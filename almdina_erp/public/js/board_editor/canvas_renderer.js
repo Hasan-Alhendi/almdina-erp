@@ -1426,16 +1426,6 @@
         const tools = (EditorMode && EditorMode.futureTools) || [];
         const enabled = target.status === "special" && target.canEdit === true && drawing.ready !== false;
         const activeTool = drawing.tool || "select";
-        const message = __(drawing.messageKey || target.messageKey || "Select a special piece to start drawing.");
-        const name = target.label
-            ? `<strong class="abe-drawing-name">${esc(target.label)}</strong>`
-            : "";
-        const size = target.widthCm != null && target.lengthCm != null
-            ? `<span class="abe-drawing-size" dir="ltr">${esc(target.widthCm)} × ${esc(target.lengthCm)} cm</span>`
-            : "";
-        const dirty = drawing.dirty
-            ? `<span class="abe-drawing-dirty">${esc(__("Unsaved drawing"))}</span>`
-            : "";
         const historyHtml = `
             <span class="abe-tool-sep" aria-hidden="true"></span>
             ${iconAction("abe-drawing-history", "undo-2", "Undo", ` data-abe-drawing-history="undo"${drawing.canUndo ? "" : " disabled"}`)}
@@ -1460,29 +1450,7 @@
             }
             return drawingToolControl(tool.id, tool.labelKey, false, false);
         }).join("");
-        const actions = enabled && activeTool === "polyline" ? `
-            <div class="abe-drawing-actions">
-                <button type="button" data-abe-drawing-action="finish"${drawing.canFinish ? "" : " disabled"}>${esc(__("Finish path"))}</button>
-                <button type="button" data-abe-drawing-action="close"${drawing.canClose ? "" : " disabled"}>${esc(__("Close path"))}</button>
-                <button type="button" data-abe-drawing-action="cancel"${drawing.canCancel ? "" : " disabled"}>${esc(__("Cancel path"))}</button>
-            </div>` : "";
-        const measure = drawingMeasureHtml(storeView, activeTool, enabled);
-        const problem = cutProblemHtml(drawing);
-        return `<div class="abe-drawing-workspace" data-abe-drawing-workspace="1">
-            <p class="abe-drawing-status" role="status">${name}${size}${dirty}<span>${esc(message)}</span></p>
-            <div class="abe-drawing-tools" role="group" aria-label="${esc(__("Drawing tools"))}">${toolHtml}${historyHtml}</div>
-            ${shapeMenuHtml(drawing)}
-            ${penSettingsHtml(drawing, enabled)}
-            ${snapMenuHtml(drawing, enabled)}
-            ${referenceMenuHtml(drawing, enabled)}
-            ${measure}
-            ${problem}
-            ${referenceFormHtml(drawing)}
-            ${shapeFormHtml(drawing)}
-            ${pathFormHtml(drawing)}
-            ${actions}
-            <p class="abe-drawing-note">${esc(__("These lines are construction guides. They are not manufacturing geometry yet."))}</p>
-        </div>`;
+        return `<div class="abe-drawing-tools" data-abe-drawing-workspace="1" role="group" aria-label="${esc(__("Drawing tools"))}">${toolHtml}${historyHtml}</div>`;
     }
 
     function pageDirection() {
@@ -1815,15 +1783,9 @@
         const target = storeView && storeView.drawingTarget;
         if (!drawing || storeView.editorMode !== "drawing" || drawing.tool !== "polyline") return "";
         if (!target || target.canEdit !== true) return "";
-        return `<div class="abe-drawing-cursor" data-abe-drawing-cursor="1" dir="ltr" aria-hidden="true">
-            <label>
-                <span>${esc(__("Length (mm)"))}</span>
-                <input type="text" inputmode="decimal" dir="ltr" autocomplete="off" spellcheck="false" tabindex="-1" data-abe-drawing-length="1" aria-label="${esc(__("Length (mm)"))}" />
-            </label>
-            <label>
-                <span>${esc(__("Angle (°)"))}</span>
-                <input type="text" inputmode="decimal" dir="ltr" autocomplete="off" spellcheck="false" tabindex="-1" data-abe-drawing-angle="1" aria-label="${esc(__("Angle (°)"))}" />
-            </label>
+        const measure = drawing.measure || { mode: "draw", enabled: false };
+        return `<div class="abe-drawing-cursor" data-abe-drawing-cursor="1" data-abe-drawing-measure="1" dir="${esc(pageDirection())}">
+            ${measureFieldsHtml(measure)}
         </div>`;
     }
 
@@ -2472,14 +2434,15 @@
             ${drawingCursorHtml(storeView)}
             <div class="abe-float-dock">
                 <div class="abe-float-stack">
-                ${editorModeSwitch(storeView.editorMode)}
-                ${drawingWorkspaceHtml(storeView)}
                 <div class="abe-canvas-tools abe-float-tools" role="toolbar" aria-label="${esc(__("Canvas tools"))}">
+                    ${editorModeSwitch(storeView.editorMode)}
+                    ${drawingMode ? drawingWorkspaceHtml(storeView) : ""}
+                    ${toolSep}
                     ${toolButton("abe-zoom-in", "zoom-in", __("Zoom in"))}
                     ${toolButton("abe-zoom-out", "zoom-out", __("Zoom out"))}
                     ${toolButton("abe-fit-all", "maximize-2", __("Fit all"))}
-                    ${toolSep}
-                    ${toolButton("abe-undo", "undo-2", __("Undo"), { disabled: !boardCommands || !storeView.canUndo })}
+                    ${drawingMode ? "" : `${toolSep}
+                    ${toolButton("abe-undo", "undo-2", __("Undo"), { disabled: !storeView.canUndo })}
                     ${toolButton("abe-redo", "redo-2", __("Redo"), { disabled: !boardCommands || !storeView.canRedo })}
                     ${toolButton("abe-restore", "refresh-ccw", __("Restore entry layout"), { disabled: !boardCommands })}
                     ${toolSep}
@@ -2522,7 +2485,7 @@
                         disabled: !boardCommands || !canRemovePiece,
                         title: removePieceTitle,
                     })}
-                    ${toolButton("abe-remove-board", "square-x", __("Remove board from distribution"), { disabled: !boardCommands || !canRemoveBoard })}
+                    ${toolButton("abe-remove-board", "square-x", __("Remove board from distribution"), { disabled: !canRemoveBoard })}`}
                 </div>
                 </div>
             </div>
@@ -3659,6 +3622,7 @@
         patchReferenceFrame,
         patchShapePreview,
         patchPenPreview,
+        bindDrawingMeasure,
         copyPlanReady,
         clickTargetKeepsSelection,
         leftOuterEdgeMidpoint,

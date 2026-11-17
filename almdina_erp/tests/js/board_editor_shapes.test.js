@@ -210,6 +210,7 @@ const dom = load([
     "public/js/board_editor/drawing_model.js",
     "public/js/board_editor/editor_mode.js",
     "public/js/board_editor/canvas_renderer.js",
+    "public/js/board_editor/drawing_properties_panel.js",
 ], {
     frappe: { utils: { escape_html: (value) => String(value == null ? "" : value) }, boot: { lang: "ar" } },
     document: null,
@@ -258,20 +259,23 @@ const view = {
     session: { pieces: {}, boards: {} },
     selectedPieceKeys: [],
 };
-dom.AlmdinaBoardEditor.CanvasRenderer.render(host, view, {
+const properties = new dom.MiniElement("aside", {}, dom.document);
+const shapeHandlers = {
     drawingPointerDown() { drawingClicks += 1; return true; },
     commitShapeForm() {
         const fields = {};
-        host.querySelectorAll("[data-abe-shape-field]").forEach((input) => {
+        properties.querySelectorAll("[data-abe-shape-field]").forEach((input) => {
             fields[input.getAttribute("data-abe-shape-field")] = input.value;
         });
         drawing.commitShapeFields("rectangle", fields, { x: 100, y: 80 }, "create");
     },
-});
+};
+dom.AlmdinaBoardEditor.CanvasRenderer.render(host, view, shapeHandlers);
+dom.AlmdinaBoardEditor.DrawingProperties.render(properties, view, shapeHandlers);
 assert.ok(host.querySelectorAll("[data-abe-drawing-tool]").some((node) => node.getAttribute("data-abe-drawing-tool") === "shapes"));
-assert.equal(host.querySelector('[data-abe-shape-kind="rectangle"]').getAttribute("data-abe-shape-kind"), "rectangle");
-const width = host.querySelector('[data-abe-shape-field="width_mm"]');
-const height = host.querySelector('[data-abe-shape-field="height_mm"]');
+assert.equal(properties.querySelector('[data-abe-shape-kind="rectangle"]').getAttribute("data-abe-shape-kind"), "rectangle");
+const width = properties.querySelector('[data-abe-shape-field="width_mm"]');
+const height = properties.querySelector('[data-abe-shape-field="height_mm"]');
 width.value = "500";
 height.value = "300";
 const enter = { key: "Enter", code: "Enter", defaultPrevented: false, cancelBubble: false, preventDefault() { this.defaultPrevented = true; }, stopPropagation() { this.cancelBubble = true; }, target: height };

@@ -423,6 +423,7 @@ const helperSource = fs.readFileSync(path.join(root, "tests/js/board_editor_poly
 const dom = load([
     "public/js/board_editor/editor_mode.js",
     "public/js/board_editor/canvas_renderer.js",
+    "public/js/board_editor/drawing_properties_panel.js",
 ], {
     frappe: { utils: { escape_html: (value) => String(value == null ? "" : value) }, boot: { lang: "en" } },
     document: null,
@@ -463,12 +464,15 @@ const view = {
     selectedPieceKeys: [],
     projection: { pieces: [], sheets: [], elements: [] },
 };
-dom.AlmdinaBoardEditor.CanvasRenderer.render(host, view, {
+const snapHandlers = {
     setDrawingTool(next) { tool = next; },
     drawingPointerDown() { drawingClicks += 1; return true; },
     toggleSnapMenu() { snapToggle += 1; },
     setSnapOption(name, value) { snapOption = [name, value]; },
-});
+};
+dom.AlmdinaBoardEditor.CanvasRenderer.render(host, view, snapHandlers);
+const properties = new dom.MiniElement("aside", {}, dom.document);
+dom.AlmdinaBoardEditor.DrawingProperties.render(properties, view, snapHandlers);
 const marker = host.querySelector('[data-abe-snap-type="endpoint"]');
 assert.ok(marker);
 assert.equal(marker.getAttribute("pointer-events"), "none");
@@ -480,7 +484,7 @@ assert.ok(labelY > 180);
 const button = host.querySelector("[data-abe-snap-toggle]");
 assert.equal(button.getAttribute("aria-pressed"), "true");
 assert.equal(button.getAttribute("data-abe-drawing-tool"), null);
-const menu = host.querySelector("[data-abe-snap-menu]");
+const menu = properties.querySelector("[data-abe-snap-menu]");
 assert.ok(menu);
 assert.equal(menu.querySelector('[data-abe-snap-option="endpoint"]').getAttribute("checked") != null, true);
 assert.equal(menu.querySelector('[data-abe-snap-option="grid"]').getAttribute("checked"), null);
@@ -534,8 +538,8 @@ assert.match(css, /\.abe-snap-menu\s*\{[^}]*flex-wrap:\s*wrap/);
 assert.doesNotMatch(css, /\.abe-snap-menu\s*\{[^}]*overflow/);
 const page = fs.readFileSync(path.join(root, "almdina_erp/page/board_editor/board_editor.js"), "utf8");
 assert.match(page, /drawing_snap\.js\?v=1/);
-assert.match(page, /canvas_renderer\.js\?v=53/);
-assert.match(page, /controller\.js\?v=51/);
-assert.match(page, /board_editor\.css\?v=48/);
+assert.match(page, /canvas_renderer\.js\?v=54/);
+assert.match(page, /controller\.js\?v=52/);
+assert.match(page, /board_editor\.css\?v=49/);
 
 console.log("board editor snap tests ok");

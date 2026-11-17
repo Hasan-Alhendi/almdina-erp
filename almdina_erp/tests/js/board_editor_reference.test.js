@@ -210,7 +210,7 @@ assert.match(fetchSource, /drawingServerIdentity\(\)/);
 assert.match(uploadSource, /drawingSession\.isCurrent\(pieceId, token\)/);
 assert.doesNotMatch(uploadSource, /view\.orderName|target\.planName/);
 assert.doesNotMatch(fetchSource, /view\.orderName|target\.planName/);
-assert.match(fs.readFileSync(path.join(root, "almdina_erp/page/board_editor/board_editor.js"), "utf8"), /controller\.js\?v=51/);
+assert.match(fs.readFileSync(path.join(root, "almdina_erp/page/board_editor/board_editor.js"), "utf8"), /controller\.js\?v=52/);
 
 const calls = [];
 const apiHost = loadContext(["public/js/board_editor/api.js"], {
@@ -283,6 +283,7 @@ assert.equal(layoutStore.snapshot().distributionDirty, false);
 const dom = loadContext([
     "public/js/board_editor/editor_mode.js",
     "public/js/board_editor/canvas_renderer.js",
+    "public/js/board_editor/drawing_properties_panel.js",
 ], {
     frappe: { utils: { escape_html: (value) => String(value == null ? "" : value) }, boot: { lang: "en" } },
     document: null,
@@ -326,15 +327,19 @@ const view = {
     selectedPieceKeys: [],
     projection: { pieces: [], sheets: [], elements: [] },
 };
-dom.AlmdinaBoardEditor.CanvasRenderer.render(host, view, {
+const referenceHandlers = {
     uploadReferenceFiles(files) { uploads.push(Array.prototype.slice.call(files)); },
-});
+};
+dom.AlmdinaBoardEditor.CanvasRenderer.render(host, view, referenceHandlers);
+const properties = new dom.MiniElement("aside", {}, dom.document);
+dom.AlmdinaBoardEditor.DrawingProperties.render(properties, view, referenceHandlers);
 assert.equal(host.querySelectorAll("[data-abe-reference-image]").length, 1);
 assert.equal(host.querySelector("[data-abe-reference-image]").getAttribute("pointer-events"), "none");
-assert.equal(host.querySelector("[data-abe-reference-form]") != null, true);
+assert.equal(host.querySelector("[data-abe-reference-form]"), null);
+assert.equal(properties.querySelector("[data-abe-reference-form]") != null, true);
 assert.match(host.querySelector("[data-abe-drawing-path]").getAttribute("d"), /M10 20 L80 20/);
 const file = { name: "door.png" };
-const input = host.querySelector("[data-abe-reference-file]");
+const input = properties.querySelector("[data-abe-reference-file]");
 input.files = [file];
 dom.emit(input, "change");
 const stage = host.querySelector("[data-abe-stage]");

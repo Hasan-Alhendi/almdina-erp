@@ -21,6 +21,7 @@ function loadEditor() {
         "public/js/board_editor/rotation_interaction.js",
         "public/js/board_editor/measure_interaction.js",
         "public/js/board_editor/canvas_renderer.js",
+        "public/js/board_editor/drawing_properties_panel.js",
     ];
     const context = {
         frappe: { utils: { escape_html: (value) => String(value) } },
@@ -320,21 +321,30 @@ store.selectPiece(1, { pieceKey: "special", mode: "replace" });
 CanvasRenderer.render(host, store.snapshot(), {});
 assert.match(host.innerHTML, /data-abe-editor-mode="drawing"[^>]*aria-pressed="true"/);
 assert.match(host.innerHTML, /data-abe-drawing-workspace="1"/);
-assert.match(host.innerHTML, /Special door/);
-assert.match(host.innerHTML, /60 × 210 cm/);
+assert.doesNotMatch(host.innerHTML, /Special door/);
+assert.doesNotMatch(host.innerHTML, /60 × 210 cm/);
+assert.doesNotMatch(host.innerHTML, /data-abe-path-form|data-abe-shape-form|data-abe-reference-form|data-abe-drawing-measure/);
 assert.match(host.innerHTML, /aria-disabled="true"/);
 assert.match(host.innerHTML, /Polyline/);
 assert.match(host.innerHTML, /data-abe-drawing-tool="polyline"[^>]*disabled/);
 assert.doesNotMatch(host.innerHTML, /<button[^>]*data-abe-drawing-tool="shapes"/);
-assert.match(host.innerHTML, /abe-undo[^>]*disabled/);
+assert.doesNotMatch(host.innerHTML, /abe-undo/);
 assert.match(host.innerHTML, /data-abe-drawing-history="undo"[^>]*disabled/);
 assert.match(host.innerHTML, /data-abe-drawing-history="redo"[^>]*disabled/);
 assert.match(host.innerHTML, /#icon-undo-2/);
 assert.match(host.innerHTML, /#icon-redo-2/);
 assert.match(host.innerHTML, /title="Undo"/);
 assert.match(host.innerHTML, /title="Redo"/);
-assert.match(host.innerHTML, /abe-measure[^>]*disabled/);
+assert.doesNotMatch(host.innerHTML, /abe-measure/);
 assert.doesNotMatch(host.innerHTML, /abe-zoom-in[^>]*disabled/);
+const properties = {
+    innerHTML: "",
+    querySelector() { return null; },
+    querySelectorAll() { return []; },
+};
+editor.DrawingProperties.render(properties, store.snapshot(), {});
+assert.match(properties.innerHTML, /Special door/);
+assert.match(properties.innerHTML, /60 × 210 cm/);
 assert.equal(JSON.stringify(store.snapshot().viewport), cameraBefore);
 assert.doesNotMatch(host.innerHTML, /abe-float-tools[\s\S]*abe-save\b/);
 assert.doesNotMatch(host.innerHTML, /abe-float-tools[\s\S]*abe-review\b/);
@@ -345,7 +355,7 @@ withHistory.drawingView = { ready: true, canUndo: true, canRedo: false, tool: "s
 CanvasRenderer.render(host, withHistory, {});
 assert.match(host.innerHTML, /data-abe-drawing-history="undo"(?![^>]*disabled)/);
 assert.match(host.innerHTML, /data-abe-drawing-history="redo"[^>]*disabled/);
-assert.match(host.innerHTML, /abe-undo[^>]*disabled/);
+assert.doesNotMatch(host.innerHTML, /abe-undo/);
 
 const controller = fs.readFileSync(path.join(root, "public/js/board_editor/controller.js"), "utf8");
 const page = fs.readFileSync(path.join(root, "almdina_erp/page/board_editor/board_editor.js"), "utf8");

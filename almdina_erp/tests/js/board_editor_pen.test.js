@@ -269,6 +269,7 @@ const dom = load([
     "public/js/board_editor/drawing_space.js",
     "public/js/board_editor/editor_mode.js",
     "public/js/board_editor/canvas_renderer.js",
+    "public/js/board_editor/drawing_properties_panel.js",
 ], {
     frappe: { utils: { escape_html: (value) => String(value == null ? "" : value) }, boot: { lang: "ar" } },
     document: null,
@@ -307,22 +308,25 @@ const view = {
     selectedPieceKeys: [],
     projection: { pieces: [], sheets: [], elements: [] },
 };
-dom.AlmdinaBoardEditor.CanvasRenderer.render(host, view, {
+const penHandlers = {
     drawingPointerDown() { drawingClicks += 1; return true; },
     onPanIntent() { pans += 1; },
     isPanKey() { return panArmed; },
     setPenSmoothing(level) { smoothing = level; },
-});
+};
+dom.AlmdinaBoardEditor.CanvasRenderer.render(host, view, penHandlers);
+const properties = new dom.MiniElement("aside", {}, dom.document);
+dom.AlmdinaBoardEditor.DrawingProperties.render(properties, view, penHandlers);
 assert.equal(host.querySelector('[data-abe-drawing-tool="pen"]').getAttribute("aria-pressed"), "true");
 assert.equal(host.querySelectorAll("button[data-abe-drawing-tool='reference_image'], button[data-abe-drawing-tool=\"reference_image\"]").length, 0);
 assert.match(host.innerHTML, /is-pen/);
-assert.equal(host.querySelector('[data-abe-pen-smoothing="low"]').getAttribute("aria-pressed"), "true");
+assert.equal(properties.querySelector('[data-abe-pen-smoothing="low"]').getAttribute("aria-pressed"), "true");
 assert.equal(host.querySelector("[data-abe-drawing-cursor]"), null);
 assert.equal(host.querySelector("[data-abe-drawing-length]"), null);
-assert.equal(host.querySelector('[data-abe-drawing-action="close-pen"]').disabled, true);
-dom.emit(host.querySelector('[data-abe-pen-smoothing="high"]'), "click");
+assert.equal(properties.querySelector('[data-abe-drawing-action="close-pen"]').disabled, true);
+dom.emit(properties.querySelector('[data-abe-pen-smoothing="high"]'), "click");
 assert.equal(smoothing, "high");
-dom.emit(host.querySelector("[data-abe-pen-settings]"), "pointerdown", { button: 0 });
+dom.emit(properties.querySelector("[data-abe-pen-settings]"), "pointerdown", { button: 0 });
 assert.equal(hostEvents, 0);
 assert.equal(drawingClicks, 0);
 const stage = host.querySelector("[data-abe-stage]");

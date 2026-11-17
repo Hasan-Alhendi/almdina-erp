@@ -40,6 +40,7 @@
 .abe-page[dir="rtl"] .abe-sidebar,
 .abe-page[dir="rtl"] .abe-right-sidebar-host,
 .abe-page[dir="rtl"] .abe-right-sidebar,
+.abe-page[dir="rtl"] .abe-draw-props,
 .abe-page[dir="rtl"] .abe-float-dock,
 .abe-page[dir="rtl"] .abe-float-stack,
 .abe-page[dir="rtl"] .abe-inspector-piece,
@@ -252,6 +253,14 @@
 
 .abe-right-sidebar-host {
   grid-area: inspector;
+}
+
+.abe-body.is-drawing {
+  --abe-right-sidebar-width: 300px;
+}
+
+.abe-body.is-drawing.is-draw-props-collapsed {
+  --abe-right-sidebar-width: 36px;
 }
 
 .abe-sidebar {
@@ -831,7 +840,126 @@
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
+  align-items: center;
   gap: 4px;
+  pointer-events: auto;
+}
+
+.abe-float-tools .abe-drawing-tool.is-active {
+  background: #dbeafe;
+  color: #0b5fff;
+}
+
+.abe-draw-props {
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--alm-surface, #fff);
+  color: var(--alm-text, #172033);
+  border-inline-start: 1px solid var(--alm-border, #e5e9f1);
+}
+
+.abe-draw-props.is-collapsed {
+  align-items: center;
+  padding-top: 8px;
+}
+
+.abe-prop-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 36px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--alm-border, #e5e9f1);
+}
+
+.abe-prop-head h2 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.abe-draw-props-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: 8px;
+}
+
+.abe-prop-section {
+  border-bottom: 1px solid var(--alm-border, #e5e9f1);
+  padding-bottom: 6px;
+  margin-bottom: 6px;
+}
+
+.abe-prop-section summary {
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.abe-prop-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.abe-prop-door,
+.abe-prop-message,
+.abe-prop-label,
+.abe-drawing-actions,
+.abe-shape-menu,
+.abe-pen-settings,
+.abe-snap-menu,
+.abe-reference-menu,
+.abe-reference-form,
+.abe-path-form,
+.abe-shape-form {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.abe-metric {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  font-size: 11px;
+}
+
+.abe-metric input,
+.abe-metric select,
+.abe-draw-props input[type="text"],
+.abe-draw-props select {
+  width: 100%;
+  min-height: 26px;
+  border: 1px solid var(--alm-border, #e5e9f1);
+  border-radius: 8px;
+  padding: 2px 6px;
+  background: var(--alm-surface, #fff);
+  color: inherit;
+}
+
+.abe-draw-props button[disabled],
+.abe-float-tools button[disabled] {
+  opacity: 0.45;
+}
+
+.abe-path-form .is-valid-cut[aria-pressed="true"] {
+  background: #e7f6ee;
+  color: #067647;
+}
+
+.abe-cut-problem {
+  color: #b42318;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
 }
 
 .abe-drawing-tool {

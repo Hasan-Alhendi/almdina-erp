@@ -3684,3 +3684,12 @@ Save a door drawing or the board distribution before copying the cutting plan.,�
 Delete,حذف
 Drawing X (mm),X (مم)
 Drawing Y (mm),Y (مم)
+Drawing properties,خصائص الرسم
+Collapse drawing properties,طي خصائص الرسم
+Expand drawing properties,فتح خصائص الرسم
+Draw on the door. Length and angle stay beside the segment.,ارسم على الدرفة. الطول والزاوية يبقيان بجانب الضلع.
+Saved drawing,رسم محفوظ
+Segment,الضلع
+Path,المسار
+Node,العقدة
+Snap,الالتقاط

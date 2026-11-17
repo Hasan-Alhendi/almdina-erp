@@ -252,6 +252,7 @@ function loadEditor() {
         "public/js/board_editor/drawing_model.js",
         "public/js/board_editor/store.js",
         "public/js/board_editor/canvas_renderer.js",
+        "public/js/board_editor/drawing_properties_panel.js",
     ].forEach((relative) => {
         vm.runInContext(fs.readFileSync(path.join(root, relative), "utf8"), context, { filename: relative });
     });
@@ -327,17 +328,22 @@ function renderDrawing(context, drawingView, scale, extraHandlers) {
     const commits = [];
     const bubbles = [];
     host.addEventListener("keydown", () => bubbles.push("host"));
-    context.AlmdinaBoardEditor.CanvasRenderer.render(host, store.snapshot(), Object.assign({
+    const handlers = Object.assign({
         commitDrawingHud(length, angle) { commits.push([length, angle]); },
         onDrawingMeasureInput() {},
-    }, extraHandlers || {}));
+    }, extraHandlers || {});
+    context.AlmdinaBoardEditor.CanvasRenderer.render(host, store.snapshot(), handlers);
+    const properties = new MiniElement("aside", { class: "abe-draw-props" }, context.document);
+    context.AlmdinaBoardEditor.DrawingProperties.render(properties, store.snapshot(), handlers);
+    host.__drawProps = properties;
     const dock = host.querySelector(".abe-float-dock");
     if (dock) dock.getBoundingClientRect = () => ({ left: 8, top: 560, width: 880, height: 72, right: 888, bottom: 632 });
     return { host, store, commits, bubbles };
 }
 
 function field(host, kind) {
-    const bar = host.querySelector("[data-abe-drawing-measure]");
+    const bar = host.querySelector("[data-abe-drawing-measure]")
+        || (host.__drawProps && host.__drawProps.querySelector("[data-abe-drawing-measure]"));
     assert.ok(bar, "measure bar");
     return bar.querySelector(kind === "angle" ? "[data-abe-drawing-angle]" : "[data-abe-drawing-length]");
 }
@@ -386,8 +392,9 @@ assert.equal(rtl.host.querySelector("[data-abe-drawing-measure]").getAttribute("
 assert.equal(field(rtl.host, "length").getAttribute("dir"), "ltr");
 assert.equal(field(rtl.host, "length").value, "350");
 assert.equal(field(rtl.host, "angle").value, "90");
+assert.equal(rtl.host.querySelectorAll("[data-abe-drawing-length]").length, 1);
 assert.equal(field(rtl.host, "length").getAttribute("tabindex"), null);
-assert.equal(rtl.host.querySelector("[data-abe-drawing-cursor] [data-abe-drawing-length]").getAttribute("tabindex"), "-1");
+assert.equal(rtl.host.querySelector("[data-abe-drawing-cursor] [data-abe-drawing-length]").getAttribute("tabindex"), null);
 context.AlmdinaLocale = { direction: () => "ltr" };
 const ltr = renderDrawing(context, readyDrawing("polyline", { mode: "draw", enabled: true, lengthMm: 350, angleDeg: 90 }));
 assert.equal(ltr.host.querySelector("[data-abe-drawing-measure]").getAttribute("dir"), "ltr");
@@ -580,8 +587,9 @@ const closed = renderDrawing(context, readyDrawing("select", {
     messageKey: "Closed paths cannot be resized one segment at a time.",
 }));
 assert.equal(closed.host.querySelector("[data-abe-drawing-measure]"), null);
-assert.match(closed.host.innerHTML, /Closed paths cannot be resized one segment at a time/);
+assert.match(closed.host.__drawProps.innerHTML, /Closed paths cannot be resized one segment at a time/);
 assert.equal(closed.host.querySelector("[data-abe-drawing-length]"), null);
+assert.equal(closed.host.__drawProps.querySelector("[data-abe-drawing-length]"), null);
 
 const drawingSource = fs.readFileSync(path.join(root, "public/js/board_editor/drawing_model.js"), "utf8");
 const controllerSource = fs.readFileSync(path.join(root, "public/js/board_editor/controller.js"), "utf8");

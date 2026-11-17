@@ -225,6 +225,7 @@ async function pageBootstrapLoadsVersionedScripts() {
         "drawing_reference.js",
         "store.js",
         "canvas_renderer.js",
+        "drawing_properties_panel.js",
         "sidebar_renderer.js",
         "right_sidebar_renderer.js",
         "controller.js",

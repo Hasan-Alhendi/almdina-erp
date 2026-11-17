@@ -32,6 +32,7 @@
         const CanvasRenderer = window.AlmdinaBoardEditor.CanvasRenderer;
         const SidebarRenderer = window.AlmdinaBoardEditor.SidebarRenderer;
         const RightSidebarRenderer = window.AlmdinaBoardEditor.RightSidebarRenderer;
+        const DrawingProperties = window.AlmdinaBoardEditor.DrawingProperties;
         const SessionDocument = window.AlmdinaBoardEditor.SessionDocument;
         const History = window.AlmdinaBoardEditor.History;
         const createMoveInteraction = window.AlmdinaBoardEditor.createMoveInteraction;
@@ -249,6 +250,8 @@
         let drawingPointer = null;
         let drawingEntry = { lengthLocked: false, angleLocked: false, lengthText: "", angleText: "" };
         let pendingMeasureFocus = null;
+        let drawingPanelCollapsed = false;
+        let lastCanvasStageWidth = 0;
         let committingMeasure = false;
 
         function resetDrawingEntry() {
@@ -1613,6 +1616,7 @@
                 dragging: Boolean(vectorGesture),
                 ready: record.ready === true,
                 dirty: drawingSession.documentDirty(record),
+                persisted: Number(record.drawingVersion) > 0,
                 canUndo: Boolean(record.past && record.past.length),
                 canRedo: Boolean(record.future && record.future.length),
                 messageKey: drawingPartialMessage || record.messageKey || "",
@@ -3150,6 +3154,13 @@
             const sidebar = root.querySelector("[data-abe-sidebar]");
             const canvas = root.querySelector("[data-abe-canvas]");
             const rightSidebar = root.querySelector("[data-abe-right-sidebar-host]");
+            const body = root.querySelector(".abe-body");
+            const drawingMode = view.editorMode === "drawing";
+            if (body) {
+                body.classList.toggle("is-drawing", drawingMode);
+                body.classList.toggle("is-draw-props-collapsed", drawingMode && drawingPanelCollapsed);
+            }
+            if (!drawingMode && DrawingProperties && DrawingProperties.reset) DrawingProperties.reset();
             SidebarRenderer.render(sidebar, view, {
                 setLayerVisible: (key, visible) => store.setLayerVisible(key, visible),
                 setAllLayersVisible: (visible) => store.setAllLayersVisible(visible),
@@ -3218,7 +3229,45 @@
                     store.selectSheet(result.sheet_no);
                 },
             });
-            if (RightSidebarRenderer && typeof RightSidebarRenderer.render === "function") {
+            if (drawingMode && DrawingProperties && typeof DrawingProperties.render === "function") {
+                DrawingProperties.render(rightSidebar, view, {
+                    toggleDrawingProperties: () => {
+                        drawingPanelCollapsed = !drawingPanelCollapsed;
+                        if (DrawingProperties.reset) DrawingProperties.reset();
+                        paint();
+                    },
+                    setShapeKind: (kind) => {
+                        drawingShapeKind = kind || "rectangle";
+                        shapeAnchor = null;
+                        shapeEntry = {};
+                        if (drawingTool !== "shapes") setDrawingTool("shapes");
+                        else syncDrawing();
+                    },
+                    onShapeInput: (key, value) => {
+                        if (key) shapeEntry[key] = value == null ? "" : String(value);
+                    },
+                    commitShapeForm: () => commitShapeForm(),
+                    drawingAction: (action) => drawingAction(action),
+                    setPenSmoothing: (level) => setPenSmoothing(level),
+                    setSnapOption: (name, value) => setSnapOption(name, value),
+                    uploadReferenceFiles: (files) => uploadReferenceFiles(files),
+                    selectReference: (id) => {
+                        if (drawingSession.selectReference(id)) syncDrawing();
+                    },
+                    referenceAction: (action, id) => referenceAction(action, id),
+                    commitReferenceField: (field, value) => commitReferenceField(field, value),
+                    setReferenceAspect: (locked) => {
+                        referenceAspectLock = locked !== false;
+                    },
+                    commitDrawingHud: (lengthText, angleText, sourceField) => commitDrawingHud(lengthText, angleText, sourceField),
+                    onDrawingMeasureInput: (field, value) => {
+                        rememberMeasureInput(field, value);
+                        const record = activeDrawingRecord();
+                        if (record && record.measureError) record.measureError = null;
+                        refreshTypedPreviewFromEntry();
+                    },
+                }, drawingPanelCollapsed);
+            } else if (RightSidebarRenderer && typeof RightSidebarRenderer.render === "function") {
                 RightSidebarRenderer.render(rightSidebar, view, inspectorHandlers());
             }
             view.proposedCuts = proposedCutsFor(view);
@@ -3474,6 +3523,20 @@
                 reviewDraft: () => reviewDraft(),
                 createPlanCopy: () => createPlanCopy(),
             });
+            const stageAfter = canvas && canvas.querySelector ? canvas.querySelector("[data-abe-stage]") : null;
+            const stageWidth = stageAfter ? Number(stageAfter.clientWidth) || 0 : 0;
+            if (
+                lastCanvasStageWidth
+                && stageWidth
+                && Math.abs(stageWidth - lastCanvasStageWidth) > 1
+                && view.viewport
+                && (view.viewport.opened || view.viewport.userAdjusted)
+            ) {
+                const nextX = (Number(stageAfter.scrollLeft) || 0) + ((lastCanvasStageWidth - stageWidth) / 2);
+                stageAfter.scrollLeft = nextX;
+                persistCamera({ scrollX: Number(stageAfter.scrollLeft) || 0, scrollY: Number(stageAfter.scrollTop) || 0 });
+            }
+            if (stageWidth) lastCanvasStageWidth = stageWidth;
             restoreDrawingMeasureFocus(canvas);
             syncReviewDialog(view);
             if (!view.viewport.opened && !view.viewport.userAdjusted) scheduleOpeningCamera();
