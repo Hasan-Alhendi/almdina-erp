@@ -1131,3 +1131,75 @@ assert.match(catalog, /^Liner on the back,لاينر من الخلف$/m);
 assert.match(catalog, /^Liner face,اللاينر على الوجه$/m);
 assert.match(catalog, /^Front face,الوجه الأمامي$/m);
 assert.match(catalog, /^Back face,الوجه الخلفي$/m);
+assert.match(catalog, /^Warning:,تنبيه:$/m);
+assert.match(
+    catalog,
+    /^"\{0\} pieces were not placed on the boards\. Review the measurements, the board size, or the rotation allowance\.",توجد \{0\} قطعة لم تدخل ضمن الألواح\. راجع المقاسات أو مقاس اللوح أو سماحية التدوير\.$/m
+);
+
+assert.doesNotMatch(html, /dco-unplaced-pieces-warning/);
+assert.doesNotMatch(html, /pieces were not placed on the boards/);
+
+function planWithUnplaced(count) {
+    return {
+        ...plan,
+        sheets: [plan.sheets[0], { ...plan.sheets[0], sheet_no: 2 }],
+        unplaced: Array.from({ length: count }, (_, index) => ({
+            id: 900 + index,
+            label: String(index + 1),
+        })),
+    };
+}
+
+function warningTag(markup) {
+    const match = markup.match(/<div class="dco-unplaced-pieces-warning"[^>]*>/);
+    assert.ok(match, "unplaced warning must render as one element");
+    return match[0];
+}
+
+const singleUnplacedHtml = renderer.build(frm, planWithUnplaced(1));
+assert.equal((singleUnplacedHtml.match(/dco-unplaced-pieces-warning/g) || []).length, 1);
+assert.match(singleUnplacedHtml, /1 pieces were not placed on the boards\. Review the measurements, the board size, or the rotation allowance\./);
+assert.match(warningTag(singleUnplacedHtml), /border:1px solid #d9534f;background:#fff5f5;color:#a94442;padding:8px;border-radius:8px/);
+assert.match(warningTag(singleUnplacedHtml), /width:100%;box-sizing:border-box/);
+const warningIndex = singleUnplacedHtml.indexOf("dco-unplaced-pieces-warning");
+const firstBoardIndex = singleUnplacedHtml.indexOf('class="dco-sheet-card"');
+const secondBoardIndex = singleUnplacedHtml.indexOf('class="dco-sheet-card"', firstBoardIndex + 1);
+assert.ok(warningIndex > singleUnplacedHtml.indexOf("dco-plan-method-line"));
+assert.ok(warningIndex < firstBoardIndex);
+assert.ok(firstBoardIndex < secondBoardIndex);
+assert.equal(singleUnplacedHtml.indexOf("dco-unplaced-pieces-warning", warningIndex + 1), -1);
+
+fakeWindow.AlmdinaLocale = {
+    direction: () => "rtl",
+    translate(message, values) {
+        if (message === "Warning:") return "تنبيه:";
+        if (message === "{0} pieces were not placed on the boards. Review the measurements, the board size, or the rotation allowance.") {
+            return `توجد ${values[0]} قطعة لم تدخل ضمن الألواح. راجع المقاسات أو مقاس اللوح أو سماحية التدوير.`;
+        }
+        return message;
+    },
+};
+const rtlWarningHtml = renderer.build(frm, planWithUnplaced(3));
+assert.match(warningTag(rtlWarningHtml), /dir="rtl"/);
+assert.match(rtlWarningHtml, /توجد 3 قطعة لم تدخل ضمن الألواح\. راجع المقاسات أو مقاس اللوح أو سماحية التدوير\./);
+assert.doesNotMatch(rtlWarningHtml, /3 pieces were not placed/);
+assert.equal((rtlWarningHtml.match(/dco-unplaced-pieces-warning/g) || []).length, 1);
+
+fakeWindow.AlmdinaLocale = {
+    direction: () => "ltr",
+    translate(message, values) {
+        let output = String(message);
+        if (Array.isArray(values)) {
+            values.forEach((value, index) => {
+                output = output.split("{" + index + "}").join(String(value));
+            });
+        }
+        return output;
+    },
+};
+const ltrWarningHtml = renderer.build(frm, planWithUnplaced(2));
+assert.match(warningTag(ltrWarningHtml), /dir="ltr"/);
+assert.match(ltrWarningHtml, /2 pieces were not placed on the boards/);
+assert.equal(ltrWarningHtml.indexOf("dco-unplaced-pieces-warning") < ltrWarningHtml.indexOf('class="dco-sheet-card"'), true);
+delete fakeWindow.AlmdinaLocale;

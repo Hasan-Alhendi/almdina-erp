@@ -89,6 +89,10 @@
 
         if (!gallery) return null;
         directCards.forEach(card => gallery.appendChild(card));
+        const warning = planRoot.querySelector(":scope > .dco-unplaced-pieces-warning");
+        if (warning && warning.nextElementSibling !== gallery) {
+            planRoot.insertBefore(warning, gallery);
+        }
         return gallery;
     }
 

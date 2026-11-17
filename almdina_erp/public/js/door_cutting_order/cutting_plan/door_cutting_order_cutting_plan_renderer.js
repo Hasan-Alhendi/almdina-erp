@@ -1041,6 +1041,12 @@
         </div>`;
     }
 
+    function render_unplaced_pieces_warning(plan) {
+        const unplaced = plan && Array.isArray(plan.unplaced) ? plan.unplaced : [];
+        if (!unplaced.length) return "";
+        return `<div class="dco-unplaced-pieces-warning" dir="${escape_html(uiDirection())}" style="display:block;width:100%;box-sizing:border-box;border:1px solid #d9534f;background:#fff5f5;color:#a94442;padding:8px;border-radius:8px;margin:0 0 12px 0;"><b>${htmlText("Warning:")}</b> ${htmlText("{0} pieces were not placed on the boards. Review the measurements, the board size, or the rotation allowance.", [unplaced.length])}</div>`;
+    }
+
     function render_plan_meta_strip(frm, plan) {
         const coverage = render_special_raw_coverage(frm, plan);
         const edgeLegend = render_edge_band_legend();
@@ -1756,6 +1762,7 @@
                 ${render_plan_meta_strip(frm, plan)}
 
                 <div class="dco-plan-method-line" style="font-size:12px;margin-bottom:8px;"><b>${htmlText("Layout method:")}</b> ${escape_html(knownStrategyText(plan.method_key, plan.method_label || frm.doc.packing_method || ""))}</div>
+                ${render_unplaced_pieces_warning(plan)}
         `;
 
         plan.sheets.forEach(sheet => {
@@ -1856,10 +1863,6 @@
 
             html += "</div></div></div>";
         });
-
-        if (plan.unplaced && plan.unplaced.length) {
-            html += `<div style="border:1px solid #d9534f;background:#fff5f5;color:#a94442;padding:8px;border-radius:8px;margin-top:12px;"><b>${htmlText("Warning:")}</b> ${htmlText("{0} pieces were not placed on the boards. Review the measurements, the board size, or the rotation allowance.", [plan.unplaced.length])}</div>`;
-        }
 
         html += "</div>";
         return html;
