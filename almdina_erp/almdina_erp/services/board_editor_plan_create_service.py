@@ -47,7 +47,15 @@ def _error_message(code: str) -> str:
         "invalid_create_request_id": _("The apply request token is missing or invalid."),
         "create_failed": _("Applying the layout to a cutting plan failed. The saved draft is unchanged."),
         "geometry_rejected": _("The adopted cut outline cannot be manufactured. Fix it in Drawing Mode before copying the plan."),
-        "drawing_version_conflict": _("A door drawing changed while the cutting plan copy was being created. Save again and retry."),
+        "drawing_version_conflict": _(
+            "Drawings for this cutting plan were changed in another window. Refresh the plan before copying it."
+        ),
+        "drawing_versions_missing": _(
+            "Drawings for this cutting plan were changed in another window. Refresh the plan before copying it."
+        ),
+        "drawing_versions_invalid": _(
+            "Drawings for this cutting plan were changed in another window. Refresh the plan before copying it."
+        ),
         "drawing_copy_failed": _("The drawing could not be copied onto the new cutting plan. The plan was not created."),
         "addon_unproven": _("This door has machining that was not proven against the new cut outline. The copy was not created."),
     }
@@ -115,7 +123,6 @@ def create_board_editor_plan_copy(
         FrappeBoardEditorDrawingStore,
     )
 
-    drawing_records = FrappeBoardEditorDrawingStore().read_for_plan(str(order.name), str(plan.name))
     expected_versions = _drawing_versions(drawing_versions)
     try:
         result = execute_create(
@@ -133,7 +140,6 @@ def create_board_editor_plan_copy(
             machine_type=str(getattr(plan, "machine_type", "") or ""),
             draft_store=FrappeBoardEditorPlanCreateStore(),
             plan_port=FrappeBoardEditorCuttingPlanPort(),
-            drawing_records=drawing_records,
             expected_drawing_versions=expected_versions,
             drawing_store=FrappeBoardEditorDrawingStore(),
         )
@@ -203,16 +209,18 @@ def _geometry_message(reason: str, piece: dict[str, Any] | None) -> str:
     return detail
 
 
-def _drawing_versions(raw: str) -> dict[str, Any] | None:
+def _drawing_versions(raw: str) -> Any:
+    """None means the field was omitted. A non-dict means the payload is invalid."""
+
     text = str(raw or "").strip()
     if not text:
         return None
     try:
         value = json.loads(text)
     except (TypeError, ValueError):
-        return {"__invalid__": -1}
+        return ()
     if not isinstance(value, dict):
-        return {"__invalid__": -1}
+        return ()
     return value
 
 

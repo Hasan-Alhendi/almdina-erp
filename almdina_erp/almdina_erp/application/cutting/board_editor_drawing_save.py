@@ -43,6 +43,8 @@ class DrawingInsertConflict(Exception):
 
 
 class DrawingStore(Protocol):
+    def lock_scope(self, order_name: str, plan_name: str) -> None: ...
+
     def lock(self, key: str) -> Mapping[str, Any] | None: ...
 
     def read(self, key: str) -> Mapping[str, Any] | None: ...
@@ -126,6 +128,9 @@ def execute_save_drawing(
     expected = _expected_version(request.get("expected_drawing_version"))
     live_revision = str(context.get("source_content_revision") or "")
     request_revision = str(request.get("source_content_revision") or "")
+    # Draft row first, then this drawing. Copy holds the same draft row, so a
+    # first insert cannot land after the copy has checked its version set.
+    _lock_drawing_scope(store, order_name, plan_name)
     existing = store.lock(key)
     decision = decide_drawing_write(
         stored_version=None if existing is None else int(existing["drawing_version"]),
@@ -160,6 +165,7 @@ def execute_save_drawing(
             source_input_fingerprint=str(context.get("source_input_fingerprint") or ""),
             version=1,
         )
+        _lock_drawing_scope(store, order_name, plan_name)
         try:
             stored = store.insert(row)
         except DrawingInsertConflict:
@@ -190,6 +196,7 @@ def execute_save_drawing(
             "source_input_fingerprint": str(context.get("source_input_fingerprint") or ""),
             "source_content_revision": live_revision,
         }
+        _lock_drawing_scope(store, order_name, plan_name)
         wrote = store.update_if_version(key, int(existing["drawing_version"]), changes)
         if not wrote:
             return _failure(
@@ -324,7 +331,12 @@ def execute_archive_drawings_for_new_source(
     order_name = str(context.get("order_name") or "")
     plan_name = str(context.get("plan_name") or "")
     catalog = context.get("catalog") if isinstance(context.get("catalog"), Mapping) else {}
-    rows = list(store.read_for_plan(order_name, plan_name))
+    _lock_drawing_scope(store, order_name, plan_name)
+    lock_for_plan = getattr(store, "lock_for_plan", None)
+    if callable(lock_for_plan):
+        rows = list(lock_for_plan(order_name, plan_name))
+    else:
+        rows = list(store.read_for_plan(order_name, plan_name))
     updates: list[dict[str, Any]] = []
     for row in rows:
         if tokens_operationally_equivalent(str(row.get("source_content_revision") or ""), live_revision):
@@ -408,6 +420,12 @@ def execute_coordinated_editor_save(
         "distribution": distribution,
         "drawings": drawings,
     }
+
+
+def _lock_drawing_scope(store: DrawingStore, order_name: str, plan_name: str) -> None:
+    lock_scope = getattr(store, "lock_scope", None)
+    if callable(lock_scope):
+        lock_scope(order_name, plan_name)
 
 
 def _view(row: Mapping[str, Any] | None, context: Mapping[str, Any], piece_id: str) -> dict[str, Any]:

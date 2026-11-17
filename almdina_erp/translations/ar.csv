@@ -3669,7 +3669,7 @@ Enter a numeric move in millimetres.,أدخل قيمة تحريك رقمية ب�
 That move puts the path outside the drawing range.,هذا التحريك يخرج المسار عن مدى الرسم.
 Save the door drawings before copying the cutting plan.,احفظ رسومات الدرف قبل نسخ خطة القص.
 The adopted cut outline cannot be manufactured. Fix it in Drawing Mode before copying the plan.,لا يمكن تصنيع محيط القص المعتمد. أصلحه في وضع الرسم قبل نسخ الخطة.
-A door drawing changed while the cutting plan copy was being created. Save again and retry.,تغيّر رسم درفة أثناء إنشاء النسخة. احفظ ثم أعد المحاولة.
+Drawings for this cutting plan were changed in another window. Refresh the plan before copying it.,تم تعديل رسومات هذه الخطة في نافذة أخرى. يرجى تحديث الخطة قبل نسخها.
 Internal cutouts are not supported. This path was left unchanged.,الفتحات الداخلية غير مدعومة. بقي المسار كما هو.
 {0} Piece: {1}.,{0} الدرفة: {1}.
 The drawing could not be copied onto the new cutting plan. The plan was not created.,تعذر نسخ الرسم إلى خطة القص الجديدة. لم تُنشأ الخطة.

@@ -1238,9 +1238,10 @@
         return { ok: true, params };
     }
 
-    function createSession() {
+        function createSession() {
         const records = new Map();
         let activeId = "";
+        let seenVersions = {};
 
         function current() {
             return activeId ? records.get(activeId) || null : null;
@@ -1269,6 +1270,19 @@
             reset() {
                 records.clear();
                 activeId = "";
+                seenVersions = {};
+            },
+            captureSeenVersions(saved) {
+                seenVersions = {};
+                if (!saved || typeof saved !== "object") return;
+                Object.keys(saved).forEach((key) => {
+                    const version = Number(saved[key]);
+                    if (!key || !Number.isFinite(version) || version < 0) return;
+                    seenVersions[String(key)] = version;
+                });
+            },
+            seenVersionPayload() {
+                return JSON.stringify(seenVersions);
             },
             activate,
             current,
@@ -1486,7 +1500,11 @@
             applySave(pieceInstanceId, response) {
                 const record = records.get(String(pieceInstanceId || ""));
                 if (!record) return false;
-                return applySave(record, response);
+                const saved = applySave(record, response);
+                if (saved && Number(record.drawingVersion) > 0) {
+                    seenVersions[String(record.pieceInstanceId)] = Number(record.drawingVersion);
+                }
+                return saved;
             },
             metrics(pathId, segmentId) {
                 const record = current();

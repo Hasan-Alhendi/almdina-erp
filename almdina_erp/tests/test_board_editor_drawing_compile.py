@@ -380,6 +380,7 @@ class DrawingCompileTests(unittest.TestCase):
         rejected = compile_saved_drawings(
             [{"piece_instance_id": "A", "drawing_version": 2, "document": _doc([open_path])}],
             pieces,
+            expected_versions={"A": 2},
         )
         self.assertEqual(rejected["code"], "geometry_rejected")
         self.assertEqual(rejected["reason"], "path_open")
@@ -392,6 +393,7 @@ class DrawingCompileTests(unittest.TestCase):
         absent = compile_saved_drawings(
             [{"piece_instance_id": "A", "drawing_version": 2, "document": _doc([]), "source_input_fingerprint": "fp-1"}],
             pieces,
+            expected_versions={"A": 2},
             source_input_fingerprint="fp-1",
         )
         self.assertEqual(absent["adopted"], {})
@@ -452,6 +454,7 @@ class DrawingCompileTests(unittest.TestCase):
                 "document": _doc([_ring([(0, 0), (500, 0), (500, 300), (0, 300)])]),
             }],
             {"A": {"piece_type": "Special", "original_w": 50, "original_h": 30, "extra_liner": 1}},
+            expected_versions={"A": 1},
         )
         self.assertEqual(rejected["code"], "geometry_rejected")
         self.assertEqual(rejected["reason"], "addon_unproven")
@@ -655,6 +658,7 @@ class DrawingCopyTests(unittest.TestCase):
             draft_store=drafts,
             plan_port=PlanPort(),
             drawing_records=[{"piece_instance_id": "A", "drawing_version": 3, "drawing_json": document}],
+            expected_drawing_versions={"A": 3},
             drawing_store=drawings,
         )
         self.assertTrue(created["ok"])
@@ -680,6 +684,7 @@ class DrawingCopyTests(unittest.TestCase):
             draft_store=failed_drafts,
             plan_port=failed_port,
             drawing_records=[{"piece_instance_id": "A", "drawing_version": 3, "drawing_json": document}],
+            expected_drawing_versions={"A": 3},
             drawing_store=failed_drawings,
         )
         self.assertEqual(failed["code"], "drawing_copy_failed")

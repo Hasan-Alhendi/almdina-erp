@@ -29,7 +29,7 @@
         `${ASSET_ROOT}/plan_edge_marks.js?v=18`,
         `${ASSET_ROOT}/editor_mode.js?v=1`,
         `${ASSET_ROOT}/drawing_space.js?v=5`,
-        `${ASSET_ROOT}/drawing_model.js?v=8`,
+        `${ASSET_ROOT}/drawing_model.js?v=9`,
         `${ASSET_ROOT}/drawing_compile.js?v=4`,
         `${ASSET_ROOT}/drawing_snap.js?v=1`,
         `${ASSET_ROOT}/drawing_reference.js?v=1`,
@@ -37,7 +37,7 @@
         `${ASSET_ROOT}/canvas_renderer.js?v=53`,
         `${ASSET_ROOT}/sidebar_renderer.js?v=21`,
         `${ASSET_ROOT}/right_sidebar_renderer.js?v=5`,
-        `${ASSET_ROOT}/controller.js?v=50`,
+        `${ASSET_ROOT}/controller.js?v=51`,
     ]);
 
     function pageModule() {

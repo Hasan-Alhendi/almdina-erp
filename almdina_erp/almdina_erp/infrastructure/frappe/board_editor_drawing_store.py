@@ -16,11 +16,33 @@ from frappe import _
 from almdina_erp.almdina_erp.application.cutting.board_editor_drawing_save import (
     DrawingInsertConflict,
 )
+from almdina_erp.almdina_erp.domain.cutting.board_editor_draft import draft_key
 
 DOCTYPE = "Board Editor Drawing Draft"
 
 
 class FrappeBoardEditorDrawingStore:
+    def lock_scope(self, order_name: str, plan_name: str) -> None:
+        """Lock the editor draft for this source plan before any drawing row.
+
+        Plan copy locks that same draft row first. Taking it here, and again
+        immediately before an insert, stops a new drawing from appearing after
+        the copy has read its version set. Missing draft storage is a no-op;
+        a copy cannot start without the draft row.
+        """
+
+        if not frappe.db.table_exists("Board Editor Draft"):
+            return
+        frappe.db.sql(
+            """
+            SELECT name
+            FROM `tabBoard Editor Draft`
+            WHERE draft_key=%s
+            FOR UPDATE
+            """,
+            (draft_key(order_name, plan_name),),
+        )
+
     def lock(self, key: str) -> dict[str, Any] | None:
         if not drawing_storage_ready():
             return None
@@ -67,8 +89,22 @@ class FrappeBoardEditorDrawingStore:
         return _row_to_record(row)
 
     def read_for_plan(self, order_name: str, plan_name: str) -> list[dict[str, Any]]:
+        return self._rows_for_plan(order_name, plan_name, lock=False)
+
+    def lock_for_plan(self, order_name: str, plan_name: str) -> list[dict[str, Any]]:
+        """Lock every drawing of this plan in key order and return that set.
+
+        Callers must already hold the draft lock from ``lock_scope`` or the
+        copy's draft lock. The locked rows are the only set copied into the
+        new plan.
+        """
+
+        return self._rows_for_plan(order_name, plan_name, lock=True)
+
+    def _rows_for_plan(self, order_name: str, plan_name: str, *, lock: bool) -> list[dict[str, Any]]:
         if not drawing_storage_ready():
             return []
+        locking = " FOR UPDATE" if lock else ""
         rows = frappe.db.sql(
             f"""
             SELECT name, drawing_key, door_cutting_order, source_plan,
@@ -77,6 +113,7 @@ class FrappeBoardEditorDrawingStore:
                 prior_drawing_archive_json
             FROM `tab{DOCTYPE}`
             WHERE door_cutting_order=%s AND source_plan=%s
+            ORDER BY drawing_key{locking}
             """,
             (order_name, plan_name),
             as_dict=True,

@@ -3575,7 +3575,10 @@
                 }
                 finishActiveGesture();
                 measureArmedBeforeDrawing = false;
-                if (drawingSession) drawingSession.reset();
+                if (drawingSession) {
+                    drawingSession.reset();
+                    drawingSession.captureSeenVersions((payload && payload.saved_drawings) || {});
+                }
                 drawingTool = "select";
                 drawingPointer = null;
                 drawingPartialMessage = "";
@@ -3819,14 +3822,8 @@
         }
 
         function drawingVersionPayload() {
-            const versions = {};
-            if (!drawingSession || typeof drawingSession.loadedRecords !== "function") return "";
-            drawingSession.loadedRecords().forEach((record) => {
-                if (record && record.pieceInstanceId && Number(record.drawingVersion) > 0) {
-                    versions[record.pieceInstanceId] = Number(record.drawingVersion);
-                }
-            });
-            return JSON.stringify(versions);
+            if (!drawingSession || typeof drawingSession.seenVersionPayload !== "function") return "";
+            return drawingSession.seenVersionPayload();
         }
 
         function revealCutProblem(response) {
@@ -3917,15 +3914,20 @@
                     backToOrder(orderName);
                 } else if (typeof frappe !== "undefined" && frappe.msgprint) {
                     const code = String((response && response.code) || "");
+                    const drawingConflict = code === "drawing_version_conflict"
+                        || code === "drawing_versions_missing"
+                        || code === "drawing_versions_invalid";
                     const title = code === "geometry_rejected"
                         ? __("Invalid cut outline")
-                        : ((code === "version_conflict" || code === "source_conflict" || code === "source_changed" || code === "drawing_version_conflict")
+                        : ((code === "version_conflict" || code === "source_conflict" || code === "source_changed" || drawingConflict)
                             ? __("Could not apply layout")
                             : __("Apply to cutting plan"));
                     frappe.msgprint({
                         title,
                         message: (response && response.message)
-                            || __("The layout could not be applied to a cutting plan."),
+                            || (drawingConflict
+                                ? __("Drawings for this cutting plan were changed in another window. Refresh the plan before copying it.")
+                                : __("The layout could not be applied to a cutting plan.")),
                         indicator: "orange",
                     });
                     if (code === "geometry_rejected") revealCutProblem(response);

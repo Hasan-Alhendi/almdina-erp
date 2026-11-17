@@ -118,20 +118,25 @@ def compile_saved_drawings(
     expected_versions: Mapping[str, Any] | None = None,
     source_input_fingerprint: str = "",
 ) -> dict[str, Any]:
-    """Compile trusted saved drawings. Client geometry is not an input."""
+    """Compile trusted saved drawings. Client geometry is not an input.
 
-    if expected_versions is not None:
-        stored = {
-            str(record.get("piece_instance_id") or ""): int(record.get("drawing_version") or 0)
-            for record in records
-        }
-        for key, value in expected_versions.items():
-            try:
-                sent = int(value)
-            except (TypeError, ValueError):
-                return {"ok": False, "code": "drawing_version_conflict"}
-            if stored.get(str(key), -1) != sent:
-                return {"ok": False, "code": "drawing_version_conflict", "piece_instance_id": str(key)}
+    ``expected_versions is None`` means the caller sent no version map. That is
+    allowed only when this plan has no saved drawings. ``{}`` is a real claim
+    that the set is empty. Any other non-map is invalid. A map must equal the
+    stored piece/version set exactly, including drawings the editor never opened.
+    """
+
+    stored = _stored_drawing_versions(records)
+    if stored is None:
+        return {"ok": False, "code": "drawing_versions_invalid"}
+    parsed = _expected_drawing_versions(expected_versions)
+    if parsed is None:
+        return {"ok": False, "code": "drawing_versions_invalid"}
+    if parsed is _ABSENT_DRAWING_VERSIONS:
+        if stored:
+            return {"ok": False, "code": "drawing_versions_missing"}
+    elif parsed != stored:
+        return {"ok": False, "code": "drawing_version_conflict"}
     adopted: dict[str, str] = {}
     for record in records:
         instance = str(record.get("piece_instance_id") or "")
@@ -214,6 +219,59 @@ def projection_with_adopted_geometry(
         geometry = element.get("geometry") if isinstance(element.get("geometry"), Mapping) else {}
         element["geometry"] = {**dict(geometry), "outer": outers[instance], "holes": []}
     return patched
+
+
+class _AbsentDrawingVersions:
+    """Sentinel: the request did not include a version map."""
+
+
+_ABSENT_DRAWING_VERSIONS = _AbsentDrawingVersions()
+
+
+def _stored_drawing_versions(records: Sequence[Mapping[str, Any]]) -> dict[str, int] | None:
+    stored: dict[str, int] = {}
+    for record in records:
+        instance = str(record.get("piece_instance_id") or "")
+        if not instance or instance in stored:
+            return None
+        version = _whole_version(record.get("drawing_version"))
+        if version is None:
+            return None
+        stored[instance] = version
+    return stored
+
+
+def _expected_drawing_versions(expected: Mapping[str, Any] | None) -> dict[str, int] | _AbsentDrawingVersions | None:
+    if expected is None:
+        return _ABSENT_DRAWING_VERSIONS
+    if not isinstance(expected, Mapping):
+        return None
+    parsed: dict[str, int] = {}
+    for key, value in expected.items():
+        instance = str(key or "")
+        if not instance or instance in parsed:
+            return None
+        version = _whole_version(value)
+        if version is None:
+            return None
+        parsed[instance] = version
+    return parsed
+
+
+def _whole_version(value: Any) -> int | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        number = value
+    elif isinstance(value, float) and value.is_integer():
+        number = int(value)
+    elif isinstance(value, str) and value.strip().isdigit():
+        number = int(value.strip())
+    else:
+        return None
+    if number < 0:
+        return None
+    return number
 
 
 def _machining_conflicts_with_new_outline(piece: Mapping[str, Any]) -> bool:
@@ -388,6 +446,14 @@ def execute_create(
             "draft_version": int(locked.get("draft_version") or 0),
         }
 
+    # The draft row is already locked. Read drawings under that same lock so a
+    # drawing inserted after an earlier snapshot cannot enter this copy.
+    verified_records: Sequence[Mapping[str, Any]] = list(drawing_records or [])
+    if drawing_store is not None:
+        lock_for_plan = getattr(drawing_store, "lock_for_plan", None)
+        if callable(lock_for_plan):
+            verified_records = list(lock_for_plan(command.order_name, command.source_plan_name) or [])
+
     source = plan_port.load_source_plan(command.order_name, command.source_plan_name)
     if not source:
         return {"ok": False, "code": "source_plan_missing"}
@@ -395,7 +461,7 @@ def execute_create(
         return {"ok": False, "code": "order_scope"}
 
     compiled = compile_saved_drawings(
-        drawing_records or [],
+        verified_records,
         _piece_catalog(projection, source.get("snapshot") or {}),
         expected_drawing_versions,
         source_input_fingerprint=str(command.source_input_fingerprint or ""),
@@ -468,11 +534,11 @@ def execute_create(
         if created_name:
             plan_port.discard_incomplete_plan(created_name)
         raise
-    if drawing_store is not None and drawing_records:
+    if drawing_store is not None and verified_records:
         copied = _copy_drawings_onto_plan(
             drawing_store=drawing_store,
             plan_port=plan_port,
-            records=drawing_records,
+            records=verified_records,
             source_snapshot=source.get("snapshot") or {},
             copied_snapshot=snapshot,
             order_name=command.order_name,
