@@ -268,8 +268,10 @@ def test_each_pass_end_is_shortened_and_merged_joins_stay_clear():
     ]
     merged = merged_liner_toolpaths_mm(piece, specs, 1.5, 8, obstacles=obstacles)
     bare = merged_liner_toolpaths_mm(piece, specs, 1.5, 8)
-    assert len(merged) == len(bare) == 2
+    assert len(merged) == len(bare) == 1
     assert merged != bare
+    assert max(point[0] for point in merged[0]) == pytest.approx(400.75)
+    assert max(point[0] for point in bare[0]) == pytest.approx(404.0)
     assert all(extension_conflict(item, 8, None, obstacles) == "" for item in merged)
     assert compare_liner_set_paths(merged, piece, specs, 1.5, 8, obstacles=obstacles).ok
     assert compare_liner_set_paths(bare, piece, specs, 1.5, 8, obstacles=obstacles).ok

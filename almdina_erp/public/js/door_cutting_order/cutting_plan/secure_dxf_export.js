@@ -853,6 +853,44 @@
         return topologyDxfPoints(placed, placement);
     }
 
+    function placeLinerLocalRing(piece, placement, local) {
+        const liner = window.AlmdinaLinerGeometry;
+        if (!liner || typeof liner.pieceFromRow !== "function" || typeof liner.transformPoint !== "function") return null;
+        if (!Array.isArray(local) || local.length < 3) return null;
+        const linerPiece = liner.pieceFromRow(piece);
+        const turns = Number.isInteger(piece.rotation_quarter_turns)
+            ? piece.rotation_quarter_turns
+            : (Number.isInteger(piece.corner_rotation_quarter_turns)
+                ? piece.corner_rotation_quarter_turns : (piece.rotated ? 1 : 0));
+        const mirrored = Boolean(piece.corner_mirrored);
+        const originX = num(piece.x) * 10;
+        const originY = num(piece.y) * 10;
+        const placed = local.map(point => {
+            const next = liner.transformPoint(point, mirrored, turns, linerPiece.widthCm * 10, linerPiece.lengthCm * 10);
+            return [next[0] + originX, next[1] + originY];
+        });
+        return topologyDxfPoints(placed, placement);
+    }
+
+    function linerRegionRings(piece, placement, specs) {
+        const liner = window.AlmdinaLinerGeometry;
+        if (
+            liner
+            && specs.length > 1
+            && typeof liner.mergedRegionPolygonsMm === "function"
+            && typeof liner.pieceFromRow === "function"
+        ) {
+            try {
+                const linerPiece = liner.pieceFromRow(piece);
+                const localRings = liner.mergedRegionPolygonsMm(linerPiece, specs, specs[0].widthCm);
+                return (localRings || []).map(local => placeLinerLocalRing(piece, placement, local)).filter(Boolean);
+            } catch (error) {
+                return specs.map(spec => linerRegionPoints(piece, placement, spec)).filter(Boolean);
+            }
+        }
+        return specs.map(spec => linerRegionPoints(piece, placement, spec)).filter(Boolean);
+    }
+
     function buildDxf(plan, options) {
         const includeSawCenters = Boolean(options && options.includeSawCenters);
         const cutterMm = cutterDiameterMm(plan);
@@ -1025,8 +1063,10 @@
                         : [(regionEngine && typeof regionEngine.specFrom === "function"
                             ? regionEngine.specFrom(piece, addon.kind)
                             : null)].filter(Boolean);
-                    specs.forEach(spec => {
-                        const region = linerRegionPoints(piece, placement, spec);
+                    const regions = addon.kind === "liner"
+                        ? linerRegionRings(piece, placement, specs)
+                        : specs.map(spec => linerRegionPoints(piece, placement, spec)).filter(Boolean);
+                    regions.forEach(region => {
                         if (!region) return;
                         entities += lwpolyline(FINISHED_GEOMETRY_LAYER, region, true);
                         regionEmitted.add(addon.kind);

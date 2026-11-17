@@ -1496,7 +1496,8 @@ async function interactionChecks() {
         { side: "edge_long_left", offsetCm: 2, startCm: 0, lengthCm: 0 },
     ], 1.5, 5);
     assert.equal(separate.length, 2);
-    assert.ok(joined.length >= 1);
+    assert.equal(joined.length, 1);
+    assert.equal(joined[0].length >= 3, true);
 
     console.log("Unified add-ons dialog interaction passed");
 }

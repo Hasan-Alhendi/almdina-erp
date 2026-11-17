@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 from pathlib import Path
 
 import pytest
@@ -8,6 +9,7 @@ import pytest
 from almdina_erp.almdina_erp.domain.cutting.dxf_geometry import (
     has_self_intersection,
     point_in_polygon,
+    point_to_polygon_distance,
     polygon_segments,
     segment_distance,
 )
@@ -39,6 +41,7 @@ from almdina_erp.almdina_erp.domain.cutting.liner_geometry import (
     merged_liner_toolpaths_mm,
     mill_regions_connected,
     liner_region_polygon_mm,
+    merged_liner_region_polygons_mm,
     compare_liner_set_paths,
     piece_polygon_mm,
     resolved_liner_span_mm,
@@ -939,3 +942,139 @@ def test_partial_overlap_and_internal_span_do_not_repeat_mill_area():
     assert internal_paths == [historical]
     extra = overlap_paths + [liner_toolpath_mm(piece, "edge_width_bottom", 2, width, diameter, 0, 0)]
     assert compare_liner_set_paths(extra, piece, overlapping, width, diameter).ok is False
+
+
+def _proper_crossings(path):
+    def side(start, end, point):
+        return (end[0] - start[0]) * (point[1] - start[1]) - (end[1] - start[1]) * (point[0] - start[0])
+
+    segments = list(zip(path, path[1:]))
+    hits = 0
+    for index, (first_start, first_end) in enumerate(segments):
+        for second_start, second_end in segments[index + 2 :]:
+            if (
+                side(first_start, first_end, second_start) * side(first_start, first_end, second_end) < -1e-6
+                and side(second_start, second_end, first_start) * side(second_start, second_end, first_end) < -1e-6
+            ):
+                hits += 1
+    return hits
+
+
+def _overlapping_runs(path):
+    def collinear(start, end, point):
+        area = abs((end[0] - start[0]) * (point[1] - start[1]) - (end[1] - start[1]) * (point[0] - start[0]))
+        return area <= GEOMETRY_TOLERANCE_MM * max(math.dist(start, point), 1.0)
+
+    segments = [(start, end) for start, end in zip(path, path[1:]) if math.dist(start, end) > 1e-6]
+    hits = 0
+    for index, (first_start, first_end) in enumerate(segments):
+        length = math.dist(first_start, first_end)
+        axis = ((first_end[0] - first_start[0]) / length, (first_end[1] - first_start[1]) / length)
+        for second_start, second_end in segments[index + 1 :]:
+            if not (collinear(first_start, first_end, second_start) and collinear(first_start, first_end, second_end)):
+                continue
+            def projected(point, origin=first_start, direction=axis):
+                return (point[0] - origin[0]) * direction[0] + (point[1] - origin[1]) * direction[1]
+            low, high = sorted((projected(second_start), projected(second_end)))
+            if min(high, length) - max(low, 0.0) > GEOMETRY_TOLERANCE_MM:
+                hits += 1
+    return hits
+
+
+def _corner_pair(first, second, offset=2):
+    return [_spec(first, offset), _spec(second, offset)]
+
+
+@pytest.mark.parametrize(
+    ("sides", "corner"),
+    [
+        (("edge_width_top", "edge_long_left"), (22.5, 22.5)),
+        (("edge_width_top", "edge_long_right"), (377.5, 22.5)),
+        (("edge_width_bottom", "edge_long_left"), (22.5, 577.5)),
+        (("edge_width_bottom", "edge_long_right"), (377.5, 577.5)),
+    ],
+)
+def test_connected_liners_follow_one_mitered_l_at_every_corner(sides, corner):
+    piece = _regular()
+    specs = _corner_pair(*sides)
+    paths = merged_liner_toolpaths_mm(piece, specs, 1.5, 5)
+    reversed_paths = merged_liner_toolpaths_mm(piece, list(reversed(specs)), 1.5, 5)
+    assert len(paths) == 1
+    assert paths[0] == reversed_paths[0]
+    assert _proper_crossings(paths[0]) == 0
+    assert _overlapping_runs(paths[0]) == 0
+    assert any(math.dist(point, corner) <= 1e-6 for point in paths[0])
+    rings = merged_liner_region_polygons_mm(piece, specs, 1.5)
+    assert len(rings) == 1
+    assert len(rings[0]) == 6
+    assert not has_self_intersection(rings[0], GEOMETRY_TOLERANCE_MM)
+    assert point_in_polygon(corner, rings[0])
+    assert point_to_polygon_distance(corner, rings[0]) > 1.0
+    if sides == ("edge_width_top", "edge_long_left"):
+        def _inside_overlap(point):
+            return point[0] <= 35.0 + 1e-6 and point[1] <= 35.0 + 1e-6
+
+        def _on_outer(point):
+            return abs(point[0] - 20.0) <= 1e-6 or abs(point[1] - 20.0) <= 1e-6
+
+        edges = list(zip(rings[0], rings[0][1:] + rings[0][:1]))
+        assert not any(
+            _inside_overlap(start) and _inside_overlap(end) and not (_on_outer(start) and _on_outer(end))
+            for start, end in edges
+        )
+    assert compare_liner_set_paths(paths, piece, specs, 1.5, 5).ok
+
+
+def test_rotated_connected_liner_keeps_the_same_corner_geometry():
+    piece = _regular()
+    specs = _corner_pair("edge_width_top", "edge_long_left")
+    path = merged_liner_toolpaths_mm(piece, specs, 1.5, 5)[0]
+    turned = [
+        transform_point(point, mirrored=False, quarter_turns=1, width=400, height=600)
+        for point in path
+    ]
+    restored = canonical_path(turned, mirrored=False, quarter_turns=1, width_mm=400, height_mm=600)
+    assert [point for point in restored] == pytest.approx(path)
+    assert _proper_crossings(turned) == 0
+    assert _overlapping_runs(turned) == 0
+
+
+@pytest.mark.parametrize("diameter", [4, 6, 8, 10])
+def test_connected_liner_corner_follows_the_actual_cutter_diameter(diameter):
+    piece = _regular()
+    specs = _corner_pair("edge_width_top", "edge_long_left")
+    path = merged_liner_toolpaths_mm(piece, specs, 1.8, diameter)[0]
+    assert _proper_crossings(path) == 0
+    assert _overlapping_runs(path) == 0
+    bends = [
+        point for point in path
+        if abs(point[0] - point[1]) <= 1e-6 and 20 < point[0] < 38
+    ]
+    assert bends
+    assert {round(point[0], 3) for point in bends} == {
+        round(20 + center, 3) for center in cutter_center_offsets_mm(18, diameter)
+    }
+
+
+def test_adjacent_liners_that_do_not_meet_stay_separate():
+    piece = _regular()
+    specs = [_spec("edge_width_top", 2, 8, 0), _spec("edge_long_left", 2, 8, 0)]
+    paths = merged_liner_toolpaths_mm(piece, specs, 1.5, 5)
+    assert len(paths) == 2
+    assert paths[0] == liner_toolpath_mm(piece, "edge_width_top", 2, 1.5, 5, 8, 0)
+    assert paths[1] == liner_toolpath_mm(piece, "edge_long_left", 2, 1.5, 5, 8, 0)
+    rings = merged_liner_region_polygons_mm(piece, specs, 1.5)
+    assert len(rings) == 2
+
+
+def test_existing_l_door_break_liner_is_unchanged_by_corner_joining():
+    piece = _l_piece("Top Right")
+    alone = [_spec("edge_break", 1)]
+    assert merged_liner_toolpaths_mm(piece, alone, 0.8, 4) == [
+        liner_toolpath_mm(piece, "edge_break", 1, 0.8, 4)
+    ]
+    separated = [_spec("edge_width_top", 1), _spec("edge_long_right", 1)]
+    paths = merged_liner_toolpaths_mm(piece, separated, 0.8, 4)
+    assert len(paths) == 2
+    assert _proper_crossings(paths[0]) == 0
+    assert _proper_crossings(paths[1]) == 0

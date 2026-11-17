@@ -1228,6 +1228,149 @@ assert.equal(await editor.applyLiner(frm, staleRow, linerValues), false);
 assert.equal(writes.length, 1);
 }
 
+function hostPath(path) {
+    return Array.from(path, point => [
+        Math.round(point[0] * 1000) / 1000,
+        Math.round(point[1] * 1000) / 1000,
+    ]);
+}
+
+function properCrossings(path) {
+    function side(start, end, point) {
+        return (end[0] - start[0]) * (point[1] - start[1]) - (end[1] - start[1]) * (point[0] - start[0]);
+    }
+    let hits = 0;
+    for (let index = 0; index < path.length - 1; index += 1) {
+        for (let other = index + 2; other < path.length - 1; other += 1) {
+            const first = side(path[index], path[index + 1], path[other])
+                * side(path[index], path[index + 1], path[other + 1]);
+            const second = side(path[other], path[other + 1], path[index])
+                * side(path[other], path[other + 1], path[index + 1]);
+            if (first < -1e-6 && second < -1e-6) hits += 1;
+        }
+    }
+    return hits;
+}
+
+function overlappingRuns(path) {
+    const segments = [];
+    for (let index = 0; index < path.length - 1; index += 1) {
+        const length = Math.hypot(path[index + 1][0] - path[index][0], path[index + 1][1] - path[index][1]);
+        if (length > 1e-6) segments.push([path[index], path[index + 1], length]);
+    }
+    let hits = 0;
+    segments.forEach(([start, end, length], index) => {
+        const axis = [(end[0] - start[0]) / length, (end[1] - start[1]) / length];
+        segments.slice(index + 1).forEach(([otherStart, otherEnd]) => {
+            const area = point => Math.abs(
+                (end[0] - start[0]) * (point[1] - start[1]) - (end[1] - start[1]) * (point[0] - start[0])
+            );
+            if (area(otherStart) > 0.25 * Math.max(Math.hypot(start[0] - otherStart[0], start[1] - otherStart[1]), 1)) return;
+            if (area(otherEnd) > 0.25 * Math.max(Math.hypot(start[0] - otherEnd[0], start[1] - otherEnd[1]), 1)) return;
+            const projected = point => (point[0] - start[0]) * axis[0] + (point[1] - start[1]) * axis[1];
+            const low = Math.min(projected(otherStart), projected(otherEnd));
+            const high = Math.max(projected(otherStart), projected(otherEnd));
+            if (Math.min(high, length) - Math.max(low, 0) > 0.25) hits += 1;
+        });
+    });
+    return hits;
+}
+
+const canonicalSpecs = [
+    { side: "edge_width_top", offsetCm: 2, startCm: 0, lengthCm: 0 },
+    { side: "edge_long_left", offsetCm: 2, startCm: 0, lengthCm: 0 },
+];
+const canonicalPath = geometry.mergedToolpathsMm(regular, canonicalSpecs, 1.5, 5);
+const swappedPath = geometry.mergedToolpathsMm(regular, canonicalSpecs.slice().reverse(), 1.5, 5);
+assert.equal(canonicalPath.length, 1);
+assert.deepEqual(hostPath(canonicalPath[0]), hostPath(swappedPath[0]));
+assert.deepEqual(hostPath(canonicalPath[0]), [
+    [22.5, 602.5],
+    [22.5, 22.5],
+    [402.5, 22.5],
+    [402.5, 27.5],
+    [27.5, 27.5],
+    [27.5, 602.5],
+    [32.5, 602.5],
+    [32.5, 32.5],
+    [402.5, 32.5],
+]);
+assert.equal(properCrossings(canonicalPath[0]), 0);
+assert.equal(overlappingRuns(canonicalPath[0]), 0);
+const rings = geometry.mergedRegionPolygonsMm(regular, canonicalSpecs, 1.5);
+assert.equal(rings.length, 1);
+assert.deepEqual(hostPath(rings[0]), [
+    [20, 600],
+    [20, 20],
+    [400, 20],
+    [400, 35],
+    [35, 35],
+    [35, 600],
+]);
+const turned = canonicalPath[0].map(point => geometry.transformPoint(point, false, 1, 400, 600));
+const restored = Array.from(turned, point => geometry.inverseTransformPoint(point, false, 1, 400, 600));
+assert.deepEqual(hostPath(restored), hostPath(canonicalPath[0]));
+assert.equal(properCrossings(turned), 0);
+assert.equal(overlappingRuns(turned), 0);
+
+[
+    ["edge_width_top", "edge_long_left"],
+    ["edge_width_top", "edge_long_right"],
+    ["edge_width_bottom", "edge_long_left"],
+    ["edge_width_bottom", "edge_long_right"],
+].forEach(([first, second]) => {
+    const specs = [
+        { side: first, offsetCm: 2, startCm: 0, lengthCm: 0 },
+        { side: second, offsetCm: 2, startCm: 0, lengthCm: 0 },
+    ];
+    const paths = geometry.mergedToolpathsMm(regular, specs, 1.5, 5);
+    const reversed = geometry.mergedToolpathsMm(regular, specs.slice().reverse(), 1.5, 5);
+    assert.equal(paths.length, 1);
+    assert.deepEqual(hostPath(paths[0]), hostPath(reversed[0]));
+    assert.equal(properCrossings(paths[0]), 0);
+    assert.equal(overlappingRuns(paths[0]), 0);
+    const cornerRings = geometry.mergedRegionPolygonsMm(regular, specs, 1.5);
+    assert.equal(cornerRings.length, 1);
+    assert.equal(cornerRings[0].length, 6);
+});
+
+[4, 6, 8, 10].forEach(diameter => {
+    const path = geometry.mergedToolpathsMm(regular, canonicalSpecs, 1.8, diameter)[0];
+    assert.equal(properCrossings(path), 0);
+    assert.equal(overlappingRuns(path), 0);
+    const bends = path.filter(point => Math.abs(point[0] - point[1]) <= 1e-6 && point[0] > 20 && point[0] < 38);
+    assert.ok(bends.length >= 1);
+});
+
+const separated = geometry.mergedToolpathsMm(regular, [
+    { side: "edge_width_top", offsetCm: 2, startCm: 8, lengthCm: 0 },
+    { side: "edge_long_left", offsetCm: 2, startCm: 8, lengthCm: 0 },
+], 1.5, 5);
+assert.equal(separated.length, 2);
+assert.deepEqual(
+    hostPath(separated[0]),
+    hostPath(geometry.toolpathMm(regular, "edge_width_top", 2, 1.5, 5, 8, 0))
+);
+assert.deepEqual(
+    hostPath(separated[1]),
+    hostPath(geometry.toolpathMm(regular, "edge_long_left", 2, 1.5, 5, 8, 0))
+);
+
+const lDoor = geometry.pieceFromRow({
+    piece_type: "L-Shaped Corner",
+    width_cm: 100,
+    length_cm: 80,
+    clipped_corner_position: "Top Right",
+    clipped_corner_width_cm: 20,
+    clipped_corner_length_cm: 30,
+});
+assert.deepEqual(
+    Array.from(geometry.mergedToolpathsMm(lDoor, [
+        { side: "edge_break", offsetCm: 1, startCm: 0, lengthCm: 0 },
+    ], 0.8, 4), path => hostPath(path)),
+    [hostPath(geometry.toolpathMm(lDoor, "edge_break", 1, 0.8, 4))]
+);
+
 persistenceChecks().catch(error => {
     console.error(error);
     process.exit(1);
