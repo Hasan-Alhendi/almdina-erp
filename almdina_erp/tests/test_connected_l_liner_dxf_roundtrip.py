@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -38,8 +39,8 @@ def _place(point):
 
 def _specs():
     return [
-        {"side": "edge_width_top", "offset_cm": 2, "start_cm": 0, "length_cm": 0},
-        {"side": "edge_long_left", "offset_cm": 2, "start_cm": 0, "length_cm": 0},
+        {"side": "edge_width_top", "offset_cm": 2, "start_cm": 2, "length_cm": 0},
+        {"side": "edge_long_left", "offset_cm": 2, "start_cm": 2, "length_cm": 0},
     ]
 
 
@@ -63,13 +64,13 @@ def _order():
         liner_reference_side="edge_width_top",
         liner_offset_cm=2,
         liner_width_cm=WIDTH_CM,
-        liner_start_cm=0,
+        liner_start_cm=2,
         liner_length_cm=0,
         liner_specs_json=json.dumps({
             "width_cm": WIDTH_CM,
             "liners": [
-                {"id": "liner_1", "side": "edge_width_top", "offset_cm": 2, "start_cm": 0, "length_cm": 0},
-                {"id": "liner_2", "side": "edge_long_left", "offset_cm": 2, "start_cm": 0, "length_cm": 0},
+                {"id": "liner_1", "side": "edge_width_top", "offset_cm": 2, "start_cm": 2, "length_cm": 0},
+                {"id": "liner_2", "side": "edge_long_left", "offset_cm": 2, "start_cm": 2, "length_cm": 0},
             ],
         }),
     )
@@ -128,6 +129,9 @@ def test_connected_l_liner_dxf_round_trip_keeps_one_corner(tmp_path):
         dxfattribs={"layer": "Liner"},
     )
     document.saveas(dxf_path)
+    sample = Path(__file__).resolve().parents[2] / "tmp" / "connected-l-liner-sample.dxf"
+    sample.parent.mkdir(exist_ok=True)
+    document.saveas(sample)
 
     written = ezdxf.readfile(dxf_path)
     geometry = [

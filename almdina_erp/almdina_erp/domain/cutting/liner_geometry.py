@@ -2647,6 +2647,194 @@ def _flag_at(flags: Sequence[bool | None] | None, index: int) -> bool | None:
     return flags[index]
 
 
+def _axis_rectangle(points: Sequence[Point]) -> tuple[float, float, float, float] | None:
+    ring = _closed_ring(points)
+    if len(ring) != 4:
+        return None
+    xs = [point[0] for point in ring]
+    ys = [point[1] for point in ring]
+    bounds = (min(xs), min(ys), max(xs), max(ys))
+    if (
+        bounds[2] - bounds[0] <= GEOMETRY_TOLERANCE_MM
+        or bounds[3] - bounds[1] <= GEOMETRY_TOLERANCE_MM
+    ):
+        return None
+    for start, end in zip(ring, ring[1:] + ring[:1]):
+        if (
+            abs(start[0] - end[0]) > GEOMETRY_TOLERANCE_MM
+            and abs(start[1] - end[1]) > GEOMETRY_TOLERANCE_MM
+        ):
+            return None
+    return bounds
+
+
+def _band_protrusions(
+    bounds: tuple[float, float, float, float],
+    overlap: tuple[float, float, float, float],
+) -> tuple[str, ...]:
+    min_x, min_y, max_x, max_y = bounds
+    overlap_min_x, overlap_min_y, overlap_max_x, overlap_max_y = overlap
+    directions = []
+    if min_x < overlap_min_x - GEOMETRY_TOLERANCE_MM:
+        directions.append("left")
+    if max_x > overlap_max_x + GEOMETRY_TOLERANCE_MM:
+        directions.append("right")
+    if min_y < overlap_min_y - GEOMETRY_TOLERANCE_MM:
+        directions.append("up")
+    if max_y > overlap_max_y + GEOMETRY_TOLERANCE_MM:
+        directions.append("down")
+    return tuple(directions)
+
+
+def _sign_toward(start: Point, end: Point, target: Point) -> float:
+    normal = _left_normal(start, end)
+    midpoint = ((start[0] + end[0]) / 2.0, (start[1] + end[1]) / 2.0)
+    toward = (target[0] - midpoint[0], target[1] - midpoint[1])
+    return 1.0 if normal[0] * toward[0] + normal[1] * toward[1] >= 0.0 else -1.0
+
+
+def _region_l_corner_span(
+    piece: LinerPiece,
+    items: Sequence[Any],
+    indices: tuple[int, int],
+    width_cm: float,
+    *,
+    start_sawn: Sequence[bool | None] | None = None,
+    end_sawn: Sequence[bool | None] | None = None,
+) -> dict[str, Any] | None:
+    """Build an L reference from two mill bands, not from the door-edge ends.
+
+    Equal offsets and a shared reference endpoint are not required. The bands
+    form an L when their rectangles overlap and each continues in exactly one
+    perpendicular direction. The reference is then the two near edges, so the
+    existing cutter-center offset miters each pass at its own corner.
+    """
+
+    bands = []
+    polygon = piece_polygon_mm(piece)
+    for index in indices:
+        side, offset_cm, start_cm, length_cm = _liner_spec_tuple(items[index])
+        try:
+            offset = float(offset_cm)
+            _reference, clipped, _start, _end, boundary_start, boundary_end = _prepared_reference(
+                piece, side, start_cm, length_cm
+            )
+            if len(clipped) != 2:
+                return None
+            sign = _inward_sign(_reference, polygon)
+            near = _offset_polyline(clipped, _mm(offset), sign)
+            far = _offset_polyline(clipped, _mm(offset) + _mm(width_cm), sign)
+            region = near + list(reversed(far))
+        except (LinerGeometryError, TypeError, ValueError):
+            return None
+        bounds = _axis_rectangle(region)
+        if bounds is None or len(near) != 2 or len(far) != 2:
+            return None
+        bands.append({
+            "near": near,
+            "bounds": bounds,
+            "start_boundary": boundary_start,
+            "end_boundary": boundary_end,
+            "start_sawn": _flag_at(start_sawn, index),
+            "end_sawn": _flag_at(end_sawn, index),
+        })
+    first, second = bands
+    overlap = (
+        max(first["bounds"][0], second["bounds"][0]),
+        max(first["bounds"][1], second["bounds"][1]),
+        min(first["bounds"][2], second["bounds"][2]),
+        min(first["bounds"][3], second["bounds"][3]),
+    )
+    if (
+        overlap[2] - overlap[0] <= GEOMETRY_TOLERANCE_MM
+        or overlap[3] - overlap[1] <= GEOMETRY_TOLERANCE_MM
+    ):
+        return None
+    first_arms = _band_protrusions(first["bounds"], overlap)
+    second_arms = _band_protrusions(second["bounds"], overlap)
+    if len(first_arms) != 1 or len(second_arms) != 1:
+        return None
+    horizontal = {"left", "right"}
+    if (first_arms[0] in horizontal) == (second_arms[0] in horizontal):
+        return None
+    shared = []
+    for first_index, first_point in enumerate(first["near"]):
+        for second_index, second_point in enumerate(second["near"]):
+            if math.dist(first_point, second_point) <= GEOMETRY_TOLERANCE_MM:
+                shared.append((first_index, second_index, first_point))
+    if len(shared) != 1:
+        return None
+    first_corner, second_corner, corner = shared[0]
+    arm_x = overlap[2] if "left" in first_arms + second_arms else overlap[0]
+    arm_y = overlap[3] if "up" in first_arms + second_arms else overlap[1]
+    if math.dist(corner, (arm_x, arm_y)) > GEOMETRY_TOLERANCE_MM:
+        return None
+
+    def oriented(band: dict[str, Any], corner_index: int) -> dict[str, Any]:
+        if corner_index == 1:
+            return {
+                "start": band["near"][0],
+                "end": band["near"][1],
+                "start_boundary": band["start_boundary"],
+                "end_boundary": band["end_boundary"],
+                "start_sawn": band["start_sawn"],
+                "end_sawn": band["end_sawn"],
+            }
+        return {
+            "start": band["near"][1],
+            "end": band["near"][0],
+            "start_boundary": band["end_boundary"],
+            "end_boundary": band["start_boundary"],
+            "start_sawn": band["end_sawn"],
+            "end_sawn": band["start_sawn"],
+        }
+
+    def reversed_span(span: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "start": span["end"],
+            "end": span["start"],
+            "start_boundary": span["end_boundary"],
+            "end_boundary": span["start_boundary"],
+            "start_sawn": span["end_sawn"],
+            "end_sawn": span["start_sawn"],
+        }
+
+    lead = oriented(first, first_corner)
+    trail = reversed_span(oriented(second, second_corner))
+    clipped = [lead["start"], corner, trail["end"]]
+    if (clipped[2][0], clipped[2][1]) < (clipped[0][0], clipped[0][1]):
+        lead, trail = reversed_span(trail), reversed_span(lead)
+        clipped = [lead["start"], corner, trail["end"]]
+    center = (
+        (overlap[0] + overlap[2]) / 2.0,
+        (overlap[1] + overlap[3]) / 2.0,
+    )
+    sign = _sign_toward(clipped[0], clipped[1], center)
+    if _sign_toward(clipped[1], clipped[2], center) != sign:
+        return None
+    first_direction = _segment_direction(clipped[0], clipped[1])
+    second_direction = _segment_direction(clipped[1], clipped[2])
+    if first_direction is None or second_direction is None:
+        return None
+    dot = abs(
+        first_direction[0] * second_direction[0]
+        + first_direction[1] * second_direction[1]
+    )
+    if dot > 1e-6:
+        return None
+    return {
+        "clipped": clipped,
+        "offset_cm": 0.0,
+        "width_cm": width_cm,
+        "sign": sign,
+        "polygon": polygon,
+        "boundary_start": lead["start_boundary"],
+        "boundary_end": trail["end_boundary"],
+        "start_sawn": lead["start_sawn"],
+        "end_sawn": trail["end_sawn"],
+    }
+
+
 def _l_corner_span(
     piece: LinerPiece,
     items: Sequence[Any],
@@ -2656,13 +2844,23 @@ def _l_corner_span(
     start_sawn: Sequence[bool | None] | None = None,
     end_sawn: Sequence[bool | None] | None = None,
 ) -> dict[str, Any] | None:
-    """Join two straight liners that meet at one corner into one L reference.
+    """Join two straight liners whose mill regions form one L.
 
-    The pair must share an endpoint and the same offset, and both reference
-    directions must keep the door on one side. A shared side name is not enough:
-    the caller only offers pairs whose mill regions already touch.
+    A shared door-edge endpoint is one way to see the corner. Partial starts
+    and unequal offsets use the actual band rectangles instead. A T or a plus
+    keeps the older clip merge.
     """
 
+    region_span = _region_l_corner_span(
+        piece,
+        items,
+        indices,
+        width_cm,
+        start_sawn=start_sawn,
+        end_sawn=end_sawn,
+    )
+    if region_span is not None:
+        return region_span
     prepared = []
     offsets: list[float] = []
     for index in indices:

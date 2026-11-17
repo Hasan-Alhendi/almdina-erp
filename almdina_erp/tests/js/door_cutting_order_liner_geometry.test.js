@@ -1356,6 +1356,40 @@ assert.deepEqual(
     hostPath(geometry.toolpathMm(regular, "edge_long_left", 2, 1.5, 5, 8, 0))
 );
 
+const partialSpecs = [
+    { side: "edge_width_top", offsetCm: 2, startCm: 2, lengthCm: 0 },
+    { side: "edge_long_left", offsetCm: 2, startCm: 2, lengthCm: 0 },
+];
+const partialPath = geometry.mergedToolpathsMm(regular, partialSpecs, 1.5, 5);
+const partialReversed = geometry.mergedToolpathsMm(regular, partialSpecs.slice().reverse(), 1.5, 5);
+assert.deepEqual(hostPath(partialPath[0]), hostPath(canonicalPath[0]));
+assert.deepEqual(hostPath(partialReversed[0]), hostPath(partialPath[0]));
+assert.equal(properCrossings(partialPath[0]), 0);
+assert.equal(overlappingRuns(partialPath[0]), 0);
+assert.deepEqual(hostPath(geometry.mergedRegionPolygonsMm(regular, partialSpecs, 1.5)[0]), [
+    [20, 600],
+    [20, 20],
+    [400, 20],
+    [400, 35],
+    [35, 35],
+    [35, 600],
+]);
+const unequal = geometry.mergedToolpathsMm(regular, [
+    { side: "edge_width_top", offsetCm: 2, startCm: 4, lengthCm: 0 },
+    { side: "edge_long_left", offsetCm: 4, startCm: 2, lengthCm: 0 },
+], 1.5, 5);
+assert.equal(unequal.length, 1);
+assert.equal(properCrossings(unequal[0]), 0);
+assert.ok(hostPath(unequal[0]).some(point => point[0] === 42.5 && point[1] === 22.5));
+assert.ok(hostPath(unequal[0]).some(point => point[0] === 47.5 && point[1] === 27.5));
+assert.ok(hostPath(unequal[0]).some(point => point[0] === 52.5 && point[1] === 32.5));
+const singlePass = geometry.mergedToolpathsMm(regular, partialSpecs, 1.5, 15);
+assert.deepEqual(hostPath(singlePass[0]), [
+    [27.5, 607.5],
+    [27.5, 27.5],
+    [407.5, 27.5],
+]);
+
 const lDoor = geometry.pieceFromRow({
     piece_type: "L-Shaped Corner",
     width_cm: 100,

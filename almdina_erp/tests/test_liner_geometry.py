@@ -1056,6 +1056,95 @@ def test_connected_liner_corner_follows_the_actual_cutter_diameter(diameter):
     }
 
 
+PARTIAL_L_PATH = [
+    (22.5, 602.5),
+    (22.5, 22.5),
+    (402.5, 22.5),
+    (402.5, 27.5),
+    (27.5, 27.5),
+    (27.5, 602.5),
+    (32.5, 602.5),
+    (32.5, 32.5),
+    (402.5, 32.5),
+]
+PARTIAL_L_RING = [
+    (20.0, 600.0),
+    (20.0, 20.0),
+    (400.0, 20.0),
+    (400.0, 35.0),
+    (35.0, 35.0),
+    (35.0, 600.0),
+]
+
+
+def test_partial_start_liners_machine_parallel_connected_l_passes():
+    """Regression: offset 20 mm and start 20 mm still form one L band."""
+
+    piece = _regular()
+    specs = [_spec("edge_width_top", 2, 2, 0), _spec("edge_long_left", 2, 2, 0)]
+    paths = merged_liner_toolpaths_mm(piece, specs, 1.5, 5)
+    assert paths == [PARTIAL_L_PATH]
+    assert merged_liner_toolpaths_mm(piece, list(reversed(specs)), 1.5, 5) == paths
+    assert _proper_crossings(paths[0]) == 0
+    assert _overlapping_runs(paths[0]) == 0
+    miters = {(22.5, 22.5), (27.5, 27.5), (32.5, 32.5)}
+    assert miters <= set(paths[0])
+    rings = merged_liner_region_polygons_mm(piece, specs, 1.5)
+    assert rings == [PARTIAL_L_RING]
+    assert not has_self_intersection(rings[0], GEOMETRY_TOLERANCE_MM)
+    assert point_in_polygon((27.5, 27.5), rings[0])
+    assert point_to_polygon_distance((27.5, 27.5), rings[0]) > 1.0
+
+
+@pytest.mark.parametrize(
+    ("specs", "miter"),
+    [
+        ([_spec("edge_width_top", 2, 2, 0), _spec("edge_long_left", 2, 2, 0)], (22.5, 22.5)),
+        ([_spec("edge_width_top", 2, 0, 38), _spec("edge_long_right", 2, 2, 0)], (377.5, 22.5)),
+        ([_spec("edge_width_bottom", 2, 2, 0), _spec("edge_long_left", 2, 0, 58)], (22.5, 577.5)),
+        ([_spec("edge_width_bottom", 2, 0, 38), _spec("edge_long_right", 2, 0, 58)], (377.5, 577.5)),
+    ],
+)
+def test_partial_spans_form_an_l_at_every_corner(specs, miter):
+    piece = _regular()
+    paths = merged_liner_toolpaths_mm(piece, specs, 1.5, 5)
+    assert len(paths) == 1
+    assert paths[0] == merged_liner_toolpaths_mm(piece, list(reversed(specs)), 1.5, 5)[0]
+    assert _proper_crossings(paths[0]) == 0
+    assert _overlapping_runs(paths[0]) == 0
+    assert any(math.dist(point, miter) <= 1e-6 for point in paths[0])
+    rings = merged_liner_region_polygons_mm(piece, specs, 1.5)
+    assert len(rings) == 1
+    assert len(rings[0]) == 6
+    assert not has_self_intersection(rings[0], GEOMETRY_TOLERANCE_MM)
+
+
+def test_unequal_offsets_join_only_when_the_bands_form_an_l():
+    piece = _regular()
+    joined = [
+        _spec("edge_width_top", 2, 4, 0),
+        _spec("edge_long_left", 4, 2, 0),
+    ]
+    path = merged_liner_toolpaths_mm(piece, joined, 1.5, 5)[0]
+    assert {(42.5, 22.5), (47.5, 27.5), (52.5, 32.5)} <= set(path)
+    assert _proper_crossings(path) == 0
+    assert len(merged_liner_region_polygons_mm(piece, joined, 1.5)) == 1
+    tee = [_spec("edge_width_top", 2), _spec("edge_long_left", 18, 0, 25)]
+    plus = [_spec("edge_width_top", 20), _spec("edge_long_left", 18)]
+    assert len(merged_liner_toolpaths_mm(piece, tee, 1.5, 5)) == 2
+    assert len(merged_liner_toolpaths_mm(piece, plus, 1.5, 5)) == 2
+
+
+def test_liner_as_wide_as_the_cutter_is_one_connected_l():
+    piece = _regular()
+    specs = [_spec("edge_width_top", 2, 2, 0), _spec("edge_long_left", 2, 2, 0)]
+    assert merged_liner_toolpaths_mm(piece, specs, 1.5, 15) == [[
+        (27.5, 607.5),
+        (27.5, 27.5),
+        (407.5, 27.5),
+    ]]
+
+
 def test_adjacent_liners_that_do_not_meet_stay_separate():
     piece = _regular()
     specs = [_spec("edge_width_top", 2, 8, 0), _spec("edge_long_left", 2, 8, 0)]

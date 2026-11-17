@@ -1253,6 +1253,7 @@
                     }
                 } else if (row) {
                     addons.forEach(addon => {
+                        if (addon.specs && row[addon.specs]) piece[addon.specs] = row[addon.specs];
                         if ((piece.overlays || []).some(item => item && item.kind === addon.kind)) return;
                         if (!num(row[addon.enabled])) return;
                         const side = String(row[addon.side] || "").trim();

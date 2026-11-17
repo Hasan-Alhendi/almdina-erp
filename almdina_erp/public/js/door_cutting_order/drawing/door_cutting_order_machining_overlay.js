@@ -348,8 +348,13 @@
     }
 
     function completeToolpaths(piece, existing, kerfMm, board, diameters, obstacles) {
-        const next = Array.isArray(existing) ? existing.slice() : [];
+        let next = Array.isArray(existing) ? existing.slice() : [];
         if (isSpecialPiece(piece)) return { overlays: next };
+        const posed = piece && piece.apply_rotated_to_geometry === false
+            && next.some(item => item && item.kind);
+        if (!posed && linerSpecsFrom(piece).length > 1) {
+            next = next.filter(item => !(item && item.kind === "liner"));
+        }
         const host = Object.assign({}, piece, {
             kerf_mm: num(kerfMm),
             tool_diameters: diameters || (piece && piece.tool_diameters) || null,
