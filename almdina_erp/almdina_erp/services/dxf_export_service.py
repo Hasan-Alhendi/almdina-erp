@@ -399,6 +399,7 @@ def _required_saved_plan(order: Any, plan_source: str | None = None) -> Any:
         from almdina_erp.almdina_erp.domain.cutting.board_editor_manufacturing import (
             BoardEditorManufacturingError,
             assert_board_editor_manufacturing_ready,
+            format_missing_geometry_message,
         )
 
         snapshot = frappe.parse_json(_plan_field(plan, "snapshot_json") or "{}") or {}
@@ -409,11 +410,13 @@ def _required_saved_plan(order: Any, plan_source: str | None = None) -> Any:
                 kerf_mm=flt(_plan_field(plan, "kerf_mm") or 0),
             )
         except BoardEditorManufacturingError as exc:
+            if exc.code == "missing_geometry":
+                frappe.throw(
+                    format_missing_geometry_message(exc.detail, action="export", translate=_),
+                    frappe.ValidationError,
+                )
             messages = {
                 "empty_plan": _("خطة محرر الألواح لا تحتوي قطعًا جاهزة للتصدير."),
-                "missing_geometry": _(
-                    "خطة محرر الألواح تفتقد هندسة نهائية لبعض القطع ولا يمكن تصديرها."
-                ),
                 "machine_rotation_forbidden": _(
                     "زاوية دوران قطعة أو أكثر غير مدعومة لنوع الماكينة المحدد في الخطة."
                 ),

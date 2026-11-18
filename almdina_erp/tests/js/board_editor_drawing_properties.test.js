@@ -138,7 +138,7 @@ assert.match(css, /\.abe-body\.is-drawing\.is-draw-props-collapsed\s*\{[^}]*--ab
 assert.match(css, /\.abe-page\[dir="rtl"\] \.abe-draw-props/);
 assert.match(page, /drawing_properties_panel\.js\?v=3/);
 assert.match(page, /canvas_renderer\.js\?v=56/);
-assert.match(page, /controller\.js\?v=54/);
+assert.match(page, /controller\.js\?v=55/);
 assert.match(page, /board_editor\.css\?v=51/);
 assert.match(controller, /DrawingProperties\.render/);
 assert.match(controller, /lastCanvasStageWidth - stageWidth/);

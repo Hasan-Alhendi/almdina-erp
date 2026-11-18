@@ -3716,3 +3716,7 @@ The text outline is not valid.,حدود النص غير صالحة.
 Rotation (°),الدوران (°)
 Duplicate,تكرار
 Center,وسط
+The cutting plan cannot be approved because the finished outline is incomplete for these doors:,تعذر اعتماد خطة القص بسبب عدم اكتمال الهندسة النهائية للدرف التالية:
+The cutting plan cannot be exported because the finished outline is incomplete for these doors:,تعذر تصدير خطة القص بسبب عدم اكتمال الهندسة النهائية للدرف التالية:
+- Door {0} — sheet {1}.,- الدرفة {0} — اللوح {1}.
+Finish and approve the cut outline in the editor then create a new plan copy.,يرجى استكمال محيط القص واعتماده داخل المحرر، ثم إنشاء نسخة جديدة من الخطة.

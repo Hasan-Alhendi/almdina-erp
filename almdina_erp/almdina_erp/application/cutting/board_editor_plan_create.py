@@ -12,6 +12,9 @@ from copy import deepcopy
 from dataclasses import dataclass
 from typing import Any, Mapping, Protocol, Sequence
 
+from almdina_erp.almdina_erp.application.cutting.board_editor_projection import (
+    GEOMETRY_SOURCE_SPECIAL_JSON,
+)
 from almdina_erp.almdina_erp.domain.cutting.board_editor_drawing_compile import (
     compile_manufacturing_geometry,
 )
@@ -212,6 +215,10 @@ def projection_with_adopted_geometry(
         piece["piece_type"] = "Special"
         piece["reserves_blank"] = geometry_reserves_blank(piece)
         piece["exact_geometry"] = True
+        # Adoption replaces the pre-drawing stock classification. The posed
+        # outline above is the manufacturing contour from here on.
+        piece["geometry_source"] = GEOMETRY_SOURCE_SPECIAL_JSON
+        piece["special_representation"] = "exact_geometry"
     for element in patched.get("elements") or []:
         instance = str(element.get("piece_instance_id") or "")
         if element.get("kind") != "finished_outline" or instance not in outers:

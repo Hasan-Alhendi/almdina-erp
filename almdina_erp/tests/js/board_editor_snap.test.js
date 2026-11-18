@@ -539,7 +539,7 @@ assert.doesNotMatch(css, /\.abe-snap-menu\s*\{[^}]*overflow/);
 const page = fs.readFileSync(path.join(root, "almdina_erp/page/board_editor/board_editor.js"), "utf8");
 assert.match(page, /drawing_snap\.js\?v=1/);
 assert.match(page, /canvas_renderer\.js\?v=56/);
-assert.match(page, /controller\.js\?v=54/);
+assert.match(page, /controller\.js\?v=55/);
 assert.match(page, /board_editor\.css\?v=51/);
 
 console.log("board editor snap tests ok");

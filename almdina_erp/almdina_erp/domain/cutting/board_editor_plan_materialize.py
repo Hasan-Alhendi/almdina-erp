@@ -9,6 +9,8 @@ copied from editor payloads.
 
 from __future__ import annotations
 
+import json
+import math
 from copy import deepcopy
 from typing import Any, Mapping, Sequence
 
@@ -405,8 +407,9 @@ def _materialize_piece(
     source_geometry = (
         source.get("geometry") if isinstance(source.get("geometry"), Mapping) else None
     )
-    # Never promote CNC-raw stock rectangles (or blank Special JSON) into a
-    # persisted DXF ``geometry`` contour. Exact DXF source keeps posed outline.
+    # A CNC-raw stock rectangle is not a manufacturing contour. An adopted
+    # drawing is different: its posed outline is the contour, even when the
+    # door was classified as raw stock before that drawing existed.
     promote_outline = False
     if source_geometry is not None and isinstance(outline, list) and len(outline) >= 3:
         promote_outline = True
@@ -509,13 +512,87 @@ def _materialize_piece(
                 piece["blank_reservation_cm"] = [
                     [num(point[0]) / 10.0, num(point[1]) / 10.0] for point in reservation
                 ]
-        if geometry_source == "cnc_raw_rect" or (
-            not exact_geometry
-            and not source_geometry
-            and not piece.get("special_shape_geometry_json")
+        # The pre-adoption classification must not delete a contour that was
+        # just posed. The stock rectangle is still not a substitute: an
+        # interior adoption whose outline is still the blank is removed.
+        posed_outer = None
+        if isinstance(piece.get("geometry"), Mapping):
+            posed_outer = piece["geometry"].get("outer")
+        blank_pose = posed.get("reservation_mm") if geometry_reserves_blank(piece) else None
+        keep_posed_contour = (
+            _verified_adopted_contour(adopted_geometry)
+            and isinstance(posed_outer, list)
+            and len(posed_outer) >= 3
+            and not _same_ring(posed_outer, blank_pose)
+        )
+        if not keep_posed_contour and (
+            geometry_source == "cnc_raw_rect"
+            or (
+                not exact_geometry
+                and not source_geometry
+                and not piece.get("special_shape_geometry_json")
+            )
         ):
             piece.pop("geometry", None)
     return piece
+
+
+def _verified_adopted_contour(payload: str | None) -> bool:
+    """True when adopted JSON is the compiler's exact manufacturing polygon."""
+
+    if not isinstance(payload, str) or not payload.strip():
+        return False
+    try:
+        data = json.loads(payload)
+    except json.JSONDecodeError:
+        return False
+    if not isinstance(data, dict) or data.get("exact") is not True:
+        return False
+    if str(data.get("kind") or "polygon") != "polygon":
+        return False
+    points = data.get("points")
+    if not isinstance(points, list) or len(points) < 3:
+        return False
+    for point in points:
+        if isinstance(point, (str, bytes)) or not isinstance(point, Sequence) or len(point) < 2:
+            return False
+        if isinstance(point[0], bool) or isinstance(point[1], bool):
+            return False
+        try:
+            x = float(point[0])
+            y = float(point[1])
+        except (TypeError, ValueError):
+            return False
+        if not math.isfinite(x) or not math.isfinite(y):
+            return False
+    return True
+
+
+def _same_ring(left: Any, right: Any, tolerance: float = 0.05) -> bool:
+    if not isinstance(left, list) or not isinstance(right, list):
+        return False
+    if len(left) != len(right) or len(left) < 3:
+        return False
+
+    def xy(point: Sequence[Any]) -> tuple[float, float]:
+        return (num(point[0]), num(point[1]))
+
+    try:
+        first = [xy(point) for point in left]
+        second = [xy(point) for point in right]
+    except (TypeError, ValueError, IndexError):
+        return False
+    count = len(first)
+
+    def aligned(shift: int, reverse: bool) -> bool:
+        for index, point in enumerate(first):
+            other_index = (shift - index) % count if reverse else (index + shift) % count
+            other = second[other_index]
+            if abs(point[0] - other[0]) > tolerance or abs(point[1] - other[1]) > tolerance:
+                return False
+        return True
+
+    return any(aligned(shift, reverse) for shift in range(count) for reverse in (False, True))
 
 
 def _overlays_from_machining(paths: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:

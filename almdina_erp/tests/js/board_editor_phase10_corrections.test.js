@@ -311,7 +311,7 @@ assert.equal(chrome.CanvasRenderer.copyPlanReady({ ...readyBase, savedDrawingRea
 assert.match(page, /drawing_model\.js\?v=11/);
 assert.match(page, /drawing_compile\.js\?v=4/);
 assert.match(page, /canvas_renderer\.js\?v=56/);
-assert.match(page, /controller\.js\?v=54/);
+assert.match(page, /controller\.js\?v=55/);
 assert.match(controller, /drawingsDirty/);
 assert.match(controller, /endVectorGesture\("cancel"\)/);
 assert.match(controller, /lostpointercapture/);

@@ -203,6 +203,11 @@ class BoardEditorApproveExportWiringContractTests(unittest.TestCase):
             source,
         )
         self.assertIn('return "BoardEditor"', source)
+        self.assertIn("format_missing_geometry_message", source)
+        self.assertNotIn(
+            "خطة محرر الألواح تفتقد هندسة نهائية لبعض القطع ولا يمكن اعتمادها.",
+            source,
+        )
 
     def test_dxf_export_resolves_board_editor_source(self):
         source = DXF_EXPORT.read_text(encoding="utf-8")
@@ -216,6 +221,11 @@ class BoardEditorApproveExportWiringContractTests(unittest.TestCase):
             "def _assert_saved_plan_fresh", 1
         )[0]
         self.assertIn("board editor", include)
+        self.assertIn("format_missing_geometry_message", source)
+        self.assertNotIn(
+            "خطة محرر الألواح تفتقد هندسة نهائية لبعض القطع ولا يمكن تصديرها.",
+            source,
+        )
 
     def test_workspace_no_longer_forces_permanent_block(self):
         source = WORKSPACE_QUERY.read_text(encoding="utf-8")

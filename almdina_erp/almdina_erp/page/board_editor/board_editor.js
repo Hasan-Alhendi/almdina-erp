@@ -38,7 +38,7 @@
         `${ASSET_ROOT}/drawing_properties_panel.js?v=3`,
         `${ASSET_ROOT}/sidebar_renderer.js?v=21`,
         `${ASSET_ROOT}/right_sidebar_renderer.js?v=5`,
-        `${ASSET_ROOT}/controller.js?v=54`,
+        `${ASSET_ROOT}/controller.js?v=55`,
     ]);
 
     function pageModule() {
