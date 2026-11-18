@@ -273,13 +273,16 @@ const frameWidth = Number(enlargedPreview.match(/class="dco-glass-frame"[^>]*wid
 assert.ok(frameWidth > 170, `glass drawing should fill more of the preview, got ${frameWidth}`);
 assert.match(enlargedPreview, /class="dco-glass-opening"/);
 assert.match(desktopStyles, /var\(--card-bg/);
-assert.match(assetManifest, /\/assets\/almdina_erp\/css\/door_cutting_order_glass_shape\.css\?v=1/);
+assert.match(assetManifest, /\/assets\/almdina_erp\/css\/door_cutting_order_glass_shape\.css\?v=2/);
 assert.doesNotMatch(source, /createElement\("style"\)|installStyles|editorStyles/);
 assert.equal(Object.prototype.hasOwnProperty.call(api, "editorStyles"), false);
 assert.doesNotMatch(desktopStyles, /overflow-y:\s*auto/);
 assert.match(source, /data-glass-mode/);
 assert.match(desktopStyles, /\.dco-glass-mode\{[^}]*display:flex/);
-assert.match(desktopStyles, /\.dco-glass-sides\{[^}]*grid-template-columns:repeat\(4/);
+assert.match(desktopStyles, /\.dco-glass-sides\{[^}]*grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/);
+const sideOrder = ["top", "bottom", "right", "left"].map((side) => source.indexOf(`data-glass-side="${side}"`));
+assert.ok(sideOrder.every((index) => index > -1));
+assert.deepEqual(sideOrder, sideOrder.slice().sort((left, right) => left - right));
 
 const individual = api.applyForm({
     piece_type: "Glass",
