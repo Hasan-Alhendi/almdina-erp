@@ -313,7 +313,11 @@ class TestFrontendConsolidationContract(unittest.TestCase):
         self.assertIn("RECALCULATE_METHOD", plan_api)
         self.assertIn("AlmdinaPlanWorkspaceAPI", plan_controls)
         self.assertIn("AlmdinaPlanPreviewSession", plan_controls)
-        self.assertIn("await previews.preview(frm, settings)", plan_controls)
+        self.assertIn("await previews.preview(frm, settings, {", plan_controls)
+        self.assertIn(
+            "recordSearchDetails: traceOptions?.orderName === frm.doc.name && traceOptions.enabled === true",
+            plan_controls,
+        )
         self.assertNotIn("transport.recalculate(frm.doc.name, settings)", plan_controls)
         self.assertNotIn("order_plan_permission_service.recalculate_order", plan_controls)
         self.assertNotIn("frappe.call", plan_controls)

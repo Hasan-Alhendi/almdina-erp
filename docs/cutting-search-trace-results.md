@@ -35,6 +35,21 @@ deployed Frappe integration passed. JUnit files remain with the local delivery;
 the new report workflow runs the feature/contract checks and retains generated
 HTML/JSON plus benchmarks as a GitHub Actions artifact.
 
+The first [report CI run](https://github.com/Hasan-Alhendi/almdina-erp/actions/runs/44404865879)
+passed **83 tests and 99 subtests**, all five Node suites, the real-engine
+benchmarks and continuation generation. It uploaded `cutting-search-report-evidence`.
+Three older source-contract assertions were then updated for Preview's optional
+diagnostics argument while retaining their transport/security checks and asserting
+order-scoped, explicit opt-in. Their complete suites passed **37 tests and 13
+subtests** locally and are now included in the report workflow.
+
+Existing CI failures were compared with the same base commit's runs: Production
+Settings/F7 both reject an unchanged 261-line controller (limit 255), asset loading
+expects 11 modules but receives 13, and Static Checks rejects two unchanged legacy
+primary-button classes. These failures already occur on the base. The Cross-order
+identity gate also hits the empty DXF validation helper described below. These
+unrelated defects are not repaired or waived by this delivery; the PR remains draft.
+
 ## Reproduced inherited blockers
 
 The base contains an empty `fetchValidatedPlan` in

@@ -32,6 +32,9 @@ jobs:
             almdina_erp/tests/test_cutting_search_report_browser.py \
             almdina_erp/tests/test_smart_plan_portfolio.py \
             almdina_erp/tests/test_plan_preview_session_exact_commit.py \
+            almdina_erp/tests/test_a5_workspace_state_foundation.py \
+            almdina_erp/tests/test_capability_execution_contract.py \
+            almdina_erp/tests/test_frontend_consolidation_contract.py \
             almdina_erp/tests/test_cutting_domain_architecture.py \
             almdina_erp/tests/test_whitelisted_endpoint_authorization.py \
             almdina_erp/tests/test_permission_matrix_application.py \
