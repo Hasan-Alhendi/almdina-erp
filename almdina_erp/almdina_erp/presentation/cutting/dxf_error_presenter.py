@@ -771,10 +771,26 @@ def present_issue(issue: DxfValidationIssue) -> PresentedDxfError:
             issue.category,
         )
     if code == codes.CUT_INVALID_GEOMETRY:
+        layer = str(params.get("outline_layer") or issue.target.layer or "CUT_PATH")
+        reasons = [
+            _GEOMETRY_ERROR_AR.get(str(error), "سبب هندسي إضافي")
+            for error in (params.get("geometry_errors") or ())
+        ]
+        if layer == "GEOMETRY":
+            reason = "، ".join(reasons) if reasons else _("invalid geometry")
+            problem = _("The finished contour on GEOMETRY is not valid. {0}").format(reason)
+            action = _("Correct the finished contour on GEOMETRY, then upload the file again.")
+            if issue.target.contour_no is not None:
+                target_text = _("Contour {0} on layer {1}.").format(issue.target.contour_no, layer)
+        else:
+            problem = "هندسة مسار القص غير صالحة."
+            action = "صحح المحيط على CUT_PATH ثم أعد الرفع."
+            if reasons:
+                problem += " السبب: " + "، ".join(reasons) + "."
         return PresentedDxfError(
-            "هندسة مسار القص غير صالحة.",
+            problem,
             target_text,
-            "صحح المحيط على CUT_PATH ثم أعد الرفع.",
+            action,
             code,
             issue.category,
         )

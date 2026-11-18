@@ -2308,12 +2308,14 @@ def _validated_cut_candidates(contours: list[dict[str, object]]) -> tuple[Contou
     candidates: list[ContourCandidate] = []
     for contour_no, contour in enumerate(contours, start=1):
         raw_points = contour.get("points") or []
+        source_layer = str(contour.get("layer") or CUT_PATH_LAYER)
         if contour.get("branched"):
             issues.append(
                 issue(
                     CUT_BRANCHED,
                     CATEGORY_CONTOUR,
-                    target=contour_target(contour_no, layer=CUT_PATH_LAYER),
+                    target=contour_target(contour_no, layer=source_layer),
+                    params={"outline_layer": source_layer},
                 )
             )
             continue
@@ -2322,7 +2324,8 @@ def _validated_cut_candidates(contours: list[dict[str, object]]) -> tuple[Contou
                 issue(
                     CUT_OPEN,
                     CATEGORY_CONTOUR,
-                    target=contour_target(contour_no, layer=CUT_PATH_LAYER),
+                    target=contour_target(contour_no, layer=source_layer),
+                    params={"outline_layer": source_layer},
                 )
             )
             continue
@@ -2333,7 +2336,8 @@ def _validated_cut_candidates(contours: list[dict[str, object]]) -> tuple[Contou
                 issue(
                     CUT_SELF_INTERSECTION,
                     CATEGORY_CONTOUR,
-                    target=contour_target(contour_no, layer=CUT_PATH_LAYER),
+                    target=contour_target(contour_no, layer=source_layer),
+                    params={"outline_layer": source_layer},
                 )
             )
             continue
@@ -2342,8 +2346,11 @@ def _validated_cut_candidates(contours: list[dict[str, object]]) -> tuple[Contou
                 issue(
                     CUT_INVALID_GEOMETRY,
                     CATEGORY_CONTOUR,
-                    target=contour_target(contour_no, layer=CUT_PATH_LAYER),
-                    params={"geometry_errors": list(geometry_errors)},
+                    target=contour_target(contour_no, layer=source_layer),
+                    params={
+                        "geometry_errors": list(geometry_errors),
+                        "outline_layer": source_layer,
+                    },
                 )
             )
             continue
@@ -3531,6 +3538,11 @@ def parse_production_dxf(
         expected_height_mm=full_board_length_cm * 10.0,
     )
     cut_contours = assemble_contours(cut_segments, CONNECTIVITY_TOLERANCE_MM)
+    # Finished doors on GEOMETRY must not be reported as CUT_PATH failures.
+    # Legacy files still assemble the door outline from CUT_PATH.
+    finished_layer = GEOMETRY_LAYER if geometry_format else CUT_PATH_LAYER
+    for contour in cut_contours:
+        contour["layer"] = finished_layer
     topology = _resolve_cut_topology(cut_contours, order, overlays)
     pieces = _extract_pieces(
         topology,

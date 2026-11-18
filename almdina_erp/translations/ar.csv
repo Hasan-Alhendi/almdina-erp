@@ -2976,6 +2976,10 @@ Increase the measurement,زيادة القياس
 Decrease the measurement,إنقاص القياس
 Row {0}: {1},السطر {0}: {1}
 "Row {0}: Piece dimensions {1} × {2} cm do not fit the board {3} × {4} cm, even after allowed rotation.",السطر {0}: قياسات الدرفة {1} × {2} سم لا تتسع ضمن اللوح {3} × {4} سم حتى بعد السماح بالدوران.
+The finished contour on GEOMETRY is not valid. {0},المحيط النهائي على طبقة GEOMETRY غير صالح. {0}
+Correct the finished contour on GEOMETRY, then upload the file again.,صحح المحيط النهائي على طبقة GEOMETRY ثم أعد رفع الملف.
+Contour {0} on layer {1}.,المحيط {0} على طبقة {1}.
+invalid geometry,هندسة غير صالحة
 A regular door could not be matched because the DXF contour is not a rectangle.,تعذر مطابقة درفة عادية لأن المحيط في DXF غير مستطيل.
 A special door could not be matched because the rectangular contour has no internal opening.,تعذر مطابقة درفة خاصة لأن المحيط مستطيل بلا فتحة داخلية.
 Use a non-rectangular contour, or add at least one internal through-cut opening inside the rectangle.,استخدم محيطًا غير مستطيل، أو أضف فتحة قص نافذة واحدة على الأقل داخل المستطيل.
