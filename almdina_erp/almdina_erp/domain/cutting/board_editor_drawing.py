@@ -102,6 +102,9 @@ SHAPE_KINDS = frozenset(
 CLIPPED_CORNERS = frozenset(
     {"top_left", "top_right", "bottom_left", "bottom_right"}
 )
+_OPTIONAL_SHAPE_ROTATION = frozenset(
+    {SHAPE_ARC, SHAPE_TRAPEZOID, SHAPE_L, SHAPE_CLIPPED_CORNER}
+)
 
 TOP_FIELDS = frozenset(
     {
@@ -119,7 +122,7 @@ TOP_FIELDS = frozenset(
 )
 BLANK_FIELDS = frozenset({"width_mm", "length_mm"})
 PATH_FIELDS = frozenset(
-    {"id", "role", "closed", "nodes", "segments", "source_shape_id"}
+    {"id", "role", "closed", "nodes", "segments", "source_shape_id", "rotation_deg"}
 )
 NODE_FIELDS = frozenset({"id", "x_mm", "y_mm"})
 LINE_FIELDS = frozenset({"id", "kind", "from_node", "to_node"})
@@ -392,7 +395,7 @@ def _path(value: Any) -> dict[str, Any]:
     source_shape_id = value.get("source_shape_id")
     if source_shape_id not in (None,):
         source_shape_id = _identifier(source_shape_id, code="invalid_id")
-    return {
+    path = {
         "id": _identifier(value.get("id"), code="invalid_id"),
         "role": role,
         "closed": closed,
@@ -400,6 +403,11 @@ def _path(value: Any) -> dict[str, Any]:
         "segments": ordered_segments,
         "source_shape_id": source_shape_id,
     }
+    if "rotation_deg" in value and value.get("rotation_deg") not in (None, ""):
+        rotation = _degrees(value.get("rotation_deg"), code="invalid_document")
+        if rotation:
+            path["rotation_deg"] = rotation
+    return path
 
 
 def _nodes(value: Any) -> list[dict[str, Any]]:
@@ -609,9 +617,9 @@ def _shape_params(kind: str, value: Any) -> dict[str, Any]:
         SHAPE_RECTANGLE: ("x_mm", "y_mm", "width_mm", "height_mm", "rotation_deg"),
         SHAPE_CIRCLE: ("cx_mm", "cy_mm", "radius_mm"),
         SHAPE_ELLIPSE: ("cx_mm", "cy_mm", "rx_mm", "ry_mm", "rotation_deg"),
-        SHAPE_ARC: ("cx_mm", "cy_mm", "radius_mm", "start_angle_deg", "sweep_angle_deg"),
+        SHAPE_ARC: ("cx_mm", "cy_mm", "radius_mm", "start_angle_deg", "sweep_angle_deg", "rotation_deg"),
         SHAPE_POLYGON: ("cx_mm", "cy_mm", "radius_mm", "sides", "rotation_deg"),
-        SHAPE_TRAPEZOID: ("x_mm", "y_mm", "bottom_width_mm", "top_width_mm", "height_mm"),
+        SHAPE_TRAPEZOID: ("x_mm", "y_mm", "bottom_width_mm", "top_width_mm", "height_mm", "rotation_deg"),
         SHAPE_L: (
             "x_mm",
             "y_mm",
@@ -619,6 +627,7 @@ def _shape_params(kind: str, value: Any) -> dict[str, Any]:
             "height_mm",
             "notch_width_mm",
             "notch_height_mm",
+            "rotation_deg",
         ),
         SHAPE_CLIPPED_CORNER: (
             "x_mm",
@@ -628,17 +637,24 @@ def _shape_params(kind: str, value: Any) -> dict[str, Any]:
             "cut_width_mm",
             "cut_height_mm",
             "corner",
+            "rotation_deg",
         ),
     }
     if kind == SHAPE_CUSTOM:
         return _custom_template_params(value)
     allowed = specs[kind]
-    _reject_unknown(value, set(allowed))
-    if set(value) != set(allowed):
+    present = dict(value)
+    if kind in _OPTIONAL_SHAPE_ROTATION and "rotation_deg" not in present:
+        present["rotation_deg"] = 0
+    _reject_unknown(present, set(allowed))
+    if set(present) != set(allowed):
         raise DrawingDocumentError("invalid_shape")
-    params = {key: _param_value(kind, key, value.get(key)) for key in allowed}
+    params = {key: _param_value(kind, key, present.get(key)) for key in allowed}
     _assert_shape_relationships(kind, params)
-    return {key: params[key] for key in allowed}
+    normalized = {key: params[key] for key in allowed}
+    if kind in _OPTIONAL_SHAPE_ROTATION and not normalized["rotation_deg"]:
+        normalized.pop("rotation_deg")
+    return normalized
 
 
 def _param_value(kind: str, key: str, value: Any) -> Any:

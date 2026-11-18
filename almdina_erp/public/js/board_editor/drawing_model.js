@@ -1194,6 +1194,205 @@
         return updateShape(record, shapeId, shiftParams(shape.kind, params, dx, dy), options);
     }
 
+    function applyShapeFrame(record, shape, previous, frame, options) {
+        const built = Space().frameToShapeParams(shape.kind, previous, frame);
+        if (!built || !built.ok) return false;
+        if (JSON.stringify(built.params) === JSON.stringify(shape.params)) {
+            clearStatus(record);
+            return true;
+        }
+        if (!options || options.history !== false) remember(record);
+        shape.params = built.params;
+        clearStatus(record);
+        return true;
+    }
+
+    function resizeShape(record, shapeId, handle, door, options) {
+        const shape = shapeById(record, shapeId);
+        const previous = (options && options.base) || (shape && shape.params);
+        if (!shape || shape.exploded || !previous || !door) return false;
+        const frame = Space().shapeFrame(shape.kind, previous);
+        const next = frame && Space().resizeFrame(frame, handle, door, Boolean(options && options.aspect));
+        if (!next) return false;
+        return applyShapeFrame(record, shape, previous, next, options);
+    }
+
+    function transformShape(record, shapeId, patch, options) {
+        const shape = shapeById(record, shapeId);
+        const previous = (options && options.base) || (shape && shape.params);
+        if (!shape || shape.exploded || !previous || !patch) return false;
+        let frame = Space().shapeFrame(shape.kind, previous);
+        if (!frame) return false;
+        const aspect = Boolean(options && options.aspect) || frame.uniform;
+        if (patch.x != null || patch.y != null) {
+            const x = patch.x != null ? patch.x : frame.center.x;
+            const y = patch.y != null ? patch.y : frame.center.y;
+            frame = Space().placeFrame(frame, x, y);
+        }
+        if (frame && (patch.width != null || patch.height != null)) {
+            let width = patch.width != null ? patch.width : frame.width;
+            let height = patch.height != null ? patch.height : frame.height;
+            if (aspect) {
+                if (patch.width != null && patch.height == null) height = width * (frame.height / frame.width);
+                if (patch.height != null && patch.width == null) width = height * (frame.width / frame.height);
+            }
+            frame = Space().sizeFrame(frame, width, height);
+        }
+        if (frame && patch.rotation != null && !frame.uniform) {
+            frame = Space().rotateFrame(frame, patch.rotation);
+        } else if (frame && patch.rotation != null && shape.kind === "arc") {
+            frame = Space().rotateFrame(frame, patch.rotation);
+        } else if (frame && patch.rotation != null && shape.kind === "polygon") {
+            frame = Space().rotateFrame(frame, patch.rotation);
+        }
+        if (!frame) return false;
+        return applyShapeFrame(record, shape, previous, frame, options);
+    }
+
+    function pathDoorPoints(path) {
+        const points = (path.nodes || []).map((node) => ({ x: node.x_mm, y: node.y_mm }));
+        (path.segments || []).forEach((segment) => {
+            (segment.controls || []).forEach((control) => points.push({ x: control.x_mm, y: control.y_mm }));
+        });
+        return points;
+    }
+
+    function pathUsesArc(path) {
+        return (path.segments || []).some((segment) => segment && segment.kind === "arc");
+    }
+
+    function writeResizedPath(path, source, next) {
+        const movedNodes = source.nodes.map((node) => Space().resizePoint({ x: node.x_mm, y: node.y_mm }, next));
+        const movedControls = source.segments.map((segment) => {
+            if (segment.kind !== "bezier" || !segment.controls) return null;
+            return segment.controls.map((control) => Space().resizePoint({ x: control.x_mm, y: control.y_mm }, next));
+        });
+        if (movedNodes.some((point) => !point) || movedControls.some((row) => row && row.some((point) => !point))) {
+            return false;
+        }
+        const radii = [];
+        for (let index = 0; index < path.segments.length; index += 1) {
+            const segment = path.segments[index];
+            const sourceSegment = source.segments[index];
+            if (segment.kind !== "arc" || !sourceSegment || sourceSegment.radius_mm == null) continue;
+            const radius = quantize(Number(sourceSegment.radius_mm) * next.scaleX);
+            if (radius == null || !(radius > 0)) return false;
+            radii[index] = radius;
+        }
+        path.nodes.forEach((node, index) => {
+            node.x_mm = movedNodes[index].x;
+            node.y_mm = movedNodes[index].y;
+        });
+        path.segments.forEach((segment, index) => {
+            if (radii[index] != null) segment.radius_mm = radii[index];
+            if (!movedControls[index]) return;
+            segment.controls.forEach((control, controlIndex) => {
+                control.x_mm = movedControls[index][controlIndex].x;
+                control.y_mm = movedControls[index][controlIndex].y;
+            });
+        });
+        const rotation = quantize(next.rotation || 0);
+        if (rotation) path.rotation_deg = rotation;
+        else delete path.rotation_deg;
+        return true;
+    }
+
+    function resizePath(record, pathId, handle, door, options) {
+        const path = pathById(record, pathId);
+        const source = (options && options.base) || path;
+        if (!path || !source || !source.nodes || !door) return false;
+        const uniform = pathUsesArc(source);
+        const frame = Space().pointsFrame(pathDoorPoints(source), Number(source.rotation_deg) || 0, uniform);
+        const next = frame && Space().resizeFrame(frame, handle, door, Boolean(options && options.aspect) || uniform);
+        if (!next) return false;
+        if (!options || options.history !== false) remember(record);
+        if (!writeResizedPath(path, source, next)) {
+            if (!options || options.history !== false) undo(record);
+            return fail(record, "invalid_point", "That resize puts the path outside the drawing range.");
+        }
+        clearStatus(record);
+        return true;
+    }
+
+    function rotatePathGeometry(path, center, delta, rotation) {
+        const turned = (point) => {
+            const next = Space().rotate(point, center, delta);
+            return pointOf(next.x, next.y);
+        };
+        const nodes = path.nodes.map((node) => turned({ x: node.x_mm, y: node.y_mm }));
+        const controls = path.segments.map((segment) => {
+            if (segment.kind !== "bezier" || !segment.controls) return null;
+            return segment.controls.map((control) => turned({ x: control.x_mm, y: control.y_mm }));
+        });
+        if (nodes.some((point) => point.x == null) || controls.some((row) => row && row.some((point) => point.x == null))) {
+            return false;
+        }
+        path.nodes.forEach((node, index) => {
+            node.x_mm = nodes[index].x;
+            node.y_mm = nodes[index].y;
+        });
+        path.segments.forEach((segment, index) => {
+            if (!controls[index]) return;
+            segment.controls.forEach((control, controlIndex) => {
+                control.x_mm = controls[index][controlIndex].x;
+                control.y_mm = controls[index][controlIndex].y;
+            });
+        });
+        if (rotation) path.rotation_deg = rotation;
+        else delete path.rotation_deg;
+        return true;
+    }
+
+    function transformPath(record, pathId, patch, options) {
+        const path = pathById(record, pathId);
+        const source = (options && options.base) || path;
+        if (!path || !source || !source.nodes || !patch) return false;
+        const uniform = pathUsesArc(source);
+        const base = Space().pointsFrame(pathDoorPoints(source), Number(source.rotation_deg) || 0, uniform);
+        if (!base) return false;
+        const aspect = Boolean(options && options.aspect) || uniform;
+        let sized = null;
+        if (patch.width != null || patch.height != null) {
+            let width = patch.width != null ? patch.width : base.width;
+            let height = patch.height != null ? patch.height : base.height;
+            if (aspect) {
+                if (patch.width != null && patch.height == null) height = width * base.height / base.width;
+                if (patch.height != null && patch.width == null) width = height * base.width / base.height;
+            }
+            sized = Space().sizeFrame(base, width, height);
+            if (!sized) return false;
+            sized.base = base;
+            sized.anchorU = base.width / 2;
+            sized.anchorV = base.height / 2;
+            sized.scaleX = sized.width / base.width;
+            sized.scaleY = sized.height / base.height;
+        }
+        const rotation = patch.rotation == null ? null : quantize(patch.rotation);
+        const dx = patch.x == null ? 0 : quantize(patch.x - base.center.x);
+        const dy = patch.y == null ? 0 : quantize(patch.y - base.center.y);
+        if (!sized && rotation == null && !dx && !dy) return true;
+        if (dx == null || dy == null) return false;
+        if (!options || options.history !== false) remember(record);
+        if (sized && !writeResizedPath(path, source, sized)) {
+            if (!options || options.history !== false) undo(record);
+            return fail(record, "invalid_point", "That resize puts the path outside the drawing range.");
+        }
+        if (rotation != null) {
+            const center = sized ? sized.center : base.center;
+            const delta = rotation - (Number(source.rotation_deg) || 0);
+            if (!rotatePathGeometry(path, center, delta, rotation)) {
+                if (!options || options.history !== false) undo(record);
+                return fail(record, "invalid_point", "That rotation puts the path outside the drawing range.");
+            }
+        }
+        if ((dx || dy) && translatePath(record, pathId, dx, dy, { history: false, base: sized || rotation != null ? null : source }) !== true) {
+            if (!options || options.history !== false) undo(record);
+            return false;
+        }
+        clearStatus(record);
+        return true;
+    }
+
     function deleteShape(record, shapeId) {
         const shape = shapeById(record, shapeId);
         if (!shape) return false;
@@ -1692,6 +1891,22 @@
             moveShape(shapeId, dx, dy, options) {
                 const record = current();
                 return Boolean(record && moveShape(record, shapeId, dx, dy, options));
+            },
+            resizeShape(shapeId, handle, door, options) {
+                const record = current();
+                return Boolean(record && resizeShape(record, shapeId, handle, door, options));
+            },
+            transformShape(shapeId, patch, options) {
+                const record = current();
+                return Boolean(record && transformShape(record, shapeId, patch, options));
+            },
+            resizePath(pathId, handle, door, options) {
+                const record = current();
+                return record ? resizePath(record, pathId, handle, door, options) === true : false;
+            },
+            transformPath(pathId, patch, options) {
+                const record = current();
+                return record ? transformPath(record, pathId, patch, options) === true : false;
             },
             convertShape(shapeId) {
                 const record = current();

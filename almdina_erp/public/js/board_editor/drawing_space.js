@@ -225,11 +225,11 @@
         rectangle: ["x_mm", "y_mm", "width_mm", "height_mm", "rotation_deg"],
         circle: ["cx_mm", "cy_mm", "radius_mm"],
         ellipse: ["cx_mm", "cy_mm", "rx_mm", "ry_mm", "rotation_deg"],
-        arc: ["cx_mm", "cy_mm", "radius_mm", "start_angle_deg", "sweep_angle_deg"],
+        arc: ["cx_mm", "cy_mm", "radius_mm", "start_angle_deg", "sweep_angle_deg", "rotation_deg"],
         polygon: ["cx_mm", "cy_mm", "radius_mm", "sides", "rotation_deg"],
-        trapezoid: ["x_mm", "y_mm", "bottom_width_mm", "top_width_mm", "height_mm"],
-        l_shape: ["x_mm", "y_mm", "width_mm", "height_mm", "notch_width_mm", "notch_height_mm"],
-        clipped_corner: ["x_mm", "y_mm", "width_mm", "height_mm", "cut_width_mm", "cut_height_mm", "corner"],
+        trapezoid: ["x_mm", "y_mm", "bottom_width_mm", "top_width_mm", "height_mm", "rotation_deg"],
+        l_shape: ["x_mm", "y_mm", "width_mm", "height_mm", "notch_width_mm", "notch_height_mm", "rotation_deg"],
+        clipped_corner: ["x_mm", "y_mm", "width_mm", "height_mm", "cut_width_mm", "cut_height_mm", "corner", "rotation_deg"],
     });
     const POSITIVE_SHAPE_KEYS = new Set([
         "width_mm", "height_mm", "radius_mm", "rx_mm", "ry_mm",
@@ -368,7 +368,7 @@
                 params.radius_mm,
                 params.start_angle_deg,
                 params.sweep_angle_deg,
-                0,
+                params.rotation_deg || 0,
                 32
             );
             if (!points) return null;
@@ -401,7 +401,8 @@
                 { x: params.x_mm + params.bottom_width_mm, y: params.y_mm + params.height_mm },
                 { x: params.x_mm, y: params.y_mm + params.height_mm },
             ];
-            const points = raw.map((point) => turnedPoint(point, point, 0));
+            const pivot = { x: params.x_mm, y: params.y_mm };
+            const points = raw.map((point) => turnedPoint(point, pivot, params.rotation_deg || 0));
             if (points.some((point) => !point)) return null;
             return { type: "polygon", closed: true, points, handles: points.map((point) => ({ ...point, role: "corner" })) };
         }
@@ -420,7 +421,8 @@
                 { x: right, y: bottom },
                 { x, y: bottom },
             ];
-            const points = raw.map((point) => turnedPoint(point, point, 0));
+            const pivot = { x: params.x_mm, y: params.y_mm };
+            const points = raw.map((point) => turnedPoint(point, pivot, params.rotation_deg || 0));
             if (points.some((point) => !point)) return null;
             return { type: "polygon", closed: true, points, handles: points.map((point) => ({ ...point, role: "corner" })) };
         }
@@ -461,7 +463,8 @@
                     { x, y: bottom },
                 ],
             }[params.corner];
-            const points = (raw || []).map((point) => turnedPoint(point, point, 0));
+            const pivot = { x: params.x_mm, y: params.y_mm };
+            const points = (raw || []).map((point) => turnedPoint(point, pivot, params.rotation_deg || 0));
             if (!points.length || points.some((point) => !point)) return null;
             return { type: "polygon", closed: true, points, handles: points.map((point) => ({ ...point, role: "corner" })) };
         }
@@ -486,6 +489,10 @@
                     return shapeFailure("A polygon needs between 3 and 360 sides.");
                 }
                 params.sides = sides;
+                continue;
+            }
+            if (key === "rotation_deg" && (raw[key] == null || raw[key] === "")) {
+                params.rotation_deg = 0;
                 continue;
             }
             const number = key.endsWith("_deg") ? quantizeDeg(raw[key]) : quantizeMm(raw[key]);
@@ -1200,6 +1207,362 @@
         };
     }
 
+    const MIN_RESIZE_MM = 0.1;
+    const RESIZE_HANDLE_ORDER = Object.freeze(["nw", "n", "ne", "e", "se", "s", "sw", "w"]);
+    const RESIZE_HANDLES = Object.freeze({
+        nw: { x: "start", y: "start", du: -1, dv: -1 },
+        n: { x: "", y: "start", du: 0, dv: -1 },
+        ne: { x: "end", y: "start", du: 1, dv: -1 },
+        e: { x: "end", y: "", du: 1, dv: 0 },
+        se: { x: "end", y: "end", du: 1, dv: 1 },
+        s: { x: "", y: "end", du: 0, dv: 1 },
+        sw: { x: "start", y: "end", du: -1, dv: 1 },
+        w: { x: "start", y: "", du: -1, dv: 0 },
+    });
+
+    function toDoor(u, v, frame) {
+        return rotate({ x: frame.pivot.x + u, y: frame.pivot.y + v }, frame.pivot, frame.rotation);
+    }
+
+    function toLocal(door, frame) {
+        const turned = rotate(door, frame.pivot, -frame.rotation);
+        return { u: turned.x - frame.pivot.x, v: turned.y - frame.pivot.y };
+    }
+
+    function pivotFor(center, width, height, rotation) {
+        const offset = rotate({ x: center.x + width / 2, y: center.y + height / 2 }, center, rotation);
+        return { x: center.x - (offset.x - center.x), y: center.y - (offset.y - center.y) };
+    }
+
+    function finitePoint(point) {
+        const x = quantizeMm(point && point.x);
+        const y = quantizeMm(point && point.y);
+        if (x == null || y == null) return null;
+        return { x, y };
+    }
+
+    function makeFrame(pivot, rotation, width, height, uniform, modelCenter) {
+        const frame = { pivot, rotation: rotation || 0, width, height, uniform: Boolean(uniform) };
+        const center = toDoor(width / 2, height / 2, frame);
+        frame.center = center;
+        frame.modelCenter = modelCenter || center;
+        frame.scaleX = 1;
+        frame.scaleY = 1;
+        return frame;
+    }
+
+    function extents(points) {
+        let minU = Infinity;
+        let minV = Infinity;
+        let maxU = -Infinity;
+        let maxV = -Infinity;
+        points.forEach((point) => {
+            minU = Math.min(minU, point.u);
+            minV = Math.min(minV, point.v);
+            maxU = Math.max(maxU, point.u);
+            maxV = Math.max(maxV, point.v);
+        });
+        if (!Number.isFinite(minU) || !(maxU - minU > 0) || !(maxV - minV > 0)) return null;
+        return { minU, minV, maxU, maxV, width: maxU - minU, height: maxV - minV };
+    }
+
+    function shapeFrame(kind, params) {
+        const built = normalizeShape(kind, params);
+        if (!built.ok) return null;
+        const value = built.params;
+        if (kind === "rectangle") {
+            return makeFrame(
+                { x: value.x_mm, y: value.y_mm },
+                value.rotation_deg,
+                value.width_mm,
+                value.height_mm,
+                false
+            );
+        }
+        if (kind === "circle" || kind === "arc") {
+            const radius = value.radius_mm;
+            const rotation = kind === "arc" ? value.rotation_deg : 0;
+            const center = { x: value.cx_mm, y: value.cy_mm };
+            return makeFrame(pivotFor(center, radius * 2, radius * 2, rotation), rotation, radius * 2, radius * 2, true, center);
+        }
+        if (kind === "ellipse") {
+            const center = { x: value.cx_mm, y: value.cy_mm };
+            const width = value.rx_mm * 2;
+            const height = value.ry_mm * 2;
+            return makeFrame(pivotFor(center, width, height, value.rotation_deg), value.rotation_deg, width, height, false, center);
+        }
+        if (kind === "polygon") {
+            const locals = [];
+            for (let index = 0; index < value.sides; index += 1) {
+                const point = polarPoint({ x: 0, y: 0 }, value.radius_mm, (index * 360) / value.sides);
+                locals.push({ u: point.x, v: point.y });
+            }
+            const box = extents(locals);
+            if (!box) return null;
+            const center = { x: value.cx_mm, y: value.cy_mm };
+            const pivot = rotate(
+                { x: center.x + box.minU, y: center.y + box.minV },
+                center,
+                value.rotation_deg
+            );
+            return makeFrame(pivot, value.rotation_deg, box.width, box.height, true, center);
+        }
+        if (kind === "trapezoid") {
+            const inset = (value.bottom_width_mm - value.top_width_mm) / 2;
+            const minU = Math.min(0, inset);
+            const origin = { x: value.x_mm, y: value.y_mm };
+            const pivot = rotate(
+                { x: origin.x + minU, y: origin.y },
+                origin,
+                value.rotation_deg
+            );
+            return makeFrame(
+                pivot,
+                value.rotation_deg,
+                Math.max(value.bottom_width_mm, value.top_width_mm),
+                value.height_mm,
+                false
+            );
+        }
+        if (kind === "l_shape" || kind === "clipped_corner") {
+            return makeFrame(
+                { x: value.x_mm, y: value.y_mm },
+                value.rotation_deg,
+                value.width_mm,
+                value.height_mm,
+                false
+            );
+        }
+        return null;
+    }
+
+    function pointsFrame(points, rotation, uniform) {
+        const list = (points || []).filter((point) => Number.isFinite(point.x) && Number.isFinite(point.y));
+        if (list.length < 2) return null;
+        const origin = {
+            x: list.reduce((sum, point) => sum + point.x, 0) / list.length,
+            y: list.reduce((sum, point) => sum + point.y, 0) / list.length,
+        };
+        const locals = list.map((point) => {
+            const turned = rotate(point, origin, -(rotation || 0));
+            return { u: turned.x - origin.x, v: turned.y - origin.y };
+        });
+        const box = extents(locals);
+        if (!box) return null;
+        const pivot = rotate({ x: origin.x + box.minU, y: origin.y + box.minV }, origin, rotation || 0);
+        return makeFrame(pivot, rotation || 0, box.width, box.height, Boolean(uniform));
+    }
+
+    function placeFrame(frame, x, y) {
+        const dx = x - frame.center.x;
+        const dy = y - frame.center.y;
+        const pivot = finitePoint({ x: frame.pivot.x + dx, y: frame.pivot.y + dy });
+        const center = finitePoint({ x, y });
+        const model = frame.modelCenter || frame.center;
+        const modelCenter = finitePoint({ x: model.x + dx, y: model.y + dy });
+        if (!pivot || !center || !modelCenter) return null;
+        return Object.assign({}, frame, { pivot, center, modelCenter, scaleX: 1, scaleY: 1 });
+    }
+
+    function sizeFrame(frame, width, height) {
+        const nextWidth = quantizeMm(width);
+        const nextHeight = quantizeMm(height);
+        if (nextWidth == null || nextHeight == null || !(nextWidth > 0) || !(nextHeight > 0)) return null;
+        const scaleX = nextWidth / frame.width;
+        const scaleY = nextHeight / frame.height;
+        const model = frame.modelCenter || frame.center;
+        const modelCenter = finitePoint({
+            x: frame.center.x + (model.x - frame.center.x) * scaleX,
+            y: frame.center.y + (model.y - frame.center.y) * scaleY,
+        });
+        const pivot = finitePoint(pivotFor(frame.center, nextWidth, nextHeight, frame.rotation));
+        if (!pivot || !modelCenter) return null;
+        return Object.assign({}, frame, {
+            pivot,
+            width: nextWidth,
+            height: nextHeight,
+            modelCenter,
+            scaleX,
+            scaleY,
+        });
+    }
+
+    function rotateFrame(frame, rotation) {
+        const angle = quantizeDeg(rotation);
+        if (angle == null) return null;
+        const delta = angle - frame.rotation;
+        const model = rotate(frame.modelCenter || frame.center, frame.center, delta);
+        const modelCenter = finitePoint(model);
+        const pivot = finitePoint(pivotFor(frame.center, frame.width, frame.height, angle));
+        if (!pivot || !modelCenter) return null;
+        return Object.assign({}, frame, {
+            pivot,
+            rotation: angle,
+            modelCenter,
+            scaleX: frame.scaleX || 1,
+            scaleY: frame.scaleY || 1,
+        });
+    }
+
+    function resizeFrame(frame, handle, doorPoint, aspect) {
+        const spec = RESIZE_HANDLES[handle];
+        if (!spec || !frame || !(frame.width > 0) || !(frame.height > 0)) return null;
+        const local = toLocal(doorPoint, frame);
+        if (!Number.isFinite(local.u) || !Number.isFinite(local.v)) return null;
+        const proportional = Boolean(aspect || frame.uniform);
+        let width = frame.width;
+        let height = frame.height;
+        let originU = 0;
+        let originV = 0;
+        if (spec.x === "end") {
+            width = Math.max(MIN_RESIZE_MM, local.u);
+            originU = 0;
+        } else if (spec.x === "start") {
+            width = Math.max(MIN_RESIZE_MM, frame.width - local.u);
+            originU = frame.width - width;
+        }
+        if (spec.y === "end") {
+            height = Math.max(MIN_RESIZE_MM, local.v);
+            originV = 0;
+        } else if (spec.y === "start") {
+            height = Math.max(MIN_RESIZE_MM, frame.height - local.v);
+            originV = frame.height - height;
+        }
+        if (proportional) {
+            const ratio = frame.width / frame.height;
+            if (spec.x && spec.y) {
+                const scaleX = width / frame.width;
+                const scaleY = height / frame.height;
+                const scale = Math.abs(scaleX - 1) >= Math.abs(scaleY - 1) ? scaleX : scaleY;
+                width = Math.max(MIN_RESIZE_MM, frame.width * scale);
+                height = Math.max(MIN_RESIZE_MM, frame.height * scale);
+                originU = spec.x === "end" ? 0 : frame.width - width;
+                originV = spec.y === "end" ? 0 : frame.height - height;
+            } else if (spec.x) {
+                height = Math.max(MIN_RESIZE_MM, width / ratio);
+                originV = (frame.height - height) / 2;
+            } else if (spec.y) {
+                width = Math.max(MIN_RESIZE_MM, height * ratio);
+                originU = (frame.width - width) / 2;
+            }
+        }
+        const pivot = finitePoint(toDoor(originU, originV, frame));
+        const sizedWidth = quantizeMm(width);
+        const sizedHeight = quantizeMm(height);
+        if (!pivot || sizedWidth == null || sizedHeight == null) return null;
+        const scaleX = sizedWidth / frame.width;
+        const scaleY = sizedHeight / frame.height;
+        const anchorU = spec.x === "start" ? frame.width : (spec.x === "end" ? 0 : frame.width / 2);
+        const anchorV = spec.y === "start" ? frame.height : (spec.y === "end" ? 0 : frame.height / 2);
+        const model = frame.modelCenter || frame.center;
+        const modelDoor = toDoor(
+            anchorU + ((model.x === frame.center.x && model.y === frame.center.y)
+                ? (frame.width / 2 - anchorU)
+                : (toLocal(model, frame).u - anchorU)) * scaleX,
+            anchorV + ((model.x === frame.center.x && model.y === frame.center.y)
+                ? (frame.height / 2 - anchorV)
+                : (toLocal(model, frame).v - anchorV)) * scaleY,
+            frame
+        );
+        const next = makeFrame(pivot, frame.rotation, sizedWidth, sizedHeight, frame.uniform, finitePoint(modelDoor) || modelDoor);
+        next.scaleX = scaleX;
+        next.scaleY = scaleY;
+        next.anchorU = anchorU;
+        next.anchorV = anchorV;
+        next.base = frame;
+        return next;
+    }
+
+    function resizePoint(point, nextFrame) {
+        const base = nextFrame && nextFrame.base;
+        if (!base) return null;
+        const local = toLocal(point, base);
+        const moved = toDoor(
+            nextFrame.anchorU + (local.u - nextFrame.anchorU) * nextFrame.scaleX,
+            nextFrame.anchorV + (local.v - nextFrame.anchorV) * nextFrame.scaleY,
+            base
+        );
+        return finitePoint(moved);
+    }
+
+    function frameToShapeParams(kind, previous, frame) {
+        const current = Object.assign({}, previous);
+        const center = frame.modelCenter || frame.center;
+        if (kind === "rectangle") {
+            current.x_mm = frame.pivot.x;
+            current.y_mm = frame.pivot.y;
+            current.width_mm = frame.width;
+            current.height_mm = frame.height;
+            current.rotation_deg = frame.rotation;
+        } else if (kind === "circle") {
+            current.cx_mm = center.x;
+            current.cy_mm = center.y;
+            current.radius_mm = frame.width / 2;
+        } else if (kind === "ellipse") {
+            current.cx_mm = center.x;
+            current.cy_mm = center.y;
+            current.rx_mm = frame.width / 2;
+            current.ry_mm = frame.height / 2;
+            current.rotation_deg = frame.rotation;
+        } else if (kind === "arc") {
+            current.cx_mm = center.x;
+            current.cy_mm = center.y;
+            current.radius_mm = frame.width / 2;
+            current.rotation_deg = frame.rotation;
+        } else if (kind === "polygon") {
+            current.cx_mm = center.x;
+            current.cy_mm = center.y;
+            current.radius_mm = Number(previous.radius_mm) * frame.scaleX;
+            current.rotation_deg = frame.rotation;
+        } else if (kind === "trapezoid") {
+            const bottom = Number(previous.bottom_width_mm) * frame.scaleX;
+            const top = Number(previous.top_width_mm) * frame.scaleX;
+            const minU = Math.min(0, (bottom - top) / 2);
+            const origin = toDoor(-minU, 0, frame);
+            current.x_mm = origin.x;
+            current.y_mm = origin.y;
+            current.bottom_width_mm = bottom;
+            current.top_width_mm = top;
+            current.height_mm = frame.height;
+            current.rotation_deg = frame.rotation;
+        } else if (kind === "l_shape") {
+            current.x_mm = frame.pivot.x;
+            current.y_mm = frame.pivot.y;
+            current.width_mm = frame.width;
+            current.height_mm = frame.height;
+            current.notch_width_mm = Number(previous.notch_width_mm) * frame.scaleX;
+            current.notch_height_mm = Number(previous.notch_height_mm) * frame.scaleY;
+            current.rotation_deg = frame.rotation;
+        } else if (kind === "clipped_corner") {
+            current.x_mm = frame.pivot.x;
+            current.y_mm = frame.pivot.y;
+            current.width_mm = frame.width;
+            current.height_mm = frame.height;
+            current.cut_width_mm = Number(previous.cut_width_mm) * frame.scaleX;
+            current.cut_height_mm = Number(previous.cut_height_mm) * frame.scaleY;
+            current.rotation_deg = frame.rotation;
+        }
+        return normalizeShape(kind, current);
+    }
+
+    function resizeCursor(dx, dy) {
+        if (!Number.isFinite(dx) || !Number.isFinite(dy) || (dx === 0 && dy === 0)) return "ew-resize";
+        let angle = Math.atan2(dy, dx) * 180 / Math.PI;
+        angle = ((angle % 180) + 180) % 180;
+        if (angle < 22.5 || angle >= 157.5) return "ew-resize";
+        if (angle < 67.5) return "nwse-resize";
+        if (angle < 112.5) return "ns-resize";
+        return "nesw-resize";
+    }
+
+    function handleLocalPoint(frame, handle) {
+        const spec = RESIZE_HANDLES[handle];
+        if (!spec) return null;
+        const u = spec.x === "end" ? frame.width : (spec.x === "start" ? 0 : frame.width / 2);
+        const v = spec.y === "end" ? frame.height : (spec.y === "start" ? 0 : frame.height / 2);
+        return toDoor(u, v, frame);
+    }
+
     window.AlmdinaBoardEditor = window.AlmdinaBoardEditor || {};
     window.AlmdinaBoardEditor.DrawingSpace = Object.freeze({
         SNAP_PX,
@@ -1224,6 +1587,18 @@
         shapeFieldDefs,
         normalizeShape,
         shapeFromDrag,
+        shapeFrame,
+        pointsFrame,
+        resizeFrame,
+        resizePoint,
+        placeFrame,
+        sizeFrame,
+        rotateFrame,
+        frameToShapeParams,
+        handleLocalPoint,
+        resizeCursor,
+        RESIZE_HANDLE_ORDER,
+        RESIZE_HANDLES,
         shapePathParts,
         bezierFromPoints,
         outlineDistance,

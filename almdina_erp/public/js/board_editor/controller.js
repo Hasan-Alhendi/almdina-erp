@@ -233,6 +233,7 @@
         let snapRevisionKey = "";
         let referenceMenuOpen = false;
         let referenceAspectLock = true;
+        let transformAspectLock = false;
         let referenceCalibration = null;
         let referenceDrag = null;
         const referenceLoads = {};
@@ -1299,6 +1300,7 @@
                 try {
                     if (vectorGesture.kind === "node") updateNodeGesture(moveEvent);
                     else if (vectorGesture.kind === "text-scale" || vectorGesture.kind === "text-rotate") updateTextHandle(moveEvent);
+                    else if (vectorGesture.kind === "resize") updateResize(moveEvent);
                     else updateSelectGesture(moveEvent);
                 } catch (error) {
                     endVectorGesture("cancel");
@@ -1522,6 +1524,57 @@
             return String(params[key]);
         }
 
+        function transformFromFrame(frame, rotatable) {
+            if (!frame) return null;
+            return {
+                x: frame.center.x,
+                y: frame.center.y,
+                width: frame.width,
+                height: frame.height,
+                rotation: frame.rotation || 0,
+                uniform: frame.uniform === true,
+                rotatable: rotatable !== false,
+                aspectLocked: transformAspectLock || frame.uniform === true,
+            };
+        }
+
+        function shapeTransform(shape, Space) {
+            if (!shape || !Space.shapeFrame) return null;
+            return transformFromFrame(Space.shapeFrame(shape.kind, shape.params), shape.kind !== "circle");
+        }
+
+        function pathTransform(path, Space) {
+            if (!path || !Space.pointsFrame) return null;
+            const points = [];
+            (path.nodes || []).forEach((node) => points.push({ x: node.x_mm, y: node.y_mm }));
+            (path.segments || []).forEach((segment) => {
+                (segment.controls || []).forEach((control) => points.push({ x: control.x_mm, y: control.y_mm }));
+            });
+            const uniform = (path.segments || []).some((segment) => segment && segment.kind === "arc");
+            return transformFromFrame(Space.pointsFrame(points, Number(path.rotation_deg) || 0, uniform), true);
+        }
+
+        function resizeModel(record, Space) {
+            if (!record || !record.selection || drawingTool !== "select") return null;
+            if (record.selection.shapeId && !record.selection.pathId) {
+                const shape = (record.document.shapes || []).find((row) => row.id === record.selection.shapeId && !row.exploded);
+                return shape && Space.shapeFrame ? Space.shapeFrame(shape.kind, shape.params) : null;
+            }
+            if (!record.selection.pathId || record.selection.nodeId || !Space.pointsFrame) return null;
+            const path = (record.document.paths || []).find((row) => row.id === record.selection.pathId);
+            if (!path) return null;
+            const points = [];
+            (path.nodes || []).forEach((node) => points.push({ x: node.x_mm, y: node.y_mm }));
+            (path.segments || []).forEach((segment) => {
+                (segment.controls || []).forEach((control) => points.push({ x: control.x_mm, y: control.y_mm }));
+            });
+            return Space.pointsFrame(
+                points,
+                Number(path.rotation_deg) || 0,
+                (path.segments || []).some((segment) => segment && segment.kind === "arc")
+            );
+        }
+
         function shapeFormState(record, Space) {
             if (!Space.shapeFieldDefs) return null;
             if (drawingTool === "node_edit" && record.selection && record.selection.nodeId && String(record.selection.nodeId).indexOf("control:") !== 0) {
@@ -1544,9 +1597,11 @@
                 : null;
             if (!editing && drawingTool !== "shapes") {
                 if (drawingTool === "select" && record.selection && record.selection.pathId && !record.selection.shapeId) {
+                    const path = (record.document.paths || []).find((row) => row.id === record.selection.pathId);
                     return {
                         mode: "path",
                         fields: [],
+                        transform: pathTransform(path, Space),
                         actions: { copy: true, paste: Boolean(record.clipboard), remove: true },
                     };
                 }
@@ -1554,10 +1609,12 @@
                 return { mode: "create", kind: drawingShapeKind, fields: [], actions: { paste: true } };
             }
             const kind = editing ? editing.kind : drawingShapeKind;
+            const hidden = new Set(["x_mm", "y_mm", "cx_mm", "cy_mm", "width_mm", "height_mm", "rotation_deg", "rx_mm", "ry_mm", "radius_mm", "bottom_width_mm"]);
             return {
                 mode: editing ? "edit" : "create",
                 kind,
-                fields: Space.shapeFieldDefs(kind).map((field) => ({
+                transform: editing ? shapeTransform(editing, Space) : null,
+                fields: Space.shapeFieldDefs(kind).filter((field) => !editing || !hidden.has(field.key)).map((field) => ({
                     key: field.key,
                     labelKey: field.labelKey,
                     value: shapeFieldValue(field.key, editing && editing.params),
@@ -1566,6 +1623,35 @@
                 actions: editing
                     ? { convert: true, copy: true, paste: Boolean(record.clipboard), remove: true }
                     : { paste: Boolean(record.clipboard) },
+            };
+        }
+
+        function resizeOverlay(record, pieceFrame, Space) {
+            const local = resizeModel(record, Space);
+            if (!local || !Space.handleLocalPoint || !Space.RESIZE_HANDLE_ORDER) return null;
+            const worldOf = (door) => (pieceFrame ? Space.doorToWorld(pieceFrame, door.x, door.y) : door);
+            const center = worldOf(local.center);
+            const handles = Space.RESIZE_HANDLE_ORDER.map((id) => {
+                const door = Space.handleLocalPoint(local, id);
+                const world = worldOf(door);
+                return {
+                    id,
+                    x: world.x,
+                    y: world.y,
+                    cursor: Space.resizeCursor(world.x - center.x, world.y - center.y),
+                };
+            });
+            const readoutDoor = Space.handleLocalPoint(local, "n") || local.center;
+            const readout = worldOf(readoutDoor);
+            return {
+                handles,
+                corners: ["nw", "ne", "se", "sw"].map((id) => worldOf(Space.handleLocalPoint(local, id))),
+                live: Boolean(vectorGesture && vectorGesture.kind === "resize"),
+                readout: {
+                    x: readout.x,
+                    y: readout.y,
+                    text: `${Math.round(local.width * 10) / 10} × ${Math.round(local.height * 10) / 10} mm`,
+                },
             };
         }
 
@@ -1626,6 +1712,8 @@
                 canCancel: Boolean(record.cursor),
                 paths,
                 shapes: drawingShapes(record, frame, Space),
+                resize: resizeOverlay(record, frame, Space),
+                resizing: Boolean(vectorGesture && vectorGesture.kind === "resize"),
                 shapeKind: drawingShapeKind,
                 shapeForm: shapeFormState(record, Space),
                 pen: drawingTool === "pen" ? { smoothing: penSmoothing, canClose: Boolean(penClosePathId) } : null,
@@ -2597,6 +2685,11 @@
             if (!mapped) return false;
             if (referenceCalibration && takeCalibrationPoint(mapped.door)) return true;
             if (drawingTool === "select") {
+                const resizeHandle = event.target && event.target.closest && event.target.closest("[data-abe-resize-handle]");
+                if (resizeHandle && record.selection) {
+                    beginResize(resizeHandle.getAttribute("data-abe-resize-handle"), mapped.door, event, record);
+                    return true;
+                }
                 const handle = event.target && event.target.closest && event.target.closest("[data-abe-text-handle]");
                 if (handle && record.selection && record.selection.textId) {
                     beginTextHandle(handle.getAttribute("data-abe-text-handle-kind"), mapped.door, event, record);
@@ -2812,7 +2905,7 @@
 
         function readShapeFields(host) {
             const fields = {};
-            if (!host) return fields;
+            if (!host || !host.querySelectorAll) return fields;
             host.querySelectorAll("[data-abe-shape-field]").forEach((input) => {
                 fields[input.getAttribute("data-abe-shape-field")] = input.value;
             });
@@ -2831,8 +2924,8 @@
                 syncDrawing();
                 return true;
             }
-            const host = ensureShell().querySelector("[data-abe-canvas]");
-            const fields = readShapeFields(host);
+            const shell = ensureShell();
+            const fields = readShapeFields(shell.querySelector("[data-abe-draw-props] [data-abe-shape-form]") || shell);
             const typed = Object.keys(fields).some((key) => {
                 if (!fields[key] || !String(fields[key]).trim()) return false;
                 return key !== "x_mm" && key !== "y_mm" && key !== "cx_mm" && key !== "cy_mm" && key !== "corner" && key !== "rotation_deg" && key !== "start_angle_deg";
@@ -2947,10 +3040,47 @@
             return {
                 kind: "path",
                 id: path.id,
+                rotation_deg: Number(path.rotation_deg) || 0,
                 nodes: JSON.parse(JSON.stringify(path.nodes || [])),
                 segments: JSON.parse(JSON.stringify(path.segments || [])),
                 shapeParams: shape ? JSON.parse(JSON.stringify(shape.params)) : null,
             };
+        }
+
+        function beginResize(handle, door, event, record) {
+            const base = selectionBase(record, record.selection);
+            if (!base || !handle || !event) return;
+            vectorGesture = {
+                kind: "resize",
+                handle,
+                pointerId: event.pointerId,
+                history: false,
+                base,
+                lastDoor: { x: door.x, y: door.y },
+            };
+            ownVectorPointer(event);
+        }
+
+        function updateResize(event) {
+            const gesture = vectorGesture;
+            if (!gesture || gesture.kind !== "resize" || !drawingSession) return;
+            const door = event && event.__door
+                ? event.__door
+                : ((store && doorPointFromEvent(store.snapshot(), event) || {}).door);
+            if (!door) return;
+            gesture.lastDoor = { x: door.x, y: door.y };
+            const options = {
+                history: gesture.history ? false : undefined,
+                aspect: Boolean(event.shiftKey) || transformAspectLock,
+                base: gesture.base.kind === "shape" ? gesture.base.params : gesture.base,
+            };
+            const before = drawingSession.documentCanonical();
+            const changed = gesture.base.kind === "shape"
+                ? drawingSession.resizeShape(gesture.base.id, gesture.handle, door, options) === true
+                : drawingSession.resizePath(gesture.base.id, gesture.handle, door, options) === true;
+            if (changed && drawingSession.documentCanonical() !== before) gesture.history = true;
+            refreshCutValidation();
+            syncDrawing();
         }
 
         function updateSelectGesture(event) {
@@ -3102,13 +3232,38 @@
             }
         }
 
+        function commitTransformField(field, value) {
+            const record = activeDrawingRecord();
+            const Model = window.AlmdinaBoardEditor && window.AlmdinaBoardEditor.DrawingModel;
+            const parsed = Model && Model.parseMeasure(value);
+            const numeric = field === "x" || field === "y" || field === "rotation" || field === "width" || field === "height";
+            if (!record || !drawingSession || !parsed || !numeric || parsed.invalid || parsed.empty) {
+                syncDrawing();
+                return;
+            }
+            if ((field === "width" || field === "height") && !(parsed.value > 0)) {
+                syncDrawing();
+                return;
+            }
+            const patch = {};
+            patch[field] = parsed.value;
+            const selection = record.selection || {};
+            const options = { aspect: transformAspectLock };
+            const changed = selection.shapeId && !selection.pathId
+                ? drawingSession.transformShape(selection.shapeId, patch, options) === true
+                : drawingSession.transformPath(selection.pathId, patch, options) === true;
+            if (changed) refreshCutValidation();
+            syncDrawing();
+        }
+
         function commitShapeForm() {
             const record = activeDrawingRecord();
-            const host = ensureShell().querySelector("[data-abe-canvas]");
-            const form = host && host.querySelector("[data-abe-shape-form]");
+            const shell = ensureShell();
+            const form = (shell.querySelector("[data-abe-draw-props] [data-abe-shape-form]"))
+                || shell.querySelector("[data-abe-shape-form]");
             if (!record || !form || !drawingSession) return;
             const mode = form.getAttribute("data-abe-shape-mode") || "create";
-            const fields = readShapeFields(host);
+            const fields = readShapeFields(form);
             if (mode === "node" && record.selection && record.selection.nodeId) {
                 drawingSession.moveNode(record.selection.pathId, record.selection.nodeId, fields.x_mm, fields.y_mm);
             } else {
@@ -3650,6 +3805,10 @@
                         if (key) shapeEntry[key] = value == null ? "" : String(value);
                     },
                     commitShapeForm: () => commitShapeForm(),
+                    commitTransformField: (field, value) => commitTransformField(field, value),
+                    setTransformAspect: (locked) => {
+                        transformAspectLock = locked === true;
+                    },
                     drawingAction: (action) => drawingAction(action),
                     setPenSmoothing: (level) => setPenSmoothing(level),
                     setSnapOption: (name, value) => setSnapOption(name, value),
@@ -3678,6 +3837,9 @@
                         refreshTypedPreviewFromEntry();
                     },
                 }, drawingPanelCollapsed);
+                if (DrawingProperties.patchTransform && view.drawingView && view.drawingView.shapeForm) {
+                    DrawingProperties.patchTransform(rightSidebar, view.drawingView.shapeForm.transform);
+                }
             } else if (RightSidebarRenderer && typeof RightSidebarRenderer.render === "function") {
                 RightSidebarRenderer.render(rightSidebar, view, inspectorHandlers());
             }
@@ -3737,6 +3899,10 @@
                     if (key) shapeEntry[key] = value == null ? "" : String(value);
                 },
                 commitShapeForm: () => commitShapeForm(),
+                commitTransformField: (field, value) => commitTransformField(field, value),
+                setTransformAspect: (locked) => {
+                    transformAspectLock = locked === true;
+                },
                 drawingAction: (action) => drawingAction(action),
                 drawingHistory: (direction) => applyDrawingHistory(direction),
                 drawingPointerDown: (event) => drawingPointerDown(event),
@@ -4451,7 +4617,14 @@
             );
         }
 
+        lifecycle.listen(window, "keyup", (event) => {
+            if (!vectorGesture || vectorGesture.kind !== "resize" || !event || event.key !== "Shift") return;
+            updateResize({ shiftKey: false, pointerId: vectorGesture.pointerId, __door: vectorGesture.lastDoor });
+        });
         lifecycle.listen(window, "keydown", (event) => {
+            if (vectorGesture && vectorGesture.kind === "resize" && event && event.key === "Shift" && !event.repeat) {
+                updateResize({ shiftKey: true, pointerId: vectorGesture.pointerId, __door: vectorGesture.lastDoor });
+            }
             if (isDrawingMeasureField(event.target) && isMeasureEnter(event)) {
                 if (!event.defaultPrevented && drawingTool === "polyline") {
                     event.preventDefault();

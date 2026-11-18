@@ -437,11 +437,11 @@ const page = fs.readFileSync(path.join(root, "almdina_erp/page/board_editor/boar
 const arCsv = fs.readFileSync(path.join(root, "translations/ar.csv"), "utf8");
 const storeSource = fs.readFileSync(path.join(root, "public/js/board_editor/store.js"), "utf8");
 assert.match(page, /store\.js\?v=23/);
-assert.match(page, /canvas_renderer\.js\?v=56/);
+assert.match(page, /canvas_renderer\.js\?v=57/);
 assert.match(page, /sidebar_renderer\.js\?v=21/);
 assert.match(page, /right_sidebar_renderer\.js\?v=5/);
-assert.match(page, /controller\.js\?v=55/);
-assert.match(page, /board_editor\.css\?v=51/);
+assert.match(page, /controller\.js\?v=56/);
+assert.match(page, /board_editor\.css\?v=52/);
 assert.match(storeSource, /showEdgeBands:\s*false/);
 assert.match(storeSource, /pieceEdgeBandOverrides/);
 assert.match(

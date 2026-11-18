@@ -207,7 +207,7 @@
         const form = drawing && drawing.shapeForm;
         const actions = form && form.actions || {};
         const hasActions = actions.convert || actions.copy || actions.paste || actions.remove || actions.insert;
-        if (!form || ((!form.fields || !form.fields.length) && !hasActions)) return "";
+        if (!form || ((!form.fields || !form.fields.length) && !form.transform && !hasActions)) return "";
         const corners = [
             ["top_left", "Top left"],
             ["top_right", "Top right"],
@@ -234,8 +234,20 @@
             actions.remove ? propButton("Delete", `data-abe-drawing-action="remove"`, "danger") : "",
         ].join("");
         const actionRow = buttons ? `<div class="abe-prop-actions">${buttons}</div>` : "";
+        const transform = form.transform;
+        const metric = (key, label, value) => `<label class="abe-metric"><span>${esc(__(label))}</span><input type="text" inputmode="decimal" dir="ltr" autocomplete="off" spellcheck="false" data-abe-transform-field="${esc(key)}" value="${esc(key === "rotation" ? formatMeasureAngle(value) : formatMeasureMm(value))}" aria-label="${esc(__(label))}"${transform && transform.rotatable === false && key === "rotation" ? " disabled" : ""} /></label>`;
+        const transformGrid = transform
+            ? `<div class="abe-prop-grid" data-abe-transform-form="1">
+                ${metric("x", "X (mm)", transform.x)}
+                ${metric("y", "Y (mm)", transform.y)}
+                ${metric("width", "Width (mm)", transform.width)}
+                ${metric("height", "Height (mm)", transform.height)}
+                ${metric("rotation", "Rotation (°)", transform.rotation)}
+                <label class="abe-metric"><span>${esc(__("Lock aspect ratio"))}</span><input type="checkbox" data-abe-transform-aspect="1"${transform.aspectLocked || transform.uniform ? " checked" : ""}${transform.uniform ? " disabled" : ""} aria-label="${esc(__("Lock aspect ratio"))}" /></label>
+            </div>`
+            : "";
         const grid = fields ? `<div class="abe-prop-grid">${fields}</div>` : "";
-        return `<div class="abe-shape-form" data-abe-shape-form="1" data-abe-shape-mode="${esc(form.mode || "create")}" dir="${esc(pageDirection())}">${grid}${error}${actionRow}</div>`;
+        return `<div class="abe-shape-form" data-abe-shape-form="1" data-abe-shape-mode="${esc(form.mode || "create")}" dir="${esc(pageDirection())}">${transformGrid}${grid}${error}${actionRow}</div>`;
     }
 
     function penSettingsHtml(drawing, enabled) {
@@ -352,7 +364,11 @@
             label: target.label || "",
             size: [target.widthCm, target.lengthCm],
             path: drawing.pathForm || null,
-            shape: drawing.shapeForm || null,
+            shape: drawing.shapeForm
+                ? Object.assign({}, drawing.shapeForm, {
+                    transform: drawing.resizing ? "live" : (drawing.shapeForm.transform || null),
+                })
+                : null,
             pen: drawing.pen || null,
             snap: drawing.snapMenuOpen === true ? drawing.snapSettings || {} : false,
             referenceMenu: drawing.referenceMenuOpen === true,
@@ -371,7 +387,7 @@
     function focusedField(root) {
         const active = root && root.ownerDocument ? root.ownerDocument.activeElement : null;
         if (!active || !root.contains || !root.contains(active)) return null;
-        const attr = ["data-abe-text-field", "data-abe-shape-field", "data-abe-reference-field", "data-abe-path-dx", "data-abe-path-dy", "data-abe-reference-known", "data-abe-drawing-length", "data-abe-drawing-angle"].find((name) => active.hasAttribute && active.hasAttribute(name));
+        const attr = ["data-abe-text-field", "data-abe-shape-field", "data-abe-transform-field", "data-abe-reference-field", "data-abe-path-dx", "data-abe-path-dy", "data-abe-reference-known", "data-abe-drawing-length", "data-abe-drawing-angle"].find((name) => active.hasAttribute && active.hasAttribute(name));
         if (!attr) return null;
         return {
             attr,
@@ -427,6 +443,24 @@
         root.querySelectorAll("[data-abe-shape-form], [data-abe-path-form], [data-abe-pen-settings], [data-abe-snap-menu], [data-abe-reference-menu], [data-abe-reference-form], [data-abe-text-form]").forEach((panel) => {
             panel.addEventListener("pointerdown", stop);
             panel.addEventListener("click", stop);
+        });
+        root.querySelectorAll("[data-abe-transform-aspect]").forEach((input) => {
+            input.addEventListener("change", (event) => {
+                event.stopPropagation();
+                if (handlers && handlers.setTransformAspect) handlers.setTransformAspect(input.checked === true);
+            });
+        });
+        root.querySelectorAll("[data-abe-transform-field]").forEach((input) => {
+            input.addEventListener("keydown", (event) => {
+                if (event.key !== "Enter" && event.code !== "Enter" && event.code !== "NumpadEnter") return;
+                event.preventDefault();
+                event.stopPropagation();
+                if (handlers && handlers.commitTransformField) handlers.commitTransformField(input.getAttribute("data-abe-transform-field"), input.value);
+            });
+            input.addEventListener("change", (event) => {
+                event.stopPropagation();
+                if (handlers && handlers.commitTransformField) handlers.commitTransformField(input.getAttribute("data-abe-transform-field"), input.value);
+            });
         });
         root.querySelectorAll("[data-abe-shape-form] [data-abe-shape-field]").forEach((input) => {
             input.addEventListener("input", () => {
@@ -635,10 +669,21 @@
         lastSignature = "";
     }
 
+    function patchTransform(host, transform) {
+        if (!host || !transform) return;
+        host.querySelectorAll("[data-abe-transform-field]").forEach((input) => {
+            if (input === host.ownerDocument.activeElement) return;
+            const key = input.getAttribute("data-abe-transform-field");
+            const text = key === "rotation" ? formatMeasureAngle(transform[key]) : formatMeasureMm(transform[key]);
+            if (text !== "" && input.value !== text) input.value = text;
+        });
+    }
+
     window.AlmdinaBoardEditor = window.AlmdinaBoardEditor || {};
     window.AlmdinaBoardEditor.DrawingProperties = Object.freeze({
         render,
         reset,
         html,
+        patchTransform,
     });
 })();

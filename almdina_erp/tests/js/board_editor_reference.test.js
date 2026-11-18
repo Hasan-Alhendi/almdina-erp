@@ -210,7 +210,7 @@ assert.match(fetchSource, /drawingServerIdentity\(\)/);
 assert.match(uploadSource, /drawingSession\.isCurrent\(pieceId, token\)/);
 assert.doesNotMatch(uploadSource, /view\.orderName|target\.planName/);
 assert.doesNotMatch(fetchSource, /view\.orderName|target\.planName/);
-assert.match(fs.readFileSync(path.join(root, "almdina_erp/page/board_editor/board_editor.js"), "utf8"), /controller\.js\?v=55/);
+assert.match(fs.readFileSync(path.join(root, "almdina_erp/page/board_editor/board_editor.js"), "utf8"), /controller\.js\?v=56/);
 
 const calls = [];
 const apiHost = loadContext(["public/js/board_editor/api.js"], {

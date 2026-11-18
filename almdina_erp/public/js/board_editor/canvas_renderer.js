@@ -1751,6 +1751,7 @@
                 }
             }
             if (!path.selected && !path.active) return;
+            if (drawing.tool === "select" && path.selected) return;
             points.forEach((point, index) => {
                 const end = index === points.length - 1 && !path.closed;
                 const start = index === 0;
@@ -1779,11 +1780,26 @@
             if (points.length < 2) return;
             const commands = points.map((point, index) => `${index === 0 ? "M" : "L"}${point.x} ${point.y}`).join(" ");
             parts.push(`<path data-abe-drawing-shape="${esc(shape.id)}" d="${commands}${shape.closed ? " Z" : ""}" fill="none" stroke="${shape.selected ? "#0b5fff" : "#344054"}" stroke-width="${shape.selected ? 2.4 : 1.6}" vector-effect="non-scaling-stroke" stroke-linejoin="round" stroke-linecap="round"${selectCursor}/>`);
-            if (!shape.selected) return;
+            if (!shape.selected || drawing.tool === "select") return;
             (shape.handles || []).forEach((handle) => {
                 parts.push(`<circle data-abe-shape-handle="${esc(shape.id)}" cx="${handle.x}" cy="${handle.y}" r="${nodeRadius}" fill="#fff" stroke="#0b5fff" stroke-width="${1.4 / safeScale}"/>`);
             });
         });
+        const resize = drawing.resize;
+        if (resize && drawing.tool === "select" && Array.isArray(resize.handles)) {
+            const box = (resize.corners || []).map((point) => `${point.x},${point.y}`).join(" ");
+            if (box) {
+                parts.push(`<polygon data-abe-resize-box="1" points="${box}" fill="none" stroke="#0b5fff" stroke-width="${1.2 / safeScale}" vector-effect="non-scaling-stroke" pointer-events="none"/>`);
+            }
+            const visual = 8 / safeScale;
+            const hit = 18 / safeScale;
+            resize.handles.forEach((handle) => {
+                parts.push(`<g data-abe-resize-handle="${esc(handle.id)}" style="cursor:${esc(handle.cursor || "nwse-resize")}"><rect x="${handle.x - hit / 2}" y="${handle.y - hit / 2}" width="${hit}" height="${hit}" fill="transparent"/><rect x="${handle.x - visual / 2}" y="${handle.y - visual / 2}" width="${visual}" height="${visual}" fill="#fff" stroke="#0b5fff" stroke-width="${1.4 / safeScale}" pointer-events="none"/></g>`);
+            });
+            if (resize.live && resize.readout) {
+                parts.push(`<text class="abe-resize-readout" data-abe-resize-readout="1" x="${resize.readout.x}" y="${resize.readout.y - (14 / safeScale)}" font-size="${12 / safeScale}" fill="#0b5fff" text-anchor="middle" pointer-events="none">${esc(resize.readout.text)}</text>`);
+            }
+        }
         if (drawing.preview) {
             const preview = drawing.preview;
             parts.push(`<line data-abe-drawing-preview="1" x1="${preview.x1}" y1="${preview.y1}" x2="${preview.x2}" y2="${preview.y2}" stroke="#0b5fff" stroke-width="1.4" stroke-dasharray="7 5" vector-effect="non-scaling-stroke" pointer-events="none"/>`);

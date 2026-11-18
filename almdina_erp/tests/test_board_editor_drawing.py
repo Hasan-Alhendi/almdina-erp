@@ -546,6 +546,58 @@ class BoardEditorDrawingContractTests(unittest.TestCase):
             normalize_document(_blank_document(paths=[path]))
         self.assertEqual(caught.exception.code, "unknown_field")
 
+    def test_shape_orientation_is_optional_and_survives_reopen(self):
+        trapezoid = {
+            "id": "shape-trap",
+            "kind": "trapezoid",
+            "exploded": False,
+            "path_id": None,
+            "params": {
+                "x_mm": 10,
+                "y_mm": 20,
+                "bottom_width_mm": 80,
+                "top_width_mm": 40,
+                "height_mm": 30,
+            },
+        }
+        stored = normalize_document(_blank_document(shapes=[trapezoid]))
+        self.assertNotIn("rotation_deg", stored["shapes"][0]["params"])
+        turned = {
+            **trapezoid,
+            "params": {**trapezoid["params"], "rotation_deg": 35},
+        }
+        reopened = normalize_document(_blank_document(shapes=[turned]))
+        self.assertEqual(reopened["shapes"][0]["params"]["rotation_deg"], 35)
+        self.assertEqual(reopened["shapes"][0]["kind"], "trapezoid")
+        arc = {
+            "id": "shape-arc",
+            "kind": "arc",
+            "exploded": False,
+            "path_id": None,
+            "params": {
+                "cx_mm": 40,
+                "cy_mm": 40,
+                "radius_mm": 20,
+                "start_angle_deg": 0,
+                "sweep_angle_deg": 90,
+                "rotation_deg": 15,
+            },
+        }
+        arc_document = normalize_document(_blank_document(shapes=[arc]))
+        self.assertEqual(arc_document["shapes"][0]["params"]["sweep_angle_deg"], 90)
+        self.assertEqual(arc_document["shapes"][0]["params"]["rotation_deg"], 15)
+        path = _line_path(
+            "path-turned",
+            "manufacturing_outer",
+            True,
+            [("n1", 0, 0), ("n2", 40, 0), ("n3", 0, 30)],
+            [("s1", "n1", "n2"), ("s2", "n2", "n3"), ("s3", "n3", "n1")],
+        )
+        path["rotation_deg"] = 20
+        path_document = normalize_document(_blank_document(paths=[path]))
+        self.assertEqual(path_document["paths"][0]["rotation_deg"], 20)
+        self.assertEqual(path_document["blank"], {"width_mm": 600, "length_mm": 2100})
+
 
 if __name__ == "__main__":
     unittest.main()

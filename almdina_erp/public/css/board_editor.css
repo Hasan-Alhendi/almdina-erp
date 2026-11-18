@@ -1904,3 +1904,10 @@ button.abe-drawing-tool:disabled {
   display: flex;
   width: 100%;
 }
+
+.abe-resize-readout {
+  font-weight: 700;
+  paint-order: stroke;
+  stroke: #fff;
+  stroke-width: 3px;
+}

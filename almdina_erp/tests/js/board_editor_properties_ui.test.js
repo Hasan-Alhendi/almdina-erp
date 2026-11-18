@@ -173,7 +173,7 @@ assert.equal(drawing.deleteReference(first), true);
 assert.equal(drawing.current().selection, null);
 
 const page = fs.readFileSync(path.join(root, "almdina_erp/page/board_editor/board_editor.js"), "utf8");
-assert.match(page, /drawing_properties_panel\.js\?v=3/);
-assert.match(page, /board_editor\.css\?v=51/);
+assert.match(page, /drawing_properties_panel\.js\?v=4/);
+assert.match(page, /board_editor\.css\?v=52/);
 
 console.log("board editor properties ui tests ok");
