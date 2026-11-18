@@ -8,10 +8,22 @@
     const MM_PER_CM = 10;
     const MODE_ALL = "All Directions";
     const MODE_SIDES = "Individual Sides";
+    const DEFAULT_GLASS_MARGIN_MM = 60;
     const OUTER_MARGIN_NOTE = "Glass margin is measured from the entered outer size. The cut size can differ after edge banding.";
 
     function isGlass(row) {
         return String((row && row.piece_type) || "") === GLASS_TYPE;
+    }
+
+    function applyNewGlassMargin(row) {
+        if (!isGlass(row)) return row;
+        row.glass_margin_mode = MODE_ALL;
+        row.glass_margin_mm = DEFAULT_GLASS_MARGIN_MM;
+        row.glass_margin_top_mm = 0;
+        row.glass_margin_bottom_mm = 0;
+        row.glass_margin_right_mm = 0;
+        row.glass_margin_left_mm = 0;
+        return row;
     }
 
     function roundMm(value) {
@@ -566,7 +578,9 @@
     window.AlmdinaGlassShape = Object.freeze({
         GLASS_TYPE,
         MM_PER_CM,
+        DEFAULT_GLASS_MARGIN_MM,
         isGlass,
+        applyNewGlassMargin,
         openingMm,
         openingFromSides,
         previewState,

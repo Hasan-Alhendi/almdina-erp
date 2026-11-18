@@ -340,6 +340,12 @@
         const nextType = pieceType || "Regular";
         const changed = (row.piece_type || "Regular") !== nextType;
         row.piece_type = nextType;
+        if (changed && nextType === "Glass") {
+            const glass = window.AlmdinaGlassShape;
+            if (glass && typeof glass.applyNewGlassMargin === "function") {
+                glass.applyNewGlassMargin(row);
+            }
+        }
         if (nextType === "Special") {
             const fastEntry = window.AlmdinaDoorCuttingFastEntry;
             if (fastEntry && typeof fastEntry.clearSpecialMeasurementEdges === "function") {
