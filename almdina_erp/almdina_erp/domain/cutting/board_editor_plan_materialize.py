@@ -470,7 +470,10 @@ def _materialize_piece(
         "h": length_mm / 10.0,
         "original_w": num(original_w),
         "original_h": num(original_h),
-        "rotated": False,
+        # The optimizer stores a swapped footprint with rotated=true. The posed
+        # outline is already in that orientation, so the flag stays a dimension
+        # contract only. apply_rotated_to_geometry remains false.
+        "rotated": bool(source.get("rotated")),
         "rotation_deg": num(posed.get("rotation_deg")),
         "apply_rotated_to_geometry": False,
         "area_m2": area_m2,

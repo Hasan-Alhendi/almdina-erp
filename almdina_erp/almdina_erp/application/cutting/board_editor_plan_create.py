@@ -524,6 +524,9 @@ def execute_create(
             "optimization_time_limit_sec": source.get("optimization_time_limit_sec"),
             "kerf_mm": source.get("kerf_mm"),
             "preferred_trim_mm": source.get("trim_margin_mm"),
+            # Explicit 0 stays off. Omitting the key made every copy default to on
+            # and rewrote manufacturing requirements away from the nested cut.
+            "deduct_edge_thickness": source.get("deduct_edge_thickness"),
         },
     )
     created_name = str(created.get("name") or "")

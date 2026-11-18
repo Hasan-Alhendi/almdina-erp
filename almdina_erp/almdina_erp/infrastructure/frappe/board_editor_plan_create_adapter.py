@@ -82,6 +82,7 @@ class FrappeBoardEditorCuttingPlanPort:
             optimization_time_limit_sec=settings.get("optimization_time_limit_sec"),
             kerf_mm=settings.get("kerf_mm"),
             preferred_trim_mm=settings.get("preferred_trim_mm"),
+            deduct_edge_thickness=settings.get("deduct_edge_thickness"),
         )
         record = self._repo.create_draft(
             order_name=order_name,
@@ -180,6 +181,7 @@ class FrappeBoardEditorCuttingPlanPort:
             "optimization_time_limit_sec": plan.optimization_time_limit_sec,
             "kerf_mm": plan.kerf_mm,
             "trim_margin_mm": plan.trim_margin_mm,
+            "deduct_edge_thickness": plan.deduct_edge_thickness,
             "snapshot": snapshot if isinstance(snapshot, dict) else {},
         }
 
