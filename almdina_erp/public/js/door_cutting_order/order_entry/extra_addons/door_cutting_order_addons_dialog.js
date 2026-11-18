@@ -45,12 +45,16 @@
         return String((row && row.piece_type) || "") === "Glass";
     }
 
-    function sessionFields(session) {
-        const items = fields();
-        if (session && glassLinerOnly(session.row)) {
-            return items.filter((item) => item.fieldname === "extra_liner");
-        }
-        return items;
+    function sessionFields() {
+        return fields();
+    }
+
+    function glassAddonLocked(session, fieldname) {
+        return Boolean(session && glassLinerOnly(session.row) && fieldname !== "extra_liner");
+    }
+
+    function addonEditable(session, editable, fieldname) {
+        return Boolean(editable) && !glassAddonLocked(session, fieldname);
     }
 
     function machiningSupported(row) {
@@ -80,7 +84,6 @@
         const glassOnly = glassLinerOnly(row);
         if (supported && editor && typeof editor.draftFromRow === "function") {
             fields().forEach((item) => {
-                if (glassOnly && item.fieldname !== "extra_liner") return;
                 const kind = kindFor(item.fieldname);
                 if (!kind) return;
                 const draft = editor.draftFromRow(row, kind, { blankWhenMissing: true });
@@ -165,7 +168,6 @@
 
     function selectTab(session, fieldname) {
         if (!session || !fieldByName(fieldname)) return session;
-        if (glassLinerOnly(session.row) && fieldname !== "extra_liner") return session;
         session.activeField = fieldname;
         return session;
     }
@@ -382,7 +384,7 @@
             <div class="dco-addons-tabs" role="tablist">${tabs}</div>
             <div class="dco-addons-error" data-addons-error hidden></div>
             <div class="dco-addons-body">
-                <section class="dco-addons-settings" data-addons-settings>${settingsMarkup(session, editable)}</section>
+                <section class="dco-addons-settings" data-addons-settings>${settingsMarkup(session, addonEditable(session, editable, session.activeField))}</section>
                 <section class="dco-addons-preview-pane">
                     <div class="dco-addons-preview-card">
                         <div class="dco-addons-preview-title">${esc(translate("Piece preview"))}</div>
@@ -613,9 +615,10 @@
 
     function syncChrome(root, session, editable) {
         if (!root) return;
+        const activeEditable = addonEditable(session, editable, session.activeField);
         syncTabs(root, session);
-        syncEnable(root, session, editable);
-        syncRemove(root, session, editable);
+        syncEnable(root, session, activeEditable);
+        syncRemove(root, session, activeEditable);
         syncSides(root, session.drafts[session.activeField], session);
         if (editorApi() && typeof editorApi().syncHandleChoices === "function") {
             editorApi().syncHandleChoices(root, session.drafts[session.activeField]);
@@ -627,7 +630,7 @@
 
     function paintStructure(root, session, editable) {
         const settings = root && root.querySelector("[data-addons-settings]");
-        if (settings) settings.innerHTML = settingsMarkup(session, editable);
+        if (settings) settings.innerHTML = settingsMarkup(session, addonEditable(session, editable, session.activeField));
         if (root) root._addonsField = session.activeField;
         syncChrome(root, session, editable);
     }

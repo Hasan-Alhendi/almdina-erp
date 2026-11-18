@@ -80,20 +80,30 @@ const glassSession = dialog.createSession({ doc: {} }, {
 });
 assert.equal(glassSession.activeField, "extra_liner");
 assert.equal(glassSession.drafts.extra_liner.enabled, false);
-assert.equal(glassSession.drafts.extra_back_groove, undefined);
-assert.equal(glassSession.drafts.extra_recessed_handle_cutout, undefined);
+assert.equal(glassSession.drafts.extra_back_groove.enabled, false);
+assert.equal(glassSession.drafts.extra_recessed_handle_cutout.enabled, false);
 dialog.setEnabled(glassSession, "extra_back_groove", true);
 dialog.setEnabled(glassSession, "extra_recessed_handle_cutout", true);
 dialog.setEnabled(glassSession, "extra_double", true);
 assert.equal(glassSession.flags.extra_double, 0);
-assert.equal(glassSession.drafts.extra_back_groove, undefined);
+assert.equal(glassSession.drafts.extra_back_groove.enabled, false);
 dialog.selectTab(glassSession, "extra_double");
-assert.equal(glassSession.activeField, "extra_liner");
+assert.equal(glassSession.activeField, "extra_double");
+const lockedGlassHtml = dialog.shellHtml(glassSession, true);
+assert.match(lockedGlassHtml, /<fieldset disabled>/);
+dialog.selectTab(glassSession, "extra_liner");
 dialog.setEnabled(glassSession, "extra_liner", true);
 assert.equal(glassSession.drafts.extra_liner.enabled, true);
 const glassHtml = dialog.shellHtml(glassSession, true);
 assert.match(glassHtml, /extra_liner/);
-assert.doesNotMatch(glassHtml, /extra_back_groove|extra_recessed_handle_cutout|extra_double/);
+assert.match(glassHtml, /extra_back_groove/);
+assert.match(glassHtml, /extra_recessed_handle_cutout/);
+assert.match(glassHtml, /extra_double/);
+assert.deepEqual(
+    [...glassHtml.matchAll(/data-addon-tab="([^"]+)"/g)].map((match) => match[1]),
+    ["extra_double", "extra_full_door_double", "extra_liner", "extra_back_groove", "extra_recessed_handle_cutout"]
+);
+assert.doesNotMatch(glassHtml, /<fieldset disabled>/);
 
 assert.equal(dialog.machiningDirty(session, "extra_liner"), false);
 dialog.selectTab(session, "extra_back_groove");
