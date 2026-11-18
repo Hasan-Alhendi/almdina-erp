@@ -41,6 +41,18 @@
         return fields().find(item => item.fieldname === fieldname) || null;
     }
 
+    function glassLinerOnly(row) {
+        return String((row && row.piece_type) || "") === "Glass";
+    }
+
+    function sessionFields(session) {
+        const items = fields();
+        if (session && glassLinerOnly(session.row)) {
+            return items.filter((item) => item.fieldname === "extra_liner");
+        }
+        return items;
+    }
+
     function machiningSupported(row) {
         const geometry = window.AlmdinaLinerGeometry;
         const editor = editorApi();
@@ -65,8 +77,10 @@
             ? editor.hostPiece(frm, row)
             : (window.AlmdinaLinerGeometry && window.AlmdinaLinerGeometry.pieceFromRow(row));
         const drafts = {};
+        const glassOnly = glassLinerOnly(row);
         if (supported && editor && typeof editor.draftFromRow === "function") {
             fields().forEach((item) => {
+                if (glassOnly && item.fieldname !== "extra_liner") return;
                 const kind = kindFor(item.fieldname);
                 if (!kind) return;
                 const draft = editor.draftFromRow(row, kind, { blankWhenMissing: true });
@@ -121,7 +135,9 @@
             doubleSides,
             drafts,
             initial,
-            activeField: known ? preferredField : (fields()[0] ? fields()[0].fieldname : ""),
+            activeField: glassOnly
+                ? "extra_liner"
+                : (known ? preferredField : (fields()[0] ? fields()[0].fieldname : "")),
         };
     }
 
@@ -149,12 +165,14 @@
 
     function selectTab(session, fieldname) {
         if (!session || !fieldByName(fieldname)) return session;
+        if (glassLinerOnly(session.row) && fieldname !== "extra_liner") return session;
         session.activeField = fieldname;
         return session;
     }
 
     function setEnabled(session, fieldname, enabled) {
         if (!session || !fieldByName(fieldname)) return session;
+        if (glassLinerOnly(session.row) && fieldname !== "extra_liner") return session;
         const next = enabled ? 1 : 0;
         if (session.presenceOnly && !FLAG_FIELDS.includes(fieldname)) {
             session.flags[fieldname] = next;
@@ -347,7 +365,7 @@
     }
 
     function shellHtml(session, editable) {
-        const tabs = fields().map((item) => {
+        const tabs = sessionFields(session).map((item) => {
             const selected = item.fieldname === session.activeField;
             const enabled = isEnabled(session, item.fieldname);
             const dot = enabled
@@ -676,6 +694,18 @@
         }
         const values = {};
         const touched = [];
+        if (glassLinerOnly(session.row)) {
+            const editor = editorApi();
+            const draft = session.drafts && session.drafts.extra_liner;
+            if (session.supported && editor && draft && machiningDirty(session, "extra_liner")) {
+                const next = editor.valuesFor(draft.kind, draft, draft.enabled);
+                if (!sameValues(session.row, next)) {
+                    Object.assign(values, next);
+                    touched.push("extra_liner");
+                }
+            }
+            return { values, touched };
+        }
         if (doubleSidesDirty(session)) {
             values.extra_double = session.flags.extra_double ? 1 : 0;
             values.extra_double_reference_sides = session.flags.extra_double
@@ -1036,6 +1066,7 @@
                 ? editor.hostPiece(frm, row)
                 : geometry.pieceFromRow(row);
             for (const item of fields()) {
+                if (glassLinerOnly(row) && item.fieldname !== "extra_liner") continue;
                 const kind = kindFor(item.fieldname);
                 if (!kind || !Number(row && row[item.fieldname])) continue;
                 const draft = editor.draftFromRow(row, kind, { blankWhenMissing: true });
@@ -1062,6 +1093,7 @@
         open,
         createSession,
         settingsMarkup,
+        shellHtml,
         collectValues,
         selectTab,
         setEnabled,

@@ -17,6 +17,8 @@ from .glass_opening_nesting import (
 )
 from .nesting_consolidation import best_rigid_translation, consolidate_nested_boards
 from .plan_portfolio import geometry_signature, manufacturing_export_rejection
+from almdina_erp.almdina_erp.domain.orders.glass_margins import has_glass_opening
+
 from .shape_aware_nesting import _cluster_sheet, _place_in_voids, _translate_pieces
 
 _CORNERS = frozenset({'L-Shaped Corner', 'Clipped Corner'})
@@ -28,7 +30,7 @@ _REASSIGNMENT_DEPTH = 2
 def has_joint_sources(pieces: list[dict[str, Any]], machine_type: str) -> bool:
     """Cheap gate: actual opening/void compatibility is proved inside the budget."""
     return machine_type != 'Panel Saw' and any(p.get('piece_type') in _CORNERS for p in pieces) and any(
-        p.get('piece_type') == 'Glass' and float(p.get('glass_margin_mm') or 0) > 0 for p in pieces)
+        p.get('piece_type') == 'Glass' and has_glass_opening(p) for p in pieces)
 
 
 def _shape_ids(plan):

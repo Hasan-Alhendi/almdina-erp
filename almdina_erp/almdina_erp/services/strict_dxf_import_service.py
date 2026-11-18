@@ -259,6 +259,11 @@ def _proxy_order(
         # stays missing so import can tell a dropped field from a blank value.
         for fieldname in (
             "glass_margin_mm",
+            "glass_margin_mode",
+            "glass_margin_top_mm",
+            "glass_margin_bottom_mm",
+            "glass_margin_right_mm",
+            "glass_margin_left_mm",
             "edge_long_left",
             "edge_long_right",
             "edge_width_top",

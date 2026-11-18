@@ -41,7 +41,7 @@
     function availableSides(pieceType) {
         if (pieceType === CLIPPED) return OUTER_SIDES.concat([SIDE_BREAK, SIDE_BREAK_ONLY]);
         if (pieceType === L_SHAPED) return OUTER_SIDES.concat([SIDE_BREAK]);
-        if (!pieceType || pieceType === "Regular") return OUTER_SIDES.slice();
+        if (!pieceType || pieceType === "Regular" || pieceType === "Glass") return OUTER_SIDES.slice();
         return [];
     }
 
@@ -105,6 +105,44 @@
             position: source.clipped_corner_position || "Top Right",
             cutWidthCm: num(source.clipped_corner_width_cm),
             cutLengthCm: num(source.clipped_corner_length_cm),
+            glassFrameMm: glassFrameMm(source, width, length),
+        };
+    }
+
+    function edgeSelected(value) {
+        if (typeof value === "string") {
+            return !["", "0", "false", "no", "off"].includes(value.trim().toLowerCase());
+        }
+        return Boolean(value);
+    }
+
+    function glassFrameMm(source, cutWidthCm, cutLengthCm) {
+        if (String(source.piece_type || "") !== "Glass") return null;
+        const individual = String(source.glass_margin_mode || "") === "Individual Sides";
+        let margins;
+        if (individual) {
+            margins = {
+                top: num(source.glass_margin_top_mm),
+                bottom: num(source.glass_margin_bottom_mm),
+                right: num(source.glass_margin_right_mm),
+                left: num(source.glass_margin_left_mm),
+            };
+        } else if (source.glass_margin_mm === null || source.glass_margin_mm === undefined || source.glass_margin_mm === "") {
+            return null;
+        } else {
+            const shared = num(source.glass_margin_mm);
+            margins = { top: shared, bottom: shared, right: shared, left: shared };
+        }
+        const removedWidth = (num(source.width_cm) - num(cutWidthCm)) * 10;
+        const removedLength = (num(source.length_cm) - num(cutLengthCm)) * 10;
+        const band = (flag, field, removed) => (
+            edgeSelected(source[flag]) && removed > 0.05 ? num(source[field]) : 0
+        );
+        return {
+            left: margins.left - band("edge_long_left", "edge_long_thickness_mm", removedWidth),
+            right: margins.right - band("edge_long_right", "edge_long_thickness_mm", removedWidth),
+            top: margins.top - band("edge_width_top", "edge_width_thickness_mm", removedLength),
+            bottom: margins.bottom - band("edge_width_bottom", "edge_width_thickness_mm", removedLength),
         };
     }
 
@@ -356,6 +394,22 @@
         const samples = offsetPolyline(reference, (offset + width) * 10, sign)
             .concat(offsetPolyline(reference, offset * 10, sign));
         if (samples.some(point => !pointInPolygon(point, polygon, TOLERANCE_MM))) return "strip_outside";
+        if (piece.pieceType === "Glass" && piece.glassFrameMm) {
+            const frames = piece.glassFrameMm;
+            if (Object.values(frames).some(value => num(value) > 0)) {
+                const key = {
+                    [SIDE_TOP]: "top",
+                    [SIDE_BOTTOM]: "bottom",
+                    [SIDE_LEFT]: "left",
+                    [SIDE_RIGHT]: "right",
+                }[side];
+                const frame = num(frames[key]);
+                const extent = (offset + width) * 10;
+                if (!(frame > TOLERANCE_MM) || extent > frame + TOLERANCE_MM) {
+                    return "liner_enters_glass_opening";
+                }
+            }
+        }
         return "";
     }
 

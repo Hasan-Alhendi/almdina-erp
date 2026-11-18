@@ -95,6 +95,10 @@ def _edge_metadata(row: dict[str, Any]) -> dict[str, Any]:
 
 
 def expand_piece_groups(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    from almdina_erp.almdina_erp.domain.orders.glass_margins import (
+        fingerprint_glass_fields,
+    )
+
     pieces: list[dict[str, Any]] = []
     serial = 1
     for row_index, row in enumerate(rows or []):
@@ -137,9 +141,7 @@ def expand_piece_groups(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
             )
             if "deduct_edge_thickness" in row:
                 pieces[-1]["deduct_edge_thickness"] = row.get("deduct_edge_thickness")
-            margin = row.get("glass_margin_mm")
-            if (row.get("piece_type") or "") == "Glass" and margin not in (None, "", 0, 0.0):
-                pieces[-1]["glass_margin_mm"] = num(margin)
+            pieces[-1].update(fingerprint_glass_fields(row))
             serial += 1
     return pieces
 

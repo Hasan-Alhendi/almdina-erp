@@ -130,7 +130,16 @@ def _placed_piece_layout_row(placed: Any, stored: dict[str, Any]) -> dict[str, A
             or stored.get("length_cm")
         ),
     }
-    for key in ("glass_host_piece_id", "glass_hole_local_mm", "glass_margin_mm"):
+    for key in (
+        "glass_host_piece_id",
+        "glass_hole_local_mm",
+        "glass_margin_mm",
+        "glass_margin_mode",
+        "glass_margin_top_mm",
+        "glass_margin_bottom_mm",
+        "glass_margin_right_mm",
+        "glass_margin_left_mm",
+    ):
         if stored.get(key) not in (None, "", []):
             row[key] = stored[key]
     for key in _SNAPSHOT_CORNER_TRANSFORMS:
@@ -661,7 +670,15 @@ def _plan_to_export_snapshot(plan: Any) -> dict[str, Any]:
                 else None
             )
             if not persisted_holes:
-                for key in ("glass_margin_mm", "glass_hole_local_mm"):
+                for key in (
+                    "glass_margin_mm",
+                    "glass_margin_mode",
+                    "glass_margin_top_mm",
+                    "glass_margin_bottom_mm",
+                    "glass_margin_right_mm",
+                    "glass_margin_left_mm",
+                    "glass_hole_local_mm",
+                ):
                     if stored.get(key) not in (None, "", []):
                         public_piece[key] = stored[key]
             host_id = stored.get("glass_host_piece_id")

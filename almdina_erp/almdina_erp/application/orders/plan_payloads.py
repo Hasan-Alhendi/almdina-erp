@@ -3,6 +3,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Iterable
 
+from almdina_erp.almdina_erp.domain.orders.glass_margins import (
+    MODE_INDIVIDUAL,
+    fingerprint_glass_fields,
+)
 from almdina_erp.almdina_erp.domain.orders.piece_policy import (
     canonical_glass_margin_mm,
 )
@@ -43,6 +47,11 @@ class PlanPieceInput:
     clipped_corner_width_cm: float
     clipped_corner_length_cm: float
     glass_margin_mm: float | None = None
+    glass_margin_mode: str = ""
+    glass_margin_top_mm: float | None = None
+    glass_margin_bottom_mm: float | None = None
+    glass_margin_right_mm: float | None = None
+    glass_margin_left_mm: float | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -121,6 +130,16 @@ def _plan_piece_payload(piece: PlanPieceInput) -> dict[str, Any]:
         "clipped_corner_width_cm": piece.clipped_corner_width_cm,
         "clipped_corner_length_cm": piece.clipped_corner_length_cm,
     }
+    if piece.glass_margin_mode == MODE_INDIVIDUAL:
+        payload.update(fingerprint_glass_fields({
+            "piece_type": piece.piece_type,
+            "glass_margin_mode": piece.glass_margin_mode,
+            "glass_margin_top_mm": piece.glass_margin_top_mm,
+            "glass_margin_bottom_mm": piece.glass_margin_bottom_mm,
+            "glass_margin_right_mm": piece.glass_margin_right_mm,
+            "glass_margin_left_mm": piece.glass_margin_left_mm,
+        }))
+        return payload
     glass_margin_mm = canonical_glass_margin_mm(
         piece.glass_margin_mm,
         piece.piece_type,

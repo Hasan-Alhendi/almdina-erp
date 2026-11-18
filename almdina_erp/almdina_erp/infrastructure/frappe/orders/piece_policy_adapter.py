@@ -79,6 +79,10 @@ class FrappeOrderPiecePolicyAdapter:
         "liner_start_invalid": "Start position must be finite and zero or greater.",
         "liner_length_invalid": "Length must be finite and greater than zero.",
         "strip_outside": "Machining geometry does not fit inside the piece.",
+        "liner_enters_glass_opening": (
+            "The liner does not fit inside the glass door frame. "
+            "Reduce its width or its distance from the edge."
+        ),
         "liner_span_on_corner": "The machining limit falls on a corner bend.",
         "liner_flat_end_unmachinable": "A flat end cannot be machined with this bit and length.",
         "liner_specs_invalid": "Liner list data is invalid.",
@@ -124,6 +128,11 @@ class FrappeOrderPiecePolicyAdapter:
             edge_break_only=cint(getattr(row, "edge_break_only", 0)),
             edge_type=str(getattr(row, "edge_type", None) or ""),
             glass_margin_mm=flt(getattr(row, "glass_margin_mm", 0)),
+            glass_margin_mode=str(getattr(row, "glass_margin_mode", "") or ""),
+            glass_margin_top_mm=flt(getattr(row, "glass_margin_top_mm", 0)),
+            glass_margin_bottom_mm=flt(getattr(row, "glass_margin_bottom_mm", 0)),
+            glass_margin_right_mm=flt(getattr(row, "glass_margin_right_mm", 0)),
+            glass_margin_left_mm=flt(getattr(row, "glass_margin_left_mm", 0)),
         )
 
     @staticmethod
@@ -390,6 +399,17 @@ class FrappeOrderPiecePolicyAdapter:
         width_cm = flt(row.width_cm) if cut_width is None else flt(cut_width)
         length_cm = flt(row.length_cm) if cut_length is None else flt(cut_length)
         notch_width_cm, notch_length_cm = self._liner_notch_cm(row)
+        frames = {}
+        if (row.piece_type or "") == "Glass":
+            from almdina_erp.almdina_erp.domain.orders.glass_margins import (
+                cut_frame_thickness_mm,
+            )
+
+            frames = cut_frame_thickness_mm(
+                row,
+                cut_width_cm=width_cm,
+                cut_length_cm=length_cm,
+            ) or {}
         return LinerPiece(
             piece_type=row.piece_type or "Regular",
             width_cm=width_cm,
@@ -397,6 +417,10 @@ class FrappeOrderPiecePolicyAdapter:
             clipped_corner_position=str(getattr(row, "clipped_corner_position", "") or ""),
             clipped_corner_width_cm=notch_width_cm,
             clipped_corner_length_cm=notch_length_cm,
+            glass_frame_left_mm=float(frames.get("left") or 0),
+            glass_frame_right_mm=float(frames.get("right") or 0),
+            glass_frame_top_mm=float(frames.get("top") or 0),
+            glass_frame_bottom_mm=float(frames.get("bottom") or 0),
         )
 
     def _validate_machining_span(
@@ -585,6 +609,7 @@ class FrappeOrderPiecePolicyAdapter:
                 frappe.throw(_("Row {0}: Piece Type is invalid.").format(index))
             if row.piece_type == GLASS_TYPE:
                 self._validate_glass_opening(row, index)
+                self._reject_unsupported_glass_addons(row, index)
             if is_corner_cut(row.piece_type):
                 self._validate_clipped_corner(row, index)
             self._validate_double_edge_sides(row, index)
@@ -660,7 +685,7 @@ class FrappeOrderPiecePolicyAdapter:
             validate_glass_opening(
                 outer_width_cm=getattr(row, "width_cm", 0),
                 outer_length_cm=getattr(row, "length_cm", 0),
-                glass_margin_mm=getattr(row, "glass_margin_mm", None),
+                source=row,
             )
         except PiecePolicyError as error:
             if error.code == "glass_margin_must_be_positive":
@@ -676,6 +701,30 @@ class FrappeOrderPiecePolicyAdapter:
                     ).format(index)
                 )
             raise
+        from almdina_erp.almdina_erp.domain.orders.glass_margins import (
+            normalized_glass_margin_fields,
+        )
+
+        stored = normalized_glass_margin_fields(row) or {}
+        for fieldname, value in stored.items():
+            if hasattr(row, fieldname):
+                setattr(row, fieldname, value)
+
+    @staticmethod
+    def _reject_unsupported_glass_addons(row: Any, index: int) -> None:
+        forbidden = (
+            ("extra_double", "Double Edge"),
+            ("extra_full_door_double", "Full Door Double"),
+            ("extra_back_groove", "Back Groove"),
+            ("extra_recessed_handle_cutout", "Recessed Handle Cutout"),
+        )
+        for fieldname, _label in forbidden:
+            if cint(getattr(row, fieldname, 0)):
+                frappe.throw(
+                    _(
+                        "Row {0}: A glass door can only add a liner."
+                    ).format(index)
+                )
 
     def ensure_documented(self) -> None:
         missing = [

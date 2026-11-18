@@ -42,6 +42,7 @@
         offset_invalid: "المسافة يجب أن تكون صفرًا أو أكبر.",
         width_invalid: "عرض اللاينر يجب أن يكون أكبر من صفر.",
         strip_outside: "اللاينر يخرج خارج الدرفة. قلّل المسافة أو العرض.",
+        liner_enters_glass_opening: "The liner does not fit inside the glass door frame. Reduce its width or its distance from the edge.",
         liner_start_invalid: "Liner start must be zero or greater.",
         liner_length_invalid: "Liner length must be greater than zero.",
         liner_span_exceeds_edge: "Liner start plus length exceeds the reference side.",
@@ -475,6 +476,53 @@
         return { api, piece, frame, outline, bands };
     }
 
+    function glassMarginCaption(row) {
+        if (!row || String(row.piece_type || "") !== "Glass") return "";
+        const glass = window.AlmdinaGlassShape;
+        const centimeters = (value) => {
+            if (glass && typeof glass.marginCmTextFromMm === "function") {
+                return String(glass.marginCmTextFromMm(value) || "");
+            }
+            const millimeters = Number(value);
+            if (!Number.isFinite(millimeters) || !(millimeters > 0)) return "";
+            return String(Math.round(millimeters * 1000) / 10000);
+        };
+        if (String(row.glass_margin_mode || "") === "Individual Sides") {
+            const parts = [
+                centimeters(row.glass_margin_top_mm),
+                centimeters(row.glass_margin_bottom_mm),
+                centimeters(row.glass_margin_right_mm),
+                centimeters(row.glass_margin_left_mm),
+            ].filter(Boolean);
+            return parts.length ? `${parts.join(" · ")} ${__("cm")}` : "";
+        }
+        const shared = centimeters(row.glass_margin_mm);
+        return shared ? `${shared} ${__("cm")}` : "";
+    }
+
+    function glassOpeningMarkup(scene) {
+        const piece = scene && scene.piece;
+        const frames = piece && piece.glassFrameMm;
+        if (!piece || piece.pieceType !== "Glass" || !frames) return "";
+        const width = num(piece.widthCm) * 10;
+        const height = num(piece.lengthCm) * 10;
+        const left = num(frames.left);
+        const top = num(frames.top);
+        const right = num(frames.right);
+        const bottom = num(frames.bottom);
+        if (!(left > 0) || !(top > 0) || !(right > 0) || !(bottom > 0)) return "";
+        const holeWidth = width - left - right;
+        const holeHeight = height - top - bottom;
+        if (!(holeWidth > 0) || !(holeHeight > 0)) return "";
+        const points = [
+            [left, top],
+            [left + holeWidth, top],
+            [left + holeWidth, top + holeHeight],
+            [left, top + holeHeight],
+        ].map((point) => mapPoint(point, scene.frame, piece));
+        return `<polygon data-glass-opening="1" points="${pointsAttr(points)}" fill="rgba(29,79,145,.12)" stroke="#1d4f91" stroke-width="1.6"/>`;
+    }
+
     function doubleEdgeSidesFromRow(row) {
         const source = row || {};
         const api = geometry();
@@ -579,14 +627,20 @@
             return `<polyline class="dco-liner-side ${selected ? "is-selected" : ""}" data-liner-side="${side}" points="${pointsAttr(path.map(point => mapPoint(point, scene.frame, scene.piece)))}" fill="none" stroke="${selected ? "#9a6207" : "transparent"}" stroke-width="${selected ? 4 : 12}" stroke-linecap="round"/>`;
         }).join("");
         const label = multi ? __("Piece preview") : __("Liner preview");
+        const marginCaption = glassMarginCaption(scene.piece && scene.piece.pieceType === "Glass" ? draft.row : null);
+        const marginText = marginCaption
+            ? `<text data-glass-margin-caption="1" x="210" y="250" text-anchor="middle" font-size="12" fill="#1d4f91">${esc(__("Glass Margin"))}: ${esc(marginCaption)}</text>`
+            : "";
         return `<svg viewBox="0 0 420 280" dir="ltr" role="img" aria-label="${esc(label)}">
             <polygon points="${pointsAttr(scene.outline)}" fill="#fff7e8" stroke="#8a5700" stroke-width="2"/>
+            ${glassOpeningMarkup(scene)}
             ${scene.bands}
             ${double}
             ${doubleHits}
             ${hits}
             ${quiet}
             ${active}
+            ${marginText}
             <text x="210" y="268" text-anchor="middle" font-size="12" fill="#536577">${rounded(scene.piece.widthCm)} × ${rounded(scene.piece.lengthCm)} ${esc(__("cm"))}</text>
         </svg>`;
     }

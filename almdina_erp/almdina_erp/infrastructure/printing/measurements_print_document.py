@@ -670,6 +670,18 @@ def _type_metric_lines(
                 lines.append((_label("Remaining on length side", translator), amount))
         return lines
     if piece_type == "Glass":
+        if str(row.get("glass_margin_mode") or "") == "Individual Sides":
+            for label, fieldname in (
+                ("Top Margin", "glass_margin_top_mm"),
+                ("Bottom Margin", "glass_margin_bottom_mm"),
+                ("Right Margin", "glass_margin_right_mm"),
+                ("Left Margin", "glass_margin_left_mm"),
+            ):
+                margin = _glass_margin_cm_text(row.get(fieldname))
+                if margin:
+                    amount = f"{margin} {_label('cm', translator)}"
+                    lines.append((_label(label, translator), amount))
+            return lines
         margin = _glass_margin_cm_text(row.get("glass_margin_mm"))
         if margin:
             amount = f"{margin} {_label('cm', translator)}"
