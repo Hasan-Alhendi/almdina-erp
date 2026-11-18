@@ -134,18 +134,29 @@ def test_fast_calculation_does_not_call_alns(monkeypatch):
     assert result.snapshot['validation']['is_valid']
 
 
-def test_invalid_proposal_cannot_replace_the_completed_native_snapshot(monkeypatch):
+@pytest.mark.parametrize('operator', ['native', 'fragmentation'])
+def test_invalid_proposal_cannot_replace_the_completed_native_snapshot(monkeypatch, operator):
     from almdina_erp.almdina_erp.domain.cutting import system_layout_refinement as refinement
+    from almdina_erp.almdina_erp.domain.cutting import fragmentation_search as neighborhood
     rows, _, plan = fixture()
     baseline = optimize_order_plan(command(rows, seconds=0), engine=FrozenEngine(plan))
     def bad(raw, *args, **kwargs):
         proposal = deepcopy(raw)
         proposal['sheets'][0]['pieces'][0]['x'] = 999
         return [raw, proposal], dict(attempts=1, stop='done', operators={})
-    monkeypatch.setattr(refinement, 'refine_system_layout', bad)
+    # Isolate each generator's invalid output. The other independent generator
+    # may now discover a genuinely valid, fewer-board result for this fixture.
+    monkeypatch.setattr(refinement, 'refine_system_layout', bad if operator == 'native'
+                        else lambda raw, *a, **kw: ([raw], {}))
+    def bad_neighbor(seeds, *args, **kwargs):
+        proposals, _ = bad(seeds[0])
+        return proposals[1], {}
+    monkeypatch.setattr(neighborhood, 'search_fragmentation', bad_neighbor
+                        if operator == 'fragmentation' else lambda *a, **kw: (None, {}))
     result = optimize_order_plan(command(rows), engine=FrozenEngine(plan))
     assert result.snapshot['sheets'] == baseline.snapshot['sheets']
     assert result.snapshot['smart_search']['alns']['projected_improvements'] == 0
+    assert result.snapshot['smart_search']['alns']['projected_alternatives'] == 0
 
 
 def test_stage_budget_is_capped_and_is_additional_to_native(monkeypatch):
