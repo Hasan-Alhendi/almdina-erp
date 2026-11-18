@@ -1,10 +1,12 @@
 """Glass opening checks for an already extracted cut contour.
 
-The finished opening is the order contract: each axis is the entered outer
-size minus twice ``glass_margin_mm``. DXF outlines are cut outlines, so each
-side's inset from that outline is the same margin minus the band already
-deducted on that side. A missing or non-positive inset is a real mismatch;
-geometry tolerance does not absorb it.
+The finished opening is the order contract. All Directions subtracts the one
+``glass_margin_mm`` from both ends of each axis. Individual Sides subtracts
+the left and right margins from the width and the top and bottom margins from
+the length, so the opening is not centered. DXF outlines are cut outlines, so
+each side's inset from that outline is that side's margin minus the band
+already deducted on that side. A missing or non-positive inset is a real
+mismatch; geometry tolerance does not absorb it.
 """
 
 from __future__ import annotations
@@ -37,6 +39,10 @@ from almdina_erp.almdina_erp.domain.cutting.dxf_topology import (
     polygon_strictly_contains_polygon,
 )
 from almdina_erp.almdina_erp.domain.cutting.piece_cut_dimensions import MM_PER_CM
+from almdina_erp.almdina_erp.domain.orders.glass_margins import (
+    GlassSideMargins,
+    resolve_glass_side_margins,
+)
 from almdina_erp.almdina_erp.domain.orders.piece_types import GLASS_TYPE
 
 # 0° and 180° keep the door width on the contour X axis. They are rotations.
@@ -117,9 +123,26 @@ def _known_decimal(value: object) -> Decimal | None:
     return Decimal(str(value))
 
 
+def _side_margins(
+    margin_mm: object = None,
+    side_margins: GlassSideMargins | None = None,
+) -> GlassSideMargins:
+    if side_margins is not None:
+        return side_margins
+    margin = _decimal(margin_mm)
+    return GlassSideMargins(
+        mode="All Directions",
+        top_mm=margin,
+        bottom_mm=margin,
+        right_mm=margin,
+        left_mm=margin,
+    )
+
+
 def cut_insets_mm(
     *,
-    margin_mm: object,
+    margin_mm: object = None,
+    side_margins: GlassSideMargins | None = None,
     long_left_mm: object = 0,
     long_right_mm: object = 0,
     width_bottom_mm: object = 0,
@@ -128,19 +151,19 @@ def cut_insets_mm(
 ) -> dict[str, Decimal]:
     """Inset of the opening from each side of the cut outline.
 
-    The margin is measured from the finished edge. While the blank is already
-    reduced by the band, the cut inset is margin minus that band. When the
-    band is not removed from the blank, the inset is the full margin.
+    Each margin is measured from the finished edge. While the blank is already
+    reduced by the band, the cut inset is that side's margin minus that band.
+    When the band is not removed from the blank, the inset is the full margin.
     """
 
-    margin = _decimal(margin_mm)
+    margins = _side_margins(margin_mm, side_margins)
     if not deduct_edge_thickness:
         long_left_mm = long_right_mm = width_bottom_mm = width_top_mm = 0
     return {
-        "long_left": margin - _decimal(long_left_mm),
-        "long_right": margin - _decimal(long_right_mm),
-        "width_bottom": margin - _decimal(width_bottom_mm),
-        "width_top": margin - _decimal(width_top_mm),
+        "long_left": margins.left_mm - _decimal(long_left_mm),
+        "long_right": margins.right_mm - _decimal(long_right_mm),
+        "width_bottom": margins.bottom_mm - _decimal(width_bottom_mm),
+        "width_top": margins.top_mm - _decimal(width_top_mm),
     }
 
 
@@ -157,7 +180,8 @@ def glass_hole_ring_mm(
     *,
     cut_width_mm: object,
     cut_length_mm: object,
-    margin_mm: object,
+    margin_mm: object = None,
+    side_margins: GlassSideMargins | None = None,
     long_left_mm: object = 0,
     long_right_mm: object = 0,
     width_bottom_mm: object = 0,
@@ -173,6 +197,7 @@ def glass_hole_ring_mm(
 
     insets = cut_insets_mm(
         margin_mm=margin_mm,
+        side_margins=side_margins,
         long_left_mm=long_left_mm,
         long_right_mm=long_right_mm,
         width_bottom_mm=width_bottom_mm,
@@ -197,8 +222,11 @@ def glass_hole_ring_mm(
 def placed_glass_hole_mm(piece: Mapping[str, object], *, rotated: bool) -> list[list[float]] | None:
     if str(piece.get("piece_type") or "") != GLASS_TYPE:
         return None
-    margin = piece.get("glass_margin_mm")
-    if margin in (None, "", 0, 0.0):
+    margins = resolve_glass_side_margins(piece)
+    if margins is None or not any(
+        value > 0
+        for value in (margins.top_mm, margins.bottom_mm, margins.right_mm, margins.left_mm)
+    ):
         return None
     width_cm = piece.get("width_cm")
     length_cm = piece.get("length_cm")
@@ -209,7 +237,7 @@ def placed_glass_hole_mm(piece: Mapping[str, object], *, rotated: bool) -> list[
     ring = glass_hole_ring_mm(
         cut_width_mm=_decimal(width_cm) * MM_PER_CM,
         cut_length_mm=_decimal(length_cm) * MM_PER_CM,
-        margin_mm=margin,
+        side_margins=margins,
         long_left_mm=long_thickness if piece.get("edge_long_left") else 0,
         long_right_mm=long_thickness if piece.get("edge_long_right") else 0,
         width_bottom_mm=width_thickness if piece.get("edge_width_bottom") else 0,
@@ -238,15 +266,27 @@ def record_glass_opening(
 
     if str(piece.get("piece_type") or "") != GLASS_TYPE:
         return
-    margin = piece.get("glass_margin_mm")
-    if margin in (None, "", 0, 0.0):
+    margins = resolve_glass_side_margins(piece)
+    if margins is None or not any(
+        value > 0
+        for value in (margins.top_mm, margins.bottom_mm, margins.right_mm, margins.left_mm)
+    ):
         return
     hole = placed_glass_hole_mm(piece, rotated=rotated)
     if not hole:
         raise GlassOpeningError(
             "A saved Glass margin did not produce an opening inside the cut rectangle."
         )
-    placed["glass_margin_mm"] = float(_decimal(margin))
+    if margins.individual:
+        placed["glass_margin_mode"] = margins.mode
+        placed["glass_margin_top_mm"] = float(margins.top_mm)
+        placed["glass_margin_bottom_mm"] = float(margins.bottom_mm)
+        placed["glass_margin_right_mm"] = float(margins.right_mm)
+        placed["glass_margin_left_mm"] = float(margins.left_mm)
+        if margins.uniform_mm is not None:
+            placed["glass_margin_mm"] = float(margins.uniform_mm)
+    else:
+        placed["glass_margin_mm"] = float(margins.top_mm)
     placed["glass_hole_local_mm"] = hole
 
 
@@ -310,6 +350,21 @@ def _size_mm(points: Sequence[Sequence[float]]) -> tuple[float, float] | None:
     return max_x - min_x, max_y - min_y
 
 
+def _finished_margin_for_side(
+    door_side: str,
+    side_margins: GlassSideMargins | None,
+    fallback: Decimal | None,
+) -> Decimal | None:
+    if side_margins is None:
+        return fallback
+    return {
+        "long_left": side_margins.left_mm,
+        "long_right": side_margins.right_mm,
+        "width_bottom": side_margins.bottom_mm,
+        "width_top": side_margins.top_mm,
+    }[door_side]
+
+
 def _side_rows(
     actual: Mapping[str, float],
     expected: Mapping[str, Decimal],
@@ -318,6 +373,7 @@ def _side_rows(
     *,
     order_margin: Decimal | None,
     tolerance: float,
+    side_margins: GlassSideMargins | None = None,
 ) -> list[dict[str, object]]:
     dxf_for_door = {door_side: dxf_side for dxf_side, door_side in mapping}
     rows: list[dict[str, object]] = []
@@ -326,10 +382,11 @@ def _side_rows(
         measured = float(actual[dxf_side])
         inset = expected[door_side]
         delta = measured - float(inset)
+        side_margin = _finished_margin_for_side(door_side, side_margins, order_margin)
         rows.append({
             "side": door_side,
             "dxf_side": dxf_side,
-            "order_margin_mm": None if order_margin is None else float(order_margin),
+            "order_margin_mm": None if side_margin is None else float(side_margin),
             "band_mm": float(bands[door_side]),
             "expected_inset_mm": float(inset),
             "actual_inset_mm": measured,
@@ -348,6 +405,7 @@ def _failure_context(
     rotated: bool,
     finished_width_mm: object = None,
     finished_length_mm: object = None,
+    side_margins: GlassSideMargins | None = None,
 ) -> dict[str, object]:
     params: dict[str, object] = {
         "margin_known": margin is not None,
@@ -370,10 +428,16 @@ def _failure_context(
         params["finished_width_mm"] = float(finished_width)
     if finished_length is not None and finished_length > 0:
         params["finished_length_mm"] = float(finished_length)
-    if margin is not None and margin > 0 and finished_width is not None and finished_length is not None:
-        opening_width = finished_width - (margin * 2)
-        opening_length = finished_length - (margin * 2)
-        if opening_width > 0 and opening_length > 0:
+    if finished_width is not None and finished_length is not None:
+        if side_margins is not None:
+            opening_width = finished_width - side_margins.left_mm - side_margins.right_mm
+            opening_length = finished_length - side_margins.top_mm - side_margins.bottom_mm
+        elif margin is not None and margin > 0:
+            opening_width = finished_width - (margin * 2)
+            opening_length = finished_length - (margin * 2)
+        else:
+            opening_width = opening_length = None
+        if opening_width is not None and opening_length is not None and opening_width > 0 and opening_length > 0:
             params["expected_opening_width_mm"] = float(opening_width)
             params["expected_opening_length_mm"] = float(opening_length)
     return params
@@ -395,9 +459,13 @@ def validate_glass_dxf_opening(
     finished_width_mm: object = None,
     finished_length_mm: object = None,
     deduct_edge_thickness: bool = True,
+    side_margins: GlassSideMargins | None = None,
 ) -> GlassOpeningDecision:
     hole_list = list(holes or ())
-    order_margin = _known_decimal(margin_mm)
+    order_margin = None if side_margins is not None else _known_decimal(margin_mm)
+    active_margins = side_margins if side_margins is not None else (
+        None if order_margin is None else _side_margins(order_margin)
+    )
     context = _failure_context(
         outer=outer,
         hole=hole_list[0] if len(hole_list) == 1 else None,
@@ -406,6 +474,7 @@ def validate_glass_dxf_opening(
         rotated=rotated,
         finished_width_mm=finished_width_mm,
         finished_length_mm=finished_length_mm,
+        side_margins=active_margins if side_margins is not None else None,
     )
     if (piece_type or "") != GLASS_TYPE:
         if hole_list:
@@ -463,7 +532,7 @@ def validate_glass_dxf_opening(
         "width_bottom": _decimal(width_bottom_mm),
         "width_top": _decimal(width_top_mm),
     }
-    if order_margin is None:
+    if active_margins is None:
         return GlassOpeningDecision(
             code=GLASS_MARGIN_MISMATCH,
             category=CATEGORY_DIMENSIONS,
@@ -477,7 +546,7 @@ def validate_glass_dxf_opening(
             },
         )
     expected = cut_insets_mm(
-        margin_mm=order_margin,
+        side_margins=active_margins,
         long_left_mm=bands["long_left"],
         long_right_mm=bands["long_right"],
         width_bottom_mm=bands["width_bottom"],
@@ -493,6 +562,7 @@ def validate_glass_dxf_opening(
         bands,
         mapping,
         order_margin=order_margin,
+        side_margins=active_margins,
         tolerance=tolerance,
     )
     report = {
@@ -505,7 +575,7 @@ def validate_glass_dxf_opening(
         report.update({
             "reason": "band_consumes_margin",
             "side": side,
-            "order_margin_mm": float(order_margin),
+            "order_margin_mm": float(_finished_margin_for_side(side, active_margins, order_margin) or 0),
             "expected_inset_mm": float(expected[side]),
             "band_mm": float(bands[side]),
             "actual_inset_mm": next(row["actual_inset_mm"] for row in rows if row["side"] == side),
@@ -520,7 +590,7 @@ def validate_glass_dxf_opening(
         report.update({
             "reason": "inset_mismatch",
             "side": side,
-            "order_margin_mm": float(order_margin),
+            "order_margin_mm": float(_finished_margin_for_side(side, active_margins, order_margin) or 0),
             "expected_inset_mm": float(expected_inset),
             "actual_inset_mm": actual_inset,
             "band_mm": float(bands[side]),

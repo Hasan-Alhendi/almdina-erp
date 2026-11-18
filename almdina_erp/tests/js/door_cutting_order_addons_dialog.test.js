@@ -71,6 +71,30 @@ assert.equal(session.drafts.extra_back_groove.side, "edge_long_right");
 assert.equal(session.drafts.extra_recessed_handle_cutout.enabled, false);
 assert.equal(session.drafts.extra_recessed_handle_cutout.side, "");
 
+const glassSession = dialog.createSession({ doc: {} }, {
+    piece_type: "Glass",
+    width_cm: 100,
+    length_cm: 100,
+    glass_margin_mm: 65,
+    extra_liner: 0,
+});
+assert.equal(glassSession.activeField, "extra_liner");
+assert.equal(glassSession.drafts.extra_liner.enabled, false);
+assert.equal(glassSession.drafts.extra_back_groove, undefined);
+assert.equal(glassSession.drafts.extra_recessed_handle_cutout, undefined);
+dialog.setEnabled(glassSession, "extra_back_groove", true);
+dialog.setEnabled(glassSession, "extra_recessed_handle_cutout", true);
+dialog.setEnabled(glassSession, "extra_double", true);
+assert.equal(glassSession.flags.extra_double, 0);
+assert.equal(glassSession.drafts.extra_back_groove, undefined);
+dialog.selectTab(glassSession, "extra_double");
+assert.equal(glassSession.activeField, "extra_liner");
+dialog.setEnabled(glassSession, "extra_liner", true);
+assert.equal(glassSession.drafts.extra_liner.enabled, true);
+const glassHtml = dialog.shellHtml(glassSession, true);
+assert.match(glassHtml, /extra_liner/);
+assert.doesNotMatch(glassHtml, /extra_back_groove|extra_recessed_handle_cutout|extra_double/);
+
 assert.equal(dialog.machiningDirty(session, "extra_liner"), false);
 dialog.selectTab(session, "extra_back_groove");
 assert.equal(dialog.machiningDirty(session, "extra_liner"), false);

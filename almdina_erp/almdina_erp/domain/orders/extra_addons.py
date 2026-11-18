@@ -232,6 +232,10 @@ def calculate_extra_addon_pricing(
 
         if piece.double and piece.full_door_double:
             raise ExtraAddonError("mutually_exclusive_double_addons", "double")
+        if str(piece.piece_type or "") == "Glass":
+            illegal = next((code for code in selected if code != "liner"), "")
+            if illegal:
+                raise ExtraAddonError("glass_addon_not_allowed", illegal)
 
         qty = int(piece.qty or 0)
         if qty <= 0:

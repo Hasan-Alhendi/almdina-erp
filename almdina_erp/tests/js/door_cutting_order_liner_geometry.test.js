@@ -158,6 +158,27 @@ assert.deepEqual(
 );
 assert.deepEqual(copy(geometry.availableSides("Special")), []);
 assert.deepEqual(
+    copy(geometry.availableSides("Glass")),
+    copy(geometry.availableSides("Regular"))
+);
+assert.equal(geometry.validationCode({
+    pieceType: "Glass",
+    widthCm: 100,
+    lengthCm: 100,
+    glassFrameMm: { left: 60, right: 40, top: 50, bottom: 80 },
+}, "edge_long_left", 1, 2), "");
+assert.equal(geometry.validationCode({
+    pieceType: "Glass",
+    widthCm: 100,
+    lengthCm: 100,
+    glassFrameMm: { left: 60, right: 40, top: 50, bottom: 80 },
+}, "edge_long_left", 4, 3), "liner_enters_glass_opening");
+assert.equal(geometry.validationCode({
+    pieceType: "Regular",
+    widthCm: 100,
+    lengthCm: 100,
+}, "edge_long_left", 4, 3), "");
+assert.deepEqual(
     copy(geometry.normalizeSideSelection("", "Regular", true)),
     copy(geometry.availableSides("Regular")),
 );

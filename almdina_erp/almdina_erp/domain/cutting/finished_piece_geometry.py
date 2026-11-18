@@ -105,7 +105,16 @@ def placed_source_for_finished_geometry(
             or stored.get("length_cm")
         ),
     }
-    for key in ("glass_host_piece_id", "glass_hole_local_mm", "glass_margin_mm"):
+    for key in (
+        "glass_host_piece_id",
+        "glass_hole_local_mm",
+        "glass_margin_mm",
+        "glass_margin_mode",
+        "glass_margin_top_mm",
+        "glass_margin_bottom_mm",
+        "glass_margin_right_mm",
+        "glass_margin_left_mm",
+    ):
         value = piece.get(key)
         if value in (None, "", []):
             value = stored.get(key)

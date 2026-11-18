@@ -142,7 +142,16 @@ def placed_piece_views(order: Any) -> list[dict[str, Any]]:
             "label": str(stored.get("label") or getattr(piece, "piece_label", "") or ""),
             "overlays": overlays,
         }
-        for key in ("glass_host_piece_id", "glass_hole_local_mm", "glass_margin_mm"):
+        for key in (
+            "glass_host_piece_id",
+            "glass_hole_local_mm",
+            "glass_margin_mm",
+            "glass_margin_mode",
+            "glass_margin_top_mm",
+            "glass_margin_bottom_mm",
+            "glass_margin_right_mm",
+            "glass_margin_left_mm",
+        ):
             if stored.get(key) not in (None, "", []):
                 view[key] = stored.get(key)
         stored_geometry = (

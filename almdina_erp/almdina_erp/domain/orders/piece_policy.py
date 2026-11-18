@@ -6,7 +6,14 @@ from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 from typing import Any, Mapping
 
-from almdina_erp.almdina_erp.domain.cutting.piece_cut_dimensions import MM_PER_CM
+from almdina_erp.almdina_erp.domain.orders.glass_margins import (
+    MODE_ALL,
+    MODE_INDIVIDUAL,
+    GlassMarginError,
+    canonical_uniform_margin_mm,
+    opening_from_margins,
+    resolve_glass_side_margins,
+)
 from almdina_erp.almdina_erp.domain.orders.piece_types import GLASS_TYPE
 
 
@@ -276,6 +283,11 @@ class PieceGeometry:
     edge_break_only: int = 0
     edge_type: str = ""
     glass_margin_mm: float = 0
+    glass_margin_mode: str = ""
+    glass_margin_top_mm: float = 0
+    glass_margin_bottom_mm: float = 0
+    glass_margin_right_mm: float = 0
+    glass_margin_left_mm: float = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -347,11 +359,18 @@ def resolve_clipped_corner(
 
 @dataclass(frozen=True, slots=True)
 class GlassOpening:
-    """Inner glass opening derived from the entered outer size and one margin."""
+    """Inner opening from the entered outer size. It is not forced to center."""
 
     margin_mm: Decimal
     opening_width_mm: Decimal
     opening_length_mm: Decimal
+    top_mm: Decimal = Decimal(0)
+    bottom_mm: Decimal = Decimal(0)
+    right_mm: Decimal = Decimal(0)
+    left_mm: Decimal = Decimal(0)
+    origin_x_mm: Decimal = Decimal(0)
+    origin_y_mm: Decimal = Decimal(0)
+    mode: str = MODE_ALL
 
 
 def _decimal_mm(value: object) -> Decimal:
@@ -368,28 +387,55 @@ def validate_glass_opening(
     *,
     outer_width_cm: object,
     outer_length_cm: object,
-    glass_margin_mm: object,
+    glass_margin_mm: object = None,
+    source: object | None = None,
 ) -> GlassOpening:
-    """Require a positive uniform margin and a positive inner opening.
+    """Require positive margins and a positive inner opening.
 
     Outer width and length stay in the order's centimetre input. They are
-    converted with the shared ``MM_PER_CM`` factor. The margin itself is
-    already millimetres. Each side keeps the same margin, so the opening is
-    the outer size minus twice the margin on each axis.
+    converted with the shared ``MM_PER_CM`` factor. Margins are already
+    millimetres. A single ``glass_margin_mm`` applies to every side. A source
+    in Individual Sides mode uses that source's four margins, so the opening
+    origin is the left and top margins rather than half the difference.
     """
 
-    margin_mm = _decimal_mm(glass_margin_mm)
-    if margin_mm <= 0:
-        raise PiecePolicyError("glass_margin_must_be_positive")
+    try:
+        if source is not None:
+            margins = resolve_glass_side_margins(source)
+            if margins is None:
+                raise GlassMarginError("glass_margin_must_be_positive")
+        else:
+            from almdina_erp.almdina_erp.domain.orders.glass_margins import (
+                GlassSideMargins,
+            )
 
-    opening_width_mm = (_decimal_mm(outer_width_cm) * MM_PER_CM) - (margin_mm * 2)
-    opening_length_mm = (_decimal_mm(outer_length_cm) * MM_PER_CM) - (margin_mm * 2)
-    if opening_width_mm <= 0 or opening_length_mm <= 0:
-        raise PiecePolicyError("glass_opening_must_be_positive")
+            margin_mm = _decimal_mm(glass_margin_mm)
+            margins = GlassSideMargins(
+                mode=MODE_ALL,
+                top_mm=margin_mm,
+                bottom_mm=margin_mm,
+                right_mm=margin_mm,
+                left_mm=margin_mm,
+            )
+        opening = opening_from_margins(
+            margins,
+            outer_width_cm=outer_width_cm,
+            outer_length_cm=outer_length_cm,
+        )
+    except GlassMarginError as exc:
+        raise PiecePolicyError(exc.code) from exc
+    shared = margins.uniform_mm if margins.uniform_mm is not None else Decimal(0)
     return GlassOpening(
-        margin_mm=margin_mm,
-        opening_width_mm=opening_width_mm,
-        opening_length_mm=opening_length_mm,
+        margin_mm=shared,
+        opening_width_mm=opening["opening_width_mm"],
+        opening_length_mm=opening["opening_length_mm"],
+        top_mm=margins.top_mm,
+        bottom_mm=margins.bottom_mm,
+        right_mm=margins.right_mm,
+        left_mm=margins.left_mm,
+        origin_x_mm=opening["origin_x_mm"],
+        origin_y_mm=opening["origin_y_mm"],
+        mode=margins.mode,
     )
 
 
@@ -405,17 +451,28 @@ def canonical_glass_margin_mm(
     non-glass plans keep their current hash.
     """
 
-    if piece_type != GLASS_TYPE:
-        return None
-    if value in (None, ""):
-        return None
-    try:
-        number = Decimal(str(value))
-    except (InvalidOperation, ValueError, TypeError):
-        return None
-    if not number.is_finite() or number == 0:
-        return None
-    return float(number)
+    return canonical_uniform_margin_mm(value, piece_type)
+
+
+def _same_glass_geometry(old: PieceGeometry, current: PieceGeometry) -> bool:
+    """Blank mode and All Directions are the same uniform contract."""
+
+    def signature(piece: PieceGeometry) -> tuple[object, ...]:
+        if piece.glass_margin_mode == MODE_INDIVIDUAL:
+            return (
+                MODE_INDIVIDUAL,
+                piece.glass_margin_top_mm,
+                piece.glass_margin_bottom_mm,
+                piece.glass_margin_right_mm,
+                piece.glass_margin_left_mm,
+            )
+        return (MODE_ALL, piece.glass_margin_mm)
+
+    left = signature(old)
+    right = signature(current)
+    if left[0] != right[0]:
+        return False
+    return all(_same_number(before, after) for before, after in zip(left[1:], right[1:], strict=True))
 
 
 def geometry_changed(
@@ -448,7 +505,7 @@ def geometry_changed(
         or old.edge_break != current.edge_break
         or old.edge_break_only != current.edge_break_only
         or old.edge_type != current.edge_type
-        or not _same_number(old.glass_margin_mm, current.glass_margin_mm)
+        or not _same_glass_geometry(old, current)
         or drawing_changed
     )
 

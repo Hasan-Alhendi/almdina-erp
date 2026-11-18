@@ -42,6 +42,7 @@
         offset_invalid: "المسافة يجب أن تكون صفرًا أو أكبر.",
         width_invalid: "عرض اللاينر يجب أن يكون أكبر من صفر.",
         strip_outside: "اللاينر يخرج خارج الدرفة. قلّل المسافة أو العرض.",
+        liner_enters_glass_opening: "The liner does not fit inside the glass door frame. Reduce its width or its distance from the edge.",
         liner_start_invalid: "Liner start must be zero or greater.",
         liner_length_invalid: "Liner length must be greater than zero.",
         liner_span_exceeds_edge: "Liner start plus length exceeds the reference side.",
