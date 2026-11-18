@@ -386,6 +386,7 @@ assert.equal(editor.draftFromRow({
 assert.match(editor.validationMessage(blank), /reference side/);
 const secondPreview = editor.previewSvg(moved);
 assert.match(firstPreview, /data-liner-strip="1"/);
+assert.doesNotMatch(firstPreview, /data-glass-opening/);
 assert.match(firstPreview, /data-liner-offset-line="1"/);
 assert.match(firstPreview, /data-liner-width-line="1"/);
 assert.match(firstPreview, /data-liner-side="edge_width_top"/);
