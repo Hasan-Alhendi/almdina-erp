@@ -68,6 +68,55 @@ def retain_diverse_finals(candidates: list[dict[str, Any]], limit: int = 5) -> l
     return sorted(selected[:limit],key=lambda p:tuple(p['industrial_rank']))
 
 
+def retain_system_gallery(candidates, limit=5):
+    """One final/continued gallery policy, preserving the native default.
+
+    A separately nominated, fully projected alternative can reserve one slot.
+    Existing nesting coverage has priority and all results keep their final
+    cutter comparison order within their role.
+    """
+    from .cut_line_quality import final_system_sort_keys
+    from .fragmentation import fragmentation_key, has_fragmentation_benefit
+    limit = min(5,max(0,limit))
+    if limit==0:
+        return []
+    native = [p for p in candidates if p.get("gallery_role") != "fragmentation_alternative"]
+    if not native:
+        native = list(candidates)
+    keys = final_system_sort_keys(native)
+    ranked = [p for _,p in sorted(zip(keys,native),key=lambda item:item[0])]
+    if not ranked:
+        return []
+    winner = ranked[0]
+    selected = [winner]
+    boards = len(winner.get("sheets") or ())
+    for kind in ("Joint","L-Shaped Corner","Clipped Corner","Glass"):
+        if len(selected)>=limit or any(kind in nesting_coverage(p) for p in selected):
+            continue
+        candidate = next((p for p in ranked if len(p.get("sheets") or ())==boards
+                          and kind in nesting_coverage(p)),None)
+        if candidate is not None and all(candidate is not p for p in selected):
+            selected.append(candidate)
+    alternatives = [p for p in candidates if winner.get("machine_type") in {"Auto","CNC Router"}
+                    and p.get("machine_type")==winner.get("machine_type")
+                    and len(p.get("sheets") or ())==boards
+                    and (p.get("validation") or {}).get("is_valid")
+                    and has_fragmentation_benefit(p.get("fragmentation_metrics"),
+                                                 winner.get("fragmentation_metrics"))]
+    if alternatives and len(selected)<limit:
+        nominee = min(alternatives,key=lambda p:fragmentation_key(p["fragmentation_metrics"]))
+        if all(nominee is not p for p in selected):
+            selected.append(nominee)
+    for candidate in ranked:
+        if len(selected)>=limit:
+            break
+        if all(candidate is not p for p in selected):
+            selected.append(candidate)
+    rest = selected[1:]
+    keys = final_system_sort_keys(rest)
+    return [winner, *[p for _,p in sorted(zip(keys,rest),key=lambda item:item[0])]]
+
+
 def _canonical(value: Any) -> Any:
     if isinstance(value, float):
         number = round(value, 9)

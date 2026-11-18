@@ -106,6 +106,7 @@ class OptimizerOptions:
     alns_search_budget_sec: float = 0.0
     pattern_search_budget_sec: float = 0.0
     corner_search_budget_sec: float = 0.0
+    fragmentation_regrouping: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -171,6 +172,7 @@ def optimize_order_plan(
     plan = preferred_plan
 
     raw_candidates = plan.pop('smart_candidates', []) if smart else []
+    fragmentation_candidates = plan.pop('smart_fragmentation_candidates', []) if smart else []
     # Internal research nominees never replace native warm finalists before
     # real Application projection. No RPC/settings surface enables this path.
     research_candidates = plan.pop('smart_research_candidates', []) if smart else []
@@ -235,10 +237,16 @@ def optimize_order_plan(
         pattern_seconds = (min(10.0, configured_patterns, max(0.0,command.optimizer.time_limit_sec))
             if math.isfinite(configured_patterns) and configured_patterns>0 else 0.0)
         formation_seeds = []
+        fragmentation_additions = []
         if snapshots and raw_seeds and alns_seconds > 0:
             additions, alns_trace = _refine_smart_gallery(command, engine, expanded,
                 raw_seeds[0], snapshots[0], applied_trim, trim_decision, plan_settings, alns_seconds,
-                formation_seeds=formation_seeds if pattern_seconds>0 else None)
+                formation_seeds=formation_seeds if pattern_seconds>0 else None,
+                fragmentation_seeds=fragmentation_candidates[:1])
+            fragmentation_additions.extend(record for record in additions
+                if record[0].get("gallery_role")=="fragmentation_alternative")
+            additions = [record for record in additions
+                if record[0].get("gallery_role")!="fragmentation_alternative"]
             if additions:
                 extra_records.extend(additions)
                 native_by_signature = {geometry_signature(snapshot): seed for snapshot, seed in reversed(ranked)}
@@ -295,6 +303,49 @@ def optimize_order_plan(
                         selected.append(record)
                 snapshots=[s for s,_ in selected[:5]]
                 raw_seeds=[r for _,r in selected[:5]]+raw_seeds
+        # Native search, refinement and their default choice finish first.
+        # One side proposal receives the same independent manufacturing gate.
+        measure = getattr(engine, "measure_fragmentation", None)
+        if snapshots and measure is not None:
+            measured_started = time.monotonic()
+            from almdina_erp.almdina_erp.domain.cutting.fragmentation import (
+                has_complete_identity, fragmentation_export_rejection,
+            )
+            side_records = list(fragmentation_additions[:1])
+            for raw in fragmentation_candidates[:1]:
+                result = _snapshot_outcome(command,engine,deepcopy(raw),expanded,applied_trim,
+                    trim_decision,plan_settings,alignment_budget={"deadline":time.monotonic(),
+                                                                 "remaining_candidates":1},
+                    preserve_layout=True)
+                side_records.append((result.snapshot,raw))
+            for snapshot,seed in side_records:
+                rejection = None
+                if not snapshot["validation"]["is_valid"]:
+                    rejection = "projection_validation"
+                elif not has_complete_identity(snapshot,expanded):
+                    rejection = "incomplete_identity"
+                else:
+                    rejection = fragmentation_export_rejection(snapshot)
+                if rejection:
+                    counts = plan.setdefault("smart_search",{}).setdefault("fragmentation_rejections",{})
+                    counts[rejection] = counts.get(rejection,0)+1
+                    continue
+                snapshot["gallery_role"] = "fragmentation_alternative"
+                signature = geometry_signature(snapshot)
+                if all(geometry_signature(p)!=signature for p in snapshots):
+                    snapshots.append(snapshot)
+                    raw_seeds.append(deepcopy(seed))
+            for snapshot in snapshots:
+                try:
+                    snapshot["fragmentation_metrics"] = measure(snapshot, board.kerf_cm)
+                except Exception as error:
+                    snapshot["fragmentation_metrics"] = None
+                    plan.setdefault("smart_search",{}).setdefault(
+                        "fragmentation_measurement_errors",[]).append(type(error).__name__)
+            from almdina_erp.almdina_erp.domain.cutting.plan_portfolio import retain_system_gallery
+            snapshots = retain_system_gallery(snapshots)
+            plan.setdefault("smart_search",{})["fragmentation_projection_sec"] = round(
+                time.monotonic()-measured_started,3)
         if snapshots:
             outcome = replace(
                 outcome,
@@ -313,11 +364,22 @@ def optimize_order_plan(
             outcome.snapshot['smart_search']['pattern_search'] = pattern_trace
         if corner_trace is not None:
             outcome.snapshot['smart_search']['corner_search'] = corner_trace
+        for snapshot in snapshots:
+            snapshot["smart_search"] = deepcopy(outcome.snapshot["smart_search"])
+            snapshot["search_time_limit_sec"] = command.optimizer.time_limit_sec
+            snapshot["total_elapsed_sec"] = outcome.snapshot["total_elapsed_sec"]
+            snapshot["attempts"] = _integer(plan.get("attempts"))
+            snapshot["search_elapsed_sec"] = _number(plan.get("search_elapsed_sec"))
+            optimizer_trace = snapshot["execution_trace"]["optimizer"]
+            optimizer_trace["attempts"] = snapshot["attempts"]
+            optimizer_trace["elapsed_sec"] = snapshot["search_elapsed_sec"]
+            optimizer_trace["reported_time_limit_sec"] = command.optimizer.time_limit_sec
     return replace(outcome,candidate_snapshots=tuple(snapshots),search_seeds=tuple(raw_seeds))
 
 
 def _refine_smart_gallery(command, engine, expanded, raw, incumbent, applied_trim,
-                          trim_decision, plan_settings, seconds, *, formation_seeds=None):
+                          trim_decision, plan_settings, seconds, *, formation_seeds=None,
+                          fragmentation_seeds=()):
     """One shared refinement deadline, then the existing snapshot/validation port.
 
     Called for a new System calculation only. Saved/uploaded snapshots are never
@@ -332,11 +394,13 @@ def _refine_smart_gallery(command, engine, expanded, raw, incumbent, applied_tri
     width = applied_trim.usable_width_cm(full_width_cm=board.full_width_cm)
     height = applied_trim.usable_length_cm(full_length_cm=board.full_length_cm)
     projection_reserve = min(1.5, seconds*.15)
+    neighborhood_reserve = min(3.5, seconds*.35)
     def collect(skeleton):
         if len(formation_seeds)<12:
             formation_seeds.append(skeleton)
     proposals, trace = refine_system_layout(raw, expanded, width, height, board.kerf_cm,
-        deadline=deadline-projection_reserve, machine_type=command.optimizer.machine_type,
+        deadline=deadline-projection_reserve-neighborhood_reserve,
+        machine_type=command.optimizer.machine_type,
         mirroring_allowed=piece_mirroring_allowed(command.allow_piece_mirroring),
         metric_kwargs=dict(min_remnant_width_cm=command.optimizer.min_remnant_width_cm,
             min_remnant_length_cm=command.optimizer.min_remnant_length_cm,
@@ -348,7 +412,7 @@ def _refine_smart_gallery(command, engine, expanded, raw, incumbent, applied_tri
     # atomic and may finish after the cooperative deadline, as in native search.
     additions = []
     for index, proposal in enumerate(proposals[1:]):
-        if index and time.monotonic() >= deadline:
+        if index and time.monotonic() >= deadline-neighborhood_reserve:
             break
         if material_signature(proposal) == original:
             continue
@@ -357,17 +421,64 @@ def _refine_smart_gallery(command, engine, expanded, raw, incumbent, applied_tri
                            and configured_alignment > 0 else 0.0)
         result = _snapshot_outcome(command, engine, deepcopy(proposal), expanded,
             applied_trim, trim_decision, plan_settings,
-            alignment_budget={"deadline": min(deadline,time.monotonic()+alignment_share),
+            alignment_budget={"deadline": min(deadline-neighborhood_reserve,time.monotonic()+alignment_share),
                               "remaining_candidates": 1})
         if result.snapshot['validation']['is_valid']:
             before, after = final_system_sort_keys([incumbent, result.snapshot])
             if after < before:
                 additions.append((result.snapshot, proposal))
+    from almdina_erp.almdina_erp.domain.cutting.fragmentation_search import search_fragmentation
+    proposal, neighborhood_trace = search_fragmentation(
+        [raw, *fragmentation_seeds], expanded, width, height, board.kerf_cm,
+        deadline=min(deadline-projection_reserve/2, time.monotonic()+neighborhood_reserve),
+        machine_type=command.optimizer.machine_type,
+        mirroring_allowed=piece_mirroring_allowed(command.allow_piece_mirroring),
+        metric_kwargs=dict(min_remnant_width_cm=command.optimizer.min_remnant_width_cm,
+            min_remnant_length_cm=command.optimizer.min_remnant_length_cm,
+            min_remnant_area_m2=command.optimizer.min_remnant_area_m2))
+    if proposal is not None:
+        result = _snapshot_outcome(command,engine,deepcopy(proposal),expanded,applied_trim,
+            trim_decision,plan_settings,preserve_layout=True)
+        if result.snapshot["validation"]["is_valid"]:
+            if len(result.snapshot["sheets"]) >= len(incumbent["sheets"]):
+                result.snapshot["gallery_role"] = "fragmentation_alternative"
+            additions.append((result.snapshot,proposal))
+        else:
+            neighborhood_trace["projection_rejection"] = "validation_failed"
+    regroup_trace = None
+    remaining = deadline-time.monotonic()
+    if command.optimizer.fragmentation_regrouping and remaining>0:
+        # Completed native refinements and their projection keep precedence.
+        # Reuse spare time only, with half reserved for the independent gate.
+        from almdina_erp.almdina_erp.domain.cutting.fragmentation import (
+            regroup_fragmentation, fragmentation_export_rejection,
+        )
+        proposal,regroup_trace = regroup_fragmentation(incumbent,expanded,width,height,board.kerf_cm,
+            deadline=time.monotonic()+remaining/2,machine_type=command.optimizer.machine_type,
+            mirroring_allowed=piece_mirroring_allowed(command.allow_piece_mirroring),
+            metric_kwargs=dict(min_remnant_width_cm=command.optimizer.min_remnant_width_cm,
+                min_remnant_length_cm=command.optimizer.min_remnant_length_cm,
+                min_remnant_area_m2=command.optimizer.min_remnant_area_m2))
+        if proposal is not None:
+            result = _snapshot_outcome(command,engine,deepcopy(proposal),expanded,applied_trim,
+                trim_decision,plan_settings,preserve_layout=True)
+            rejection = fragmentation_export_rejection(result.snapshot)
+            if rejection:
+                regroup_trace["export_rejection"] = rejection
+            elif result.snapshot["validation"]["is_valid"]:
+                if len(result.snapshot["sheets"])>=len(incumbent["sheets"]):
+                    result.snapshot["gallery_role"] = "fragmentation_alternative"
+                additions.append((result.snapshot,proposal))
     summary = {key: trace[key] for key in (
         'attempts', 'stop', 'operators', 'weights', 'movable_pieces', 'pinned_pieces',
         'skeletons', 'compound_attempts', 'compound_improvements') if key in trace}
     summary.update(budget_sec=seconds, elapsed_sec=round(time.monotonic()-started, 3),
-        projected_improvements=len(additions), additional_to_native_search=True)
+        projected_improvements=sum(s.get("gallery_role")!="fragmentation_alternative" for s,_ in additions),
+        projected_alternatives=sum(s.get("gallery_role")=="fragmentation_alternative" for s,_ in additions),
+        additional_to_native_search=True)
+    summary["fragmentation_neighborhood"] = neighborhood_trace
+    if regroup_trace is not None:
+        summary["fragmentation_regrouping"] = regroup_trace
     return additions, summary
 
 
@@ -434,7 +545,7 @@ def _refine_pattern_gallery(command,engine,expanded,seeds,incumbent,applied_trim
 
 
 def _snapshot_outcome(command, engine, plan, expanded, applied_trim, trim_decision, plan_settings, *,
-                      alignment_budget=None):
+                      alignment_budget=None, preserve_layout=False):
     """One manufacturing snapshot projection for the default and every alternative."""
     board = command.board
     plan["kerf_cm"] = board.kerf_cm
@@ -467,16 +578,17 @@ def _snapshot_outcome(command, engine, plan, expanded, applied_trim, trim_decisi
     original_metrics = _enrich_final_geometry_metrics(
         {**plan, "sheets": original_sheets}, metric_options
     )
-    realize_sheet_edge_trim(
-        sheets,
-        full_width_cm=board.full_width_cm,
-        full_length_cm=board.full_length_cm,
-        preferred_width_trim_cm=trim_decision.preferred.width_trim_cm,
-        preferred_length_trim_cm=trim_decision.preferred.length_trim_cm,
-        balance_existing_applied=True,
-        max_centerable_edge_gap_cm=command.optimizer.max_centerable_edge_gap_cm,
-        **metric_options,
-    )
+    if not preserve_layout:
+        realize_sheet_edge_trim(
+            sheets,
+            full_width_cm=board.full_width_cm,
+            full_length_cm=board.full_length_cm,
+            preferred_width_trim_cm=trim_decision.preferred.width_trim_cm,
+            preferred_length_trim_cm=trim_decision.preferred.length_trim_cm,
+            balance_existing_applied=True,
+            max_centerable_edge_gap_cm=command.optimizer.max_centerable_edge_gap_cm,
+            **metric_options,
+        )
     plan["sheets"] = sheets
     plan = _enrich_final_geometry_metrics(plan, metric_options)
     if _centering_worsens_industrial_quality(
@@ -487,7 +599,7 @@ def _snapshot_outcome(command, engine, plan, expanded, applied_trim, trim_decisi
         plan["sheets"] = original_sheets
         plan = _enrich_final_geometry_metrics(plan, metric_options)
 
-    if plan_settings.optimization_mode == "smart":
+    if plan_settings.optimization_mode == "smart" and not preserve_layout:
         # An invalid centering proposal must not make alignment a no-op and
         # then be rolled back only *after* the refinement opportunity is gone.
         # Use the same independent geometry/permission gates as the final gate.

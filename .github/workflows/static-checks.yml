@@ -10,6 +10,38 @@ permissions:
   contents: read
 
 jobs:
+  fragmentation-validation:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install app test dependencies
+        run: python -m pip install '.[test]'
+
+      - name: Verify fragmentation and manufacturing independently
+        run: |
+          python -m pytest -q \
+            almdina_erp/tests/test_fragmentation_portfolio.py \
+            almdina_erp/tests/test_fragmentation_search.py \
+            almdina_erp/tests/test_smart_cutting_search.py \
+            almdina_erp/tests/test_smart_plan_portfolio.py \
+            almdina_erp/tests/test_smart_cutting_manufacturing.py \
+            almdina_erp/tests/test_smart_cutting_lifecycle.py \
+            almdina_erp/tests/test_alns_recalculation.py \
+            almdina_erp/tests/test_board_regrouping.py \
+            almdina_erp/tests/test_final_cut_line_alignment.py \
+            almdina_erp/tests/test_plan_preview_session_exact_commit.py \
+            almdina_erp/tests/test_piece_mirroring_policy.py \
+            almdina_erp/tests/test_dxf_manufacturing_identity.py \
+            almdina_erp/tests/test_strict_dxf_persisted_cut_contract.py \
+            almdina_erp/tests/test_glass_door_margins_and_liner.py
+
   static-validation:
     runs-on: ubuntu-latest
     steps:
@@ -266,6 +298,7 @@ jobs:
             almdina_erp/tests/test_pattern_layout_search.py \
             almdina_erp/tests/test_coupled_corner_frames.py \
             almdina_erp/tests/test_smart_plan_portfolio.py \
+            almdina_erp/tests/test_fragmentation_portfolio.py \
             almdina_erp/tests/test_joint_nesting.py \
             almdina_erp/tests/test_geometry_first_nesting.py \
             almdina_erp/tests/test_smart_cutting_manufacturing.py \
