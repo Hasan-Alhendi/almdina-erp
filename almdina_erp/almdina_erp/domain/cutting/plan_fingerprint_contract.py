@@ -29,7 +29,8 @@ piece_instance_id width_cm length_cm final_width_cm final_length_cm qty
 allow_rotation edge_long_right edge_long_left edge_width_top edge_width_bottom
 edge_break edge_break_only piece_type clipped_corner_position
 clipped_corner_width_cm clipped_corner_length_cm special_shape_geometry_json
-glass_margin_mm extra_double extra_double_reference_sides
+glass_margin_mm glass_margin_mode glass_margin_top_mm glass_margin_bottom_mm
+glass_margin_right_mm glass_margin_left_mm extra_double extra_double_reference_sides
 edge_long_thickness_mm edge_width_thickness_mm liner_specs_json
 extra_liner liner_reference_side liner_offset_cm liner_width_cm liner_start_cm liner_length_cm
 extra_back_groove back_groove_reference_side back_groove_offset_cm back_groove_width_cm back_groove_start_cm back_groove_length_cm
@@ -50,7 +51,7 @@ qty allow_rotation edge_long_right edge_long_left edge_width_top edge_width_bott
 edge_break edge_break_only extra_double extra_liner extra_back_groove extra_recessed_handle_cutout
 """.split())
 _STRING_PIECE_KEYS = frozenset("""
-piece_instance_id piece_type extra_double_reference_sides clipped_corner_position
+piece_instance_id piece_type extra_double_reference_sides glass_margin_mode clipped_corner_position
 special_shape_geometry_json liner_specs_json liner_reference_side
 back_groove_reference_side recessed_handle_reference_side
 """.split())
@@ -179,8 +180,20 @@ def freeze_geometry_piece(piece: Mapping[str, Any]) -> dict[str, Any]:
         raise PlanFingerprintContractError('unknown_fingerprint_piece_fields')
     if _REQUIRED_PIECE_KEYS - set(piece):
         raise PlanFingerprintContractError('missing_fingerprint_piece_fields')
-    if piece['piece_type'] == 'Glass' and 'glass_margin_mm' not in piece:
-        raise PlanFingerprintContractError('missing_fingerprint_glass_margin')
+    if piece['piece_type'] == 'Glass':
+        individual = piece.get('glass_margin_mode') == 'Individual Sides'
+        if individual:
+            required = {
+                'glass_margin_mode',
+                'glass_margin_top_mm',
+                'glass_margin_bottom_mm',
+                'glass_margin_right_mm',
+                'glass_margin_left_mm',
+            }
+            if required - set(piece):
+                raise PlanFingerprintContractError('missing_fingerprint_glass_margin')
+        elif 'glass_margin_mm' not in piece:
+            raise PlanFingerprintContractError('missing_fingerprint_glass_margin')
     for group in _MACHINING_GROUPS:
         present = group.intersection(piece)
         if present and present != group:

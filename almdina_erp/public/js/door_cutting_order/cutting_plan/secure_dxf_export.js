@@ -742,8 +742,12 @@
 
     function glassOpeningMissing(piece) {
         if (String((piece && piece.piece_type) || "") !== "Glass") return false;
-        const margin = Number(piece && piece.glass_margin_mm);
-        if (!(margin > 0)) return false;
+        const individual = String((piece && piece.glass_margin_mode) || "") === "Individual Sides";
+        const margin = individual
+            ? ["glass_margin_top_mm", "glass_margin_bottom_mm", "glass_margin_right_mm", "glass_margin_left_mm"]
+                .some((name) => Number(piece && piece[name]) > 0)
+            : Number(piece && piece.glass_margin_mm) > 0;
+        if (!margin) return false;
         const persisted = piece.geometry && Array.isArray(piece.geometry.holes)
             ? piece.geometry.holes
             : null;

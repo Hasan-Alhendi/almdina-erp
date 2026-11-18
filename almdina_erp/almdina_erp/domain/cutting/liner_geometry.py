@@ -66,6 +66,10 @@ class LinerPiece:
     clipped_corner_position: str = "Top Right"
     clipped_corner_width_cm: float = 0.0
     clipped_corner_length_cm: float = 0.0
+    glass_frame_left_mm: float = 0.0
+    glass_frame_right_mm: float = 0.0
+    glass_frame_top_mm: float = 0.0
+    glass_frame_bottom_mm: float = 0.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -633,6 +637,18 @@ def validation_code(piece: LinerPiece, side: str, offset_cm: float, width_cm: fl
             return "strip_outside"
     if has_self_intersection(strip, GEOMETRY_TOLERANCE_MM):
         return "strip_outside"
+    if piece.piece_type == GLASS_TYPE:
+        frames = {
+            SIDE_LEFT: piece.glass_frame_left_mm,
+            SIDE_RIGHT: piece.glass_frame_right_mm,
+            SIDE_TOP: piece.glass_frame_top_mm,
+            SIDE_BOTTOM: piece.glass_frame_bottom_mm,
+        }
+        if any(value > 0 for value in frames.values()):
+            frame = frames.get(side, 0.0)
+            extent = _mm(offset) + _mm(width)
+            if frame <= GEOMETRY_TOLERANCE_MM or extent > frame + GEOMETRY_TOLERANCE_MM:
+                return "liner_enters_glass_opening"
     return ""
 
 

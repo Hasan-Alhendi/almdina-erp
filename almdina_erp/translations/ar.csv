@@ -2807,6 +2807,16 @@ Opening Width,عرض الفتحة
 Opening Length,طول الفتحة
 Apply Shape,اعتماد الشكل
 Invalid Glass Margin,هامش البلور غير صالح
+All Directions,كل الاتجاهات
+Individual Sides,كل جهة
+Glass Margin Mode,طريقة تحديد الهامش
+Top Margin,الهامش العلوي
+Bottom Margin,الهامش السفلي
+Right Margin,الهامش الأيمن
+Left Margin,الهامش الأيسر
+The liner does not fit inside the glass door frame. Reduce its width or its distance from the edge.,اللاينر لا يتسع داخل إطار درفة البلور. قلّل عرضه أو بعده عن الحافة.
+Row {0}: A glass door can only add a liner.,الصف {0}: درفة البلور تقبل اللاينر فقط.
+A glass door can only add a liner.,درفة البلور تقبل اللاينر فقط.
 Glass margin is measured from the entered outer size. The cut size can differ after edge banding.,هامش البلور يُقاس من المقاس الخارجي المدخل. مقاس القص قد يختلف بعد القشاط.
 Glass shape applied,تم اعتماد شكل البلور
 Saw blade thickness conflict: {0} mm versus {1} mm in the cutting plan. DXF was not exported.,سماكة الشفرة متعارضة: {0} مم مقابل {1} مم في خطة القص، ولم يُصدَّر الملف.

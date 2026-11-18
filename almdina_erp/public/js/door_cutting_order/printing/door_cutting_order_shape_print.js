@@ -236,6 +236,22 @@
             return lines;
         }
         if (type === "Glass") {
+            if (String(piece.glass_margin_mode || "") === "Individual Sides") {
+                [
+                    ["Top Margin", "glass_margin_top_mm"],
+                    ["Bottom Margin", "glass_margin_bottom_mm"],
+                    ["Right Margin", "glass_margin_right_mm"],
+                    ["Left Margin", "glass_margin_left_mm"],
+                ].forEach(([label, fieldname]) => {
+                    const glass = window.AlmdinaGlassShape;
+                    const millimeters = Number(piece[fieldname]);
+                    const value = glass && typeof glass.marginCmTextFromMm === "function"
+                        ? String(glass.marginCmTextFromMm(millimeters) || "")
+                        : (Number.isFinite(millimeters) && millimeters > 0 ? String(Math.round(millimeters * 1000) / 10000) : "");
+                    if (value) lines.push({ label: translate(label), value, unit: translate("cm") });
+                });
+                return lines;
+            }
             const margin = glassMarginCmText(piece);
             if (margin) {
                 lines.push({

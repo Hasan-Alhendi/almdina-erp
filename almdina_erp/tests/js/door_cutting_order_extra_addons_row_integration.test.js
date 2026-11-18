@@ -83,6 +83,14 @@ const context = vm.createContext({
 });
 
 vm.runInContext(
+    source("door_cutting_order/drawing/door_cutting_order_glass_shape_ux.js"),
+    context
+);
+vm.runInContext(
+    source("door_cutting_order/drawing/door_cutting_order_liner_geometry.js"),
+    context
+);
+vm.runInContext(
     source("door_cutting_order/order_entry/extra_addons/door_cutting_order_extra_addons_ux.js"),
     context
 );
@@ -106,6 +114,25 @@ assert.equal(performance.setPieceType(frm, tr, "Clipped Corner"), row);
 assert.equal(row.piece_type, "Clipped Corner");
 assert.equal(row.extra_liner, 1);
 assert.equal(row.extra_double, 1);
+
+row.width_cm = 100;
+row.length_cm = 100;
+assert.equal(performance.setPieceType(frm, tr, "Glass"), row);
+assert.equal(row.glass_margin_mode, "All Directions");
+assert.equal(row.glass_margin_mm, 60);
+const glassPiece = fakeWindow.AlmdinaLinerGeometry.pieceFromRow(row);
+assert.equal(glassPiece.glassFrameMm.left, 60);
+assert.equal(
+    fakeWindow.AlmdinaLinerGeometry.validationCode(glassPiece, "edge_long_left", 1, 2),
+    ""
+);
+row.glass_margin_mm = 80;
+row.glass_margin_mode = "Individual Sides";
+row.glass_margin_top_mm = 50;
+assert.equal(performance.setPieceType(frm, tr, "Glass"), row);
+assert.equal(row.glass_margin_mm, 80);
+assert.equal(row.glass_margin_mode, "Individual Sides");
+assert.equal(row.glass_margin_top_mm, 50);
 
 setTimeout(() => {
     assert.ok(triggered.includes("piece_type"));
