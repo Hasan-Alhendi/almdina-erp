@@ -163,6 +163,14 @@ assert.ok(markup.includes("dco-cnc-cut-preview__sheet"));
 assert.ok(!/class="dco-cnc-cut-preview__sheet"[^>]*\bstroke=/.test(markup));
 assert.ok(!markup.includes("dco-cnc-cut-preview__frame"));
 assert.ok(markup.includes('transform="translate(80,60)"'));
+assert.ok(markup.includes('data-stop-badge="left"'));
+assert.ok(markup.includes('data-stop-badge="bottom"'));
+assert.ok(markup.includes('data-stop-arrow="left"'));
+assert.ok(markup.includes('data-stop-arrow="bottom"'));
+assert.ok(markup.includes('data-zero-anchor="bottom-left"'));
+assert.ok(!markup.includes("data-placement-diagram"));
+assert.ok(!markup.includes("dco-cnc-cut-preview__origin"));
+assert.equal((markup.match(/dco-cnc-cut-preview__svg/g) || []).length, 1);
 
 const cornerState = { cncMachine: "Router A", sheetWidthCm: 120, sheetLengthCm: 240 };
 const cornerWorkspace = {
@@ -187,13 +195,20 @@ assert.strictEqual(cornerPlacement.offset_bottom_cm, 160);
 assert.strictEqual(cornerPlacement.right_clearance_cm, 80);
 const cornerMarkup = ux.cutPathPreviewMarkup(program, { layout: "page", placement: cornerPlacement, zoom: 1 });
 assert.ok(cornerMarkup.includes('transform="translate(0,1600)"'));
-const diagram = ux.placementDiagramMarkup(cornerPlacement);
-assert.ok(diagram.includes('data-stop-side="right"'));
-assert.ok(diagram.includes('data-stop-side="bottom"'));
-assert.ok(diagram.includes("data-work-zero-label"));
-assert.ok(diagram.includes("(0,0)"));
-assert.ok(diagram.includes("80 cm") || diagram.includes("80 سم"));
-assert.ok(!diagram.includes("<input"));
+assert.ok(cornerMarkup.includes('data-stop-badge="right"'));
+assert.ok(cornerMarkup.includes('data-stop-badge="bottom"'));
+assert.ok(cornerMarkup.includes('data-stop-arrow="right"'));
+assert.ok(cornerMarkup.includes('data-stop-arrow="bottom"'));
+assert.ok(!cornerMarkup.includes('data-stop-badge="left"'));
+assert.ok(!cornerMarkup.includes('data-stop-badge="top"'));
+assert.ok(cornerMarkup.includes('data-zero-anchor="bottom-right"'));
+assert.ok(cornerMarkup.includes('data-svg-x="2000"'));
+assert.ok(cornerMarkup.includes('data-svg-y="4000"'));
+assert.ok(cornerMarkup.includes("(0,0)"));
+assert.ok(cornerMarkup.includes("80 cm") || cornerMarkup.includes("80 سم"));
+assert.ok(!cornerMarkup.includes("<input"));
+assert.ok(!cornerMarkup.includes("data-placement-diagram"));
+assert.equal((cornerMarkup.match(/dco-cnc-cut-preview__svg/g) || []).length, 1);
 assert.ok(!cornerMarkup.includes("Left Stop"));
 assert.ok(!cornerMarkup.includes("Right Stop"));
 assert.strictEqual(ux.validateSheetPlacementFits({
@@ -208,5 +223,92 @@ assert.ok(markup.includes("data-path-number=\"1\"") || markup.includes("data-pat
 
 const zoomed = ux.clampCutPreviewZoom(1.5);
 assert.strictEqual(zoomed, ux.clampCutPreviewZoom(1.5));
+
+assert.ok(!panel.includes("placementDiagramMarkup"));
+assert.ok(!panel.includes("data-placement-diagram"));
+assert.ok(panel.includes("data-sheet-placement"));
+assert.ok(css.includes(".dco-cnc-cut-preview__stop-badge"));
+assert.ok(css.includes("font-size: 12px"));
+assert.ok(!css.includes(".dco-cnc-cut-preview__stop-badge") || !/\.dco-cnc-cut-preview__stop-badge\s*\{[^}]*--cut-zoom/.test(css));
+
+const comboProgram = {
+    sheet_width_mm: 1830,
+    sheet_length_mm: 2800,
+    geometry_ready: true,
+    ready: true,
+    issues: [],
+    operations: program.operations,
+};
+const zeroPoints = {
+    "Bottom Left": ["0", "3100", "bottom-left"],
+    "Bottom Right": ["2100", "3100", "bottom-right"],
+    "Top Left": ["0", "0", "top-left"],
+    "Top Right": ["2100", "0", "top-right"],
+};
+["Bottom Left", "Bottom Right", "Top Left", "Top Right"].forEach(zero => {
+    ["Left Side", "Right Side"].forEach(widthSide => {
+        ["Bottom Side", "Top Side"].forEach(lengthSide => {
+            const combo = ux.placementPreviewPayload({
+                cnc_machines: [{
+                    name: "Router A",
+                    machine_name: "Router A",
+                    width_cm: 210,
+                    length_cm: 310,
+                    enabled: true,
+                    work_zero_position: zero,
+                    width_stop_side: widthSide,
+                    length_stop_side: lengthSide,
+                }],
+            }, { cncMachine: "Router A", sheetWidthCm: 183, sheetLengthCm: 280 });
+            const html = ux.cutPathPreviewMarkup(comboProgram, { layout: "page", placement: combo });
+            const [zeroX, zeroY, anchor] = zeroPoints[zero];
+            assert.ok(html.includes(`data-zero-anchor="${anchor}"`), zero);
+            assert.ok(html.includes(`data-svg-x="${zeroX}"`), `${zero} x`);
+            assert.ok(html.includes(`data-svg-y="${zeroY}"`), `${zero} y`);
+            assert.ok(html.includes("(0,0)"));
+            assert.equal(html.includes('data-stop-badge="left"'), widthSide === "Left Side");
+            assert.equal(html.includes('data-stop-badge="right"'), widthSide === "Right Side");
+            assert.equal(html.includes('data-stop-badge="bottom"'), lengthSide === "Bottom Side");
+            assert.equal(html.includes('data-stop-badge="top"'), lengthSide === "Top Side");
+            assert.equal(html.includes('data-stop-arrow="left"'), widthSide === "Left Side");
+            assert.equal(html.includes('data-stop-arrow="right"'), widthSide === "Right Side");
+            assert.equal(html.includes('data-stop-arrow="bottom"'), lengthSide === "Bottom Side");
+            assert.equal(html.includes('data-stop-arrow="top"'), lengthSide === "Top Side");
+            assert.ok(html.includes("27 cm") || html.includes("27 سم"));
+            assert.ok(html.includes("30 cm") || html.includes("30 سم"));
+            assert.ok(!html.includes("<input"));
+            assert.ok(!html.includes("data-placement-diagram"));
+            assert.equal((html.match(/dco-cnc-cut-preview__svg/g) || []).length, 1);
+        });
+    });
+});
+
+const overlayNodes = [{
+    svgX: 2100,
+    svgY: 3100,
+    style: {},
+    getAttribute(name) {
+        return name === "data-svg-x" ? String(this.svgX) : String(this.svgY);
+    },
+}];
+const measure = { viewBox: "", setAttribute(name, value) { this[name] = value; } };
+const overlayHost = {
+    querySelector(selector) {
+        if (selector === "[data-placement-overlay]") {
+            return { querySelectorAll() { return overlayNodes; } };
+        }
+        if (selector === "[data-measure-layer]") return measure;
+        return null;
+    },
+};
+const zoomedSvg = {
+    box: "400 600 800 1200",
+    getAttribute() { return this.box; },
+};
+ux.syncPlacementOverlay(overlayHost, zoomedSvg);
+assert.strictEqual(measure.viewBox, "400 600 800 1200");
+assert.strictEqual(overlayNodes[0].style.left, "212.5%");
+assert.strictEqual(overlayNodes[0].style.top, "208.33333333333334%");
+assert.ok(!String(overlayNodes[0].style.transform || "").includes("scale"));
 
 console.log("dco_operational_files_sheet_placement.test.js passed");
