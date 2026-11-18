@@ -137,6 +137,27 @@ def _reflect_points_vertical(
     return [[num(point[0]), (2.0 * center_y) - num(point[1])] for point in points]
 
 
+def _reflect_opening_rings(
+    piece: dict[str, Any],
+    *,
+    axis: str,
+    center_x: float = 0.0,
+    center_y: float = 0.0,
+) -> None:
+    rings = piece.get("base_opening_rings_mm")
+    if not isinstance(rings, list):
+        return
+    reflected = []
+    for ring in rings:
+        if not isinstance(ring, list) or len(ring) < 3:
+            continue
+        if axis == "v":
+            reflected.append(_reflect_points_vertical(ring, center_y=center_y))
+        else:
+            reflected.append(_reflect_points_horizontal(ring, center_x=center_x))
+    piece["base_opening_rings_mm"] = reflected
+
+
 def apply_local_horizontal_mirror(piece: dict[str, Any]) -> None:
     """Reflect base geometry about the pivot in local X (corner_contour convention)."""
 
@@ -151,6 +172,7 @@ def apply_local_horizontal_mirror(piece: dict[str, Any]) -> None:
             piece["base_hole_mm"],
             center_x=center_x,
         )
+    _reflect_opening_rings(piece, axis="h", center_x=center_x)
     _reflect_machining_paths(piece, axis="h")
     piece["mirrored"] = not _truthy_flag(piece.get("mirrored"))
     rederive_outline(piece)
@@ -197,6 +219,7 @@ def apply_local_flip_h(piece: dict[str, Any]) -> None:
             piece["base_hole_mm"],
             center_x=center_x,
         )
+    _reflect_opening_rings(piece, axis="h", center_x=center_x)
     _reflect_machining_paths(piece, axis="h")
     piece["flip_h"] = not _truthy_flag(piece.get("flip_h"))
     rederive_outline(piece)
@@ -214,6 +237,7 @@ def apply_local_flip_v(piece: dict[str, Any]) -> None:
             piece["base_hole_mm"],
             center_y=center_y,
         )
+    _reflect_opening_rings(piece, axis="v", center_y=center_y)
     _reflect_machining_paths(piece, axis="v")
     piece["flip_v"] = not _truthy_flag(piece.get("flip_v"))
     rederive_outline(piece)

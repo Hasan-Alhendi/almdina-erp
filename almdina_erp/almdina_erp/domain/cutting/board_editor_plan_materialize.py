@@ -387,9 +387,15 @@ def _materialize_piece(
     # Posed glass_hole_local_mm is usable-sheet (review frame). Use it only for
     # geometry.holes. Manufacturing glass_hole_local_mm stays piece-local from source.
     holes = []
-    hole = posed.get("glass_hole_local_mm")
-    if isinstance(hole, list) and len(hole) >= 3:
-        holes.append(hole)
+    posed_rings = posed.get("opening_rings_mm")
+    if isinstance(posed_rings, list) and posed_rings:
+        for ring in posed_rings:
+            if isinstance(ring, list) and len(ring) >= 3:
+                holes.append(ring)
+    else:
+        hole = posed.get("glass_hole_local_mm")
+        if isinstance(hole, list) and len(hole) >= 3:
+            holes.append(hole)
     manufacturing_hole = source.get("glass_hole_local_mm")
     piece_type = str(trusted.get("piece_type") or source.get("piece_type") or "")
     geometry_source = str(
@@ -479,8 +485,11 @@ def _materialize_piece(
     if piece_type == "Special":
         if source.get("special_shape_geometry_json") not in (None, ""):
             piece["special_shape_geometry_json"] = source.get("special_shape_geometry_json")
-        if geometry_source == "cnc_raw_rect" or (
-            not exact_geometry and not source_geometry and not source.get("special_shape_geometry_json")
+        kept_openings = bool((piece.get("geometry") or {}).get("holes")) if isinstance(piece.get("geometry"), Mapping) else False
+        if not kept_openings and (
+            geometry_source == "cnc_raw_rect" or (
+                not exact_geometry and not source_geometry and not source.get("special_shape_geometry_json")
+            )
         ):
             piece.pop("geometry", None)
     return piece

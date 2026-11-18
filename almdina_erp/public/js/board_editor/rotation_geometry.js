@@ -96,6 +96,14 @@
         if (piece.base_hole_mm == null && Array.isArray(piece.glass_hole_local_mm)) {
             piece.base_hole_mm = piece.glass_hole_local_mm.map((point) => [num(point[0]), num(point[1])]);
         }
+        if (
+            !Array.isArray(piece.base_opening_rings_mm)
+            && Array.isArray(piece.opening_rings_mm)
+        ) {
+            piece.base_opening_rings_mm = piece.opening_rings_mm.map((ring) => (
+                ring.map((point) => [num(point[0]), num(point[1])])
+            ));
+        }
         if (!piece.pivot_mm || piece.pivot_mm.x == null) {
             piece.pivot_mm = aabbCenter(piece.base_outline_mm);
         }
@@ -111,6 +119,11 @@
         piece.outline_mm = rotatePoints(piece.base_outline_mm, piece.pivot_mm, angle);
         if (Array.isArray(piece.base_hole_mm) && piece.base_hole_mm.length >= 3) {
             piece.glass_hole_local_mm = rotatePoints(piece.base_hole_mm, piece.pivot_mm, angle);
+        }
+        if (Array.isArray(piece.base_opening_rings_mm)) {
+            piece.opening_rings_mm = piece.base_opening_rings_mm.map((ring) => (
+                rotatePoints(ring, piece.pivot_mm, angle)
+            ));
         }
         const bounds = footprintOf(piece).bounds;
         piece.local_x_mm = bounds.x;
@@ -204,6 +217,11 @@
         piece.base_outline_mm = rotatePoints(piece.base_outline_mm, hostPivot, delta);
         if (Array.isArray(piece.base_hole_mm)) {
             piece.base_hole_mm = rotatePoints(piece.base_hole_mm, hostPivot, delta);
+        }
+        if (Array.isArray(piece.base_opening_rings_mm)) {
+            piece.base_opening_rings_mm = piece.base_opening_rings_mm.map((ring) => (
+                rotatePoints(ring, hostPivot, delta)
+            ));
         }
         const rotatedPivot = rotatePoint(
             [num(piece.pivot_mm.x), num(piece.pivot_mm.y)],

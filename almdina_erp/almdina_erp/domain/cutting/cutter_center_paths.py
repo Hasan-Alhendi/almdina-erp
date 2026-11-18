@@ -52,7 +52,8 @@ def cutter_center_paths(
     paths: list[CutterCenterPath] = []
     segments: list[Segment] = []
     for outer, holes in prepared:
-        for ring in [outer, *[hole for hole in holes if len(hole) >= 3]]:
+        # Openings are released before the outer profile that contains them.
+        for ring in [*[hole for hole in holes if len(hole) >= 3], outer]:
             offset = (
                 ring
                 if radius <= tolerance
@@ -98,6 +99,31 @@ def cutter_center_segments(
         if path.closed and len(path.points) >= 3:
             segments.append((path.points[-1], path.points[0]))
     return _merge_collinear(segments, tolerance)
+
+
+def internal_center_ring(
+    outer: Sequence[Point],
+    hole: Sequence[Point],
+    radius_mm: float,
+) -> list[Point] | None:
+    """Return the cutter center of one opening, offset into the opening.
+
+    ``None`` means the selected cutter cannot travel inside that opening.
+    A zero radius keeps the finished opening, which is the existing zero-kerf
+    contract.
+    """
+
+    prepared = _prepare_shapes([(outer, [hole])])
+    if not prepared or not prepared[0][1]:
+        return None
+    hole_ring = prepared[0][1][0]
+    radius = max(0.0, float(radius_mm or 0.0))
+    if radius <= 1e-9:
+        return hole_ring
+    offset = _offset_closed(hole_ring, radius, _waste_sign(hole_ring, prepared, radius))
+    if len(offset) < 3:
+        return None
+    return offset
 
 
 def _prepare_shapes(

@@ -963,9 +963,25 @@ def present_issue(issue: DxfValidationIssue) -> PresentedDxfError:
         )
     if code == codes.SPECIAL_OUTLINE_IS_RECTANGLE:
         return PresentedDxfError(
-            _("A special door could not be matched because the DXF contour is a rectangle."),
+            _("A special door could not be matched because the rectangular contour has no internal opening."),
             target_text,
-            _("Use a non-rectangular contour whose outer dimensions match the ordered special door."),
+            _("Use a non-rectangular contour, or add at least one internal through-cut opening inside the rectangle."),
+            code,
+            issue.category,
+        )
+    if code == codes.REGULAR_OPENING_UNEXPECTED:
+        return PresentedDxfError(
+            _("A regular door cannot contain an internal through-cut opening."),
+            target_text,
+            _("Remove the opening from the regular door contour."),
+            code,
+            issue.category,
+        )
+    if code == codes.OPENING_UNMANUFACTURABLE:
+        return PresentedDxfError(
+            _("An internal opening cannot be cut with the selected cutter."),
+            target_text,
+            _("Enlarge the opening or choose a cutter that fits inside it."),
             code,
             issue.category,
         )
@@ -1092,6 +1108,14 @@ def present_issue(issue: DxfValidationIssue) -> PresentedDxfError:
         return PresentedDxfError("هوية القطعة لا تطابق هوية الطلب المحفوظة.", target_text, "أعد حساب الخطة أو استورد DXF من الطلب الحالي.", code, issue.category)
 
     if code == codes.PIECE_IDENTITY_AMBIGUOUS:
+        if params.get("reason") == "glass_special_geometry":
+            return PresentedDxfError(
+                _("Glass and special doors with the same opening cannot be told apart."),
+                target_text,
+                _("Add manufacturing evidence that identifies each door, then import again."),
+                code,
+                issue.category,
+            )
         candidate_rows = tuple(
             sorted({
                 int(row)

@@ -48,6 +48,8 @@
     }
 
     function resolveSessionHoleMm(piece, related) {
+        // Special through-cuts stay on opening_rings_mm. They are not a Glass host.
+        if (String((piece && piece.piece_type) || "") === "Special") return null;
         const fromGeometry = holesFromRelatedGeometry(related);
         if (fromGeometry && fromGeometry.length) {
             // One authoritative Glass opening in session (matches current move/rotate APIs).
@@ -57,6 +59,11 @@
             piece && piece.glass_hole_local_mm,
             piece && piece.placement_cm
         );
+    }
+
+    function resolveOpeningRingsMm(piece, related) {
+        if (String((piece && piece.piece_type) || "") !== "Special") return [];
+        return holesFromRelatedGeometry(related) || [];
     }
 
     function hasMovableGeometry(piece, related) {
@@ -326,6 +333,7 @@
                 }
             }
             const sessionHole = resolveSessionHoleMm(piece, related);
+            const openingRings = resolveOpeningRingsMm(piece, related);
             const sessionPiece = {
                 piece_key: key,
                 piece_id: pieceId,
@@ -347,6 +355,8 @@
                 // Session stores the hole in the same usable-sheet frame as outline_mm.
                 glass_hole_local_mm: sessionHole,
                 base_hole_mm: sessionHole ? clone(sessionHole) : null,
+                opening_rings_mm: openingRings,
+                base_opening_rings_mm: openingRings.length ? clone(openingRings) : [],
                 editable,
                 block_reason: !instanceId
                     ? "missing_piece_instance_id"

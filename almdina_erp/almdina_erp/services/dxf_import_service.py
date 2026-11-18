@@ -67,8 +67,10 @@ from almdina_erp.almdina_erp.domain.cutting.dxf_issue import (
     MINSERT_UNSUPPORTED,
     MIXED_RESOURCE_SOURCE,
     OFFCUT_IDENTITY_MISMATCH,
+    OPENING_UNMANUFACTURABLE,
     OVERLAY_INVALID_PATH,
     PIECE_IDENTITY_MISSING,
+    REGULAR_OPENING_UNEXPECTED,
     PIECE_COUNT_MISMATCH,
     PIECE_INVALID_DIMENSIONS,
     PIECE_MISSING,
@@ -104,12 +106,14 @@ from almdina_erp.almdina_erp.domain.cutting.cutter_center_paths import (
     SAW_CENTER_MATCH,
     classify_saw_center_segments,
     cutter_center_segments,
+    internal_center_ring,
 )
 from almdina_erp.almdina_erp.domain.cutting.dxf_geometry import (
     assemble_contours,
     bbox,
     consistent_directed_rings,
     is_axis_aligned_rectangle,
+    point_in_polygon,
     polygon_area,
     polygon_distance,
     polygon_inside_rect,
@@ -1503,6 +1507,7 @@ def _expected_topology_evidence(order: Any) -> tuple[ExpectedPieceEvidence, ...]
             clipped_cut_width_mm=_num(piece.get("clipped_corner_width_cm")) * 10.0,
             clipped_cut_length_mm=_num(piece.get("clipped_corner_length_cm")) * 10.0,
             clipped_corner_position=str(piece.get("clipped_corner_position") or ""),
+            addon_signature=overlay_signature(piece.get("selected_codes") or ()),
         )
         for piece in _expected_order_pieces(order)
     )
@@ -1528,16 +1533,20 @@ def _match_dimensions(a_w: float, a_h: float, b_w: float, b_h: float, tol: float
 def _legacy_outline_allows(
     expected_piece: dict[str, Any],
     rectangular: bool | None,
+    *,
+    hole_count: int = 0,
 ) -> bool:
-    """Keep legacy matching from crossing Regular and Special outlines."""
+    """Keep legacy matching aligned with the owned-opening identity contract."""
 
     if rectangular is None:
         return True
     kind = str(expected_piece.get("piece_type") or "")
     if kind == "Regular":
-        return bool(rectangular)
+        return bool(rectangular) and hole_count == 0
     if kind == "Special":
-        return not bool(rectangular)
+        if not rectangular:
+            return True
+        return hole_count > 0
     return True
 
 
@@ -1685,6 +1694,7 @@ def _apply_glass_identity(pieces: list[dict[str, Any]], expected: list[dict[str,
                 height_mm=_num(item["length_cm"]) * 10.0,
                 allow_rotation=bool(item["allow_rotation"]),
                 is_glass=item["piece_type"] == "Glass",
+                piece_type=str(item["piece_type"] or ""),
             )
             for item in expected
         ),
@@ -2061,12 +2071,17 @@ def _match_pieces_to_order(
             if piece.get("piece_type") in {"Regular", "Special"}
             else None
         )
-        key = (size, rectangular)
+        hole_count = len(piece.get("_holes_mm") or ())
+        key = (size, rectangular, hole_count > 0)
         if key not in candidate_sets:
             candidate_sets[key] = frozenset(
                 index
                 for index in by_size.get(size, set()) | special_indexes
-                if _legacy_outline_allows(expected[index], rectangular)
+                if _legacy_outline_allows(
+                    expected[index],
+                    rectangular,
+                    hole_count=hole_count,
+                )
             )
         contours.append(
             SpecialContourRecord(
@@ -2338,7 +2353,112 @@ def _validated_cut_candidates(contours: list[dict[str, object]]) -> tuple[Contou
     return tuple(candidates)
 
 
-def _resolve_cut_topology(contours: list[dict[str, object]], order: Any) -> ResolvedTopology:
+def _contour_addon_signatures(
+    candidates: Sequence[ContourCandidate],
+    overlays: Sequence[Any],
+) -> dict[int, frozenset[str]]:
+    """Bind add-on paths to the innermost containing cut contour.
+
+    A path that is not inside exactly one contour is ignored here. Overlay
+    validation still rejects a path that spans hosts.
+    """
+
+    buckets: dict[int, set[str]] = {}
+    for overlay in overlays:
+        path = list(getattr(overlay, "path", ()) or ())
+        if not path:
+            continue
+        sample = path[len(path) // 2]
+        owners = [
+            contour
+            for contour in candidates
+            if point_in_polygon(sample, contour.polygon, GEOMETRY_TOLERANCE_MM)
+        ]
+        tight = [
+            owner
+            for owner in owners
+            if not any(
+                other.key != owner.key
+                and polygon_strictly_contains_polygon(
+                    owner.polygon,
+                    other.polygon,
+                    tolerance=GEOMETRY_TOLERANCE_MM,
+                )
+                for other in owners
+            )
+        ]
+        if len(tight) != 1:
+            continue
+        buckets.setdefault(tight[0].key, set()).add(str(getattr(overlay, "kind", "") or ""))
+    return {key: overlay_signature(kinds) for key, kinds in buckets.items()}
+
+
+def _opening_accepts_cutter(
+    outer: Sequence[Sequence[float]],
+    hole: Sequence[Sequence[float]],
+    radius_mm: float,
+) -> bool:
+    ring = internal_center_ring(outer, hole, radius_mm)
+    if ring is None:
+        return False
+    if radius_mm <= GEOMETRY_TOLERANCE_MM:
+        return True
+    if validate_polygon(ring, GEOMETRY_TOLERANCE_MM):
+        return False
+    if not polygon_strictly_contains_polygon(
+        hole,
+        ring,
+        tolerance=GEOMETRY_TOLERANCE_MM,
+    ):
+        return False
+    # The cutter disk must stay inside the opening. A ring that is merely
+    # inside a hole narrower than the kerf still cuts through the finished edge.
+    clearance = polygon_distance(hole, ring, tolerance=GEOMETRY_TOLERANCE_MM)
+    return clearance + GEOMETRY_TOLERANCE_MM >= radius_mm
+
+
+def _opening_manufacturing_issues(
+    pieces: Sequence[dict[str, Any]],
+    kerf_mm: float,
+) -> list[DxfValidationIssue]:
+    radius = max(0.0, float(kerf_mm or 0.0)) / 2.0
+    issues: list[DxfValidationIssue] = []
+    for piece in pieces:
+        holes = piece.get("_holes_mm") or ()
+        if str(piece.get("piece_type") or "") == "Regular" and holes:
+            issues.append(
+                issue(
+                    REGULAR_OPENING_UNEXPECTED,
+                    CATEGORY_TOPOLOGY,
+                    target=DxfIssueTarget(kind="order"),
+                    params={"identity_unproven": True, "opening_count": len(holes)},
+                )
+            )
+            continue
+        outer = piece.get("_outline_mm") or ()
+        for hole in holes:
+            if _opening_accepts_cutter(outer, hole, radius):
+                continue
+            issues.append(
+                issue(
+                    OPENING_UNMANUFACTURABLE,
+                    CATEGORY_TOPOLOGY,
+                    target=piece_target(
+                        source_piece_no=piece.get("source_piece_no"),
+                        copy_no=piece.get("copy_no"),
+                    ),
+                    params={"kerf_mm": float(kerf_mm or 0.0)},
+                )
+            )
+            break
+    return issues
+
+
+def _resolve_cut_topology(
+    contours: list[dict[str, object]],
+    order: Any,
+    overlays: Sequence[Any] = (),
+) -> ResolvedTopology:
     candidates = _validated_cut_candidates(contours)
     try:
         return resolve_contour_ownership(
@@ -2346,6 +2466,7 @@ def _resolve_cut_topology(contours: list[dict[str, object]], order: Any) -> Reso
             _expected_topology_evidence(order),
             dimension_tolerance=DIMENSION_TOLERANCE_MM,
             geometry_tolerance=GEOMETRY_TOLERANCE_MM,
+            contour_signatures=_contour_addon_signatures(candidates, overlays),
         )
     except DxfTopologyError as exc:
         if exc.code == "EXPECTED_PIECE_MISMATCH":
@@ -3283,6 +3404,9 @@ def _identify_imported_pieces(
 ):
     """Canonical identity/add-on pipeline, shared by import and read-only diagnosis."""
     labeled = _match_pieces_to_order(pieces, order)
+    opening_issues = _opening_manufacturing_issues(labeled, max(0.0, flt(order.kerf_mm)))
+    if opening_issues:
+        raise DxfImportError(issues=opening_issues)
     cutter_diameter_mm, kind_diameters = _import_tool_diameters(order)
     _reconcile_addon_groups(
         labeled,
@@ -3407,7 +3531,7 @@ def parse_production_dxf(
         expected_height_mm=full_board_length_cm * 10.0,
     )
     cut_contours = assemble_contours(cut_segments, CONNECTIVITY_TOLERANCE_MM)
-    topology = _resolve_cut_topology(cut_contours, order)
+    topology = _resolve_cut_topology(cut_contours, order, overlays)
     pieces = _extract_pieces(
         topology,
         sheets=sheets,
