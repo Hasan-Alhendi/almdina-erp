@@ -230,12 +230,16 @@ def fragmentation_export_rejection(plan):
     from .plan_portfolio import manufacturing_export_rejection
     from .finished_piece_geometry import resolve_finished_geometry_mm
     from .dxf_geometry import is_axis_aligned_rectangle
+    from .machining_overlay import machining_values
 
     rejection = manufacturing_export_rejection(plan)
     if rejection:
         return rejection
     for sheet in plan.get("sheets") or ():
         for piece in sheet["pieces"]:
+            if any(value["enabled"] and (not value["side"] or value["width_cm"] <= 0)
+                   for value in machining_values(piece).values()):
+                return "unproven_machining_parameters"
             if piece.get("piece_type") != "Special":
                 continue
             geometry = resolve_finished_geometry_mm(

@@ -28,6 +28,7 @@ jobs:
         run: |
           python -m pytest -q \
             almdina_erp/tests/test_fragmentation_portfolio.py \
+            almdina_erp/tests/test_fragmentation_search.py \
             almdina_erp/tests/test_smart_cutting_search.py \
             almdina_erp/tests/test_smart_plan_portfolio.py \
             almdina_erp/tests/test_smart_cutting_manufacturing.py \

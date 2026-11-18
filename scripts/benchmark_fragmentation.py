@@ -31,6 +31,8 @@ def main():
     parser.add_argument("--dimensions", choices=("saved", "nominal"), default="saved")
     parser.add_argument("--arm", default="baseline")
     parser.add_argument("--capture", action="store_true")
+    parser.add_argument("--ignore-liner", action="store_true",
+                        help="Explicit layout-only experiment; disable liner in memory, never in the DCO file")
     args = parser.parse_args()
     sys.path.insert(0, str(args.repo.resolve()))
     from almdina_erp.almdina_erp.application.cutting.optimize_order_plan import (
@@ -68,6 +70,8 @@ def main():
                 width_cm=source["cut_width_cm"], length_cm=source["cut_length_cm"]
             )
         row["deduct_edge_thickness"] = args.dimensions == "saved"
+        if args.ignore_liner:
+            row.update(extra_liner=0, liner_specs_json=None)
         rows.append(row)
         if (source["width_cm"], source["length_cm"]) != (
             source["cut_width_cm"],
@@ -170,6 +174,7 @@ def main():
         budget=args.budget,
         input_sha256=hashlib.sha256(raw).hexdigest(),
         dimensions=args.dimensions,
+        ignored_addons=["liner"] if args.ignore_liner else [],
         input_size_differences=changes,
         unknown_special_sources=[
             r["piece_no"]

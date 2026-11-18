@@ -57,7 +57,9 @@ def main():
                         assert name not in profiles or profiles[name] == thickness
                         profiles[name] = thickness
         rows = [
-            SimpleNamespace(**{**row, "name": f"local-{row['piece_no']}"})
+            SimpleNamespace(**{**row, "name": f"local-{row['piece_no']}",
+                **(dict(extra_liner=0, liner_specs_json=None)
+                   if "liner" in run.get("ignored_addons", []) else {})})
             for row in dco["pieces"]
         ]
         order = SimpleNamespace(**{**dco, "pieces": rows})

@@ -37,7 +37,10 @@ def read_dxf(path):
     entities = list(doc.modelspace())
     boards = polygons(entities, "SHEET_OUTLINE")
     boards.sort(key=lambda b: (round(b.bounds[1] / 2640), b.bounds[0]))
-    shapes = polygons(entities, "GEOMETRY")
+    # Some independent designer exports keep finished contours in CUT_PATH;
+    # their layer 0 is a half-kerf tool offset and is not material geometry.
+    layer = "GEOMETRY" if any(e.dxf.layer.upper() == "GEOMETRY" for e in entities) else "CUT_PATH"
+    shapes = polygons(entities, layer)
     labels = [
         (Point(tuple(e.dxf.insert)[:2]), int(e.dxf.text))
         for e in entities

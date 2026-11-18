@@ -241,7 +241,8 @@ def optimize_order_plan(
         if snapshots and raw_seeds and alns_seconds > 0:
             additions, alns_trace = _refine_smart_gallery(command, engine, expanded,
                 raw_seeds[0], snapshots[0], applied_trim, trim_decision, plan_settings, alns_seconds,
-                formation_seeds=formation_seeds if pattern_seconds>0 else None)
+                formation_seeds=formation_seeds if pattern_seconds>0 else None,
+                fragmentation_seeds=fragmentation_candidates[:1])
             fragmentation_additions.extend(record for record in additions
                 if record[0].get("gallery_role")=="fragmentation_alternative")
             additions = [record for record in additions
@@ -377,7 +378,8 @@ def optimize_order_plan(
 
 
 def _refine_smart_gallery(command, engine, expanded, raw, incumbent, applied_trim,
-                          trim_decision, plan_settings, seconds, *, formation_seeds=None):
+                          trim_decision, plan_settings, seconds, *, formation_seeds=None,
+                          fragmentation_seeds=()):
     """One shared refinement deadline, then the existing snapshot/validation port.
 
     Called for a new System calculation only. Saved/uploaded snapshots are never
@@ -392,11 +394,13 @@ def _refine_smart_gallery(command, engine, expanded, raw, incumbent, applied_tri
     width = applied_trim.usable_width_cm(full_width_cm=board.full_width_cm)
     height = applied_trim.usable_length_cm(full_length_cm=board.full_length_cm)
     projection_reserve = min(1.5, seconds*.15)
+    neighborhood_reserve = min(3.5, seconds*.35)
     def collect(skeleton):
         if len(formation_seeds)<12:
             formation_seeds.append(skeleton)
     proposals, trace = refine_system_layout(raw, expanded, width, height, board.kerf_cm,
-        deadline=deadline-projection_reserve, machine_type=command.optimizer.machine_type,
+        deadline=deadline-projection_reserve-neighborhood_reserve,
+        machine_type=command.optimizer.machine_type,
         mirroring_allowed=piece_mirroring_allowed(command.allow_piece_mirroring),
         metric_kwargs=dict(min_remnant_width_cm=command.optimizer.min_remnant_width_cm,
             min_remnant_length_cm=command.optimizer.min_remnant_length_cm,
@@ -408,7 +412,7 @@ def _refine_smart_gallery(command, engine, expanded, raw, incumbent, applied_tri
     # atomic and may finish after the cooperative deadline, as in native search.
     additions = []
     for index, proposal in enumerate(proposals[1:]):
-        if index and time.monotonic() >= deadline:
+        if index and time.monotonic() >= deadline-neighborhood_reserve:
             break
         if material_signature(proposal) == original:
             continue
@@ -417,12 +421,30 @@ def _refine_smart_gallery(command, engine, expanded, raw, incumbent, applied_tri
                            and configured_alignment > 0 else 0.0)
         result = _snapshot_outcome(command, engine, deepcopy(proposal), expanded,
             applied_trim, trim_decision, plan_settings,
-            alignment_budget={"deadline": min(deadline,time.monotonic()+alignment_share),
+            alignment_budget={"deadline": min(deadline-neighborhood_reserve,time.monotonic()+alignment_share),
                               "remaining_candidates": 1})
         if result.snapshot['validation']['is_valid']:
             before, after = final_system_sort_keys([incumbent, result.snapshot])
             if after < before:
                 additions.append((result.snapshot, proposal))
+    from almdina_erp.almdina_erp.domain.cutting.fragmentation_search import search_fragmentation
+    proposal, neighborhood_trace = search_fragmentation(
+        [raw, *fragmentation_seeds], expanded, width, height, board.kerf_cm,
+        deadline=min(deadline-projection_reserve/2, time.monotonic()+neighborhood_reserve),
+        machine_type=command.optimizer.machine_type,
+        mirroring_allowed=piece_mirroring_allowed(command.allow_piece_mirroring),
+        metric_kwargs=dict(min_remnant_width_cm=command.optimizer.min_remnant_width_cm,
+            min_remnant_length_cm=command.optimizer.min_remnant_length_cm,
+            min_remnant_area_m2=command.optimizer.min_remnant_area_m2))
+    if proposal is not None:
+        result = _snapshot_outcome(command,engine,deepcopy(proposal),expanded,applied_trim,
+            trim_decision,plan_settings,preserve_layout=True)
+        if result.snapshot["validation"]["is_valid"]:
+            if len(result.snapshot["sheets"]) >= len(incumbent["sheets"]):
+                result.snapshot["gallery_role"] = "fragmentation_alternative"
+            additions.append((result.snapshot,proposal))
+        else:
+            neighborhood_trace["projection_rejection"] = "validation_failed"
     regroup_trace = None
     remaining = deadline-time.monotonic()
     if command.optimizer.fragmentation_regrouping and remaining>0:
@@ -454,6 +476,7 @@ def _refine_smart_gallery(command, engine, expanded, raw, incumbent, applied_tri
         projected_improvements=sum(s.get("gallery_role")!="fragmentation_alternative" for s,_ in additions),
         projected_alternatives=sum(s.get("gallery_role")=="fragmentation_alternative" for s,_ in additions),
         additional_to_native_search=True)
+    summary["fragmentation_neighborhood"] = neighborhood_trace
     if regroup_trace is not None:
         summary["fragmentation_regrouping"] = regroup_trace
     return additions, summary
