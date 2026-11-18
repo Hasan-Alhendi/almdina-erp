@@ -44,6 +44,8 @@ const workspace = {
             length_cm: 250,
             enabled: true,
             work_zero_position: "Bottom Left",
+            width_stop_side: "Left Side",
+            length_stop_side: "Bottom Side",
             left_stop_cm: 3,
             bottom_stop_cm: 4,
         },
@@ -54,6 +56,8 @@ const workspace = {
             length_cm: 200,
             enabled: true,
             work_zero_position: "Bottom Left",
+            width_stop_side: "Left Side",
+            length_stop_side: "Bottom Side",
             left_stop_cm: 3,
             bottom_stop_cm: 4,
         },
@@ -64,6 +68,8 @@ const workspace = {
             length_cm: 250,
             enabled: true,
             work_zero_position: "Bottom Left",
+            width_stop_side: "",
+            length_stop_side: "",
             left_stop_cm: null,
             bottom_stop_cm: null,
         },
@@ -87,13 +93,10 @@ const negative = {
         item.name === "Router A" ? { ...item, bottom_stop_cm: -1 } : item
     )),
 };
-assert.strictEqual(
-    ux.validateSheetPlacementFits(negative, state).code,
-    "offset_bottom_invalid"
-);
+assert.strictEqual(ux.validateSheetPlacementFits(negative, state).ok, true);
 assert.strictEqual(
     ux.validateSheetPlacementFits(workspace, { ...state, cncMachine: "Router C" }).code,
-    "cnc_machine_stops_unconfigured"
+    "cnc_machine_stop_sides_required"
 );
 assert.strictEqual(
     ux.validateSheetPlacementFits(workspace, { ...state, cncMachine: "" }, { requireMachine: true }).code,
@@ -106,8 +109,10 @@ assert.strictEqual(workspace.cnc_machines[1].bottom_stop_cm, 4);
 
 const placement = ux.placementPreviewPayload(workspace, state);
 assert.strictEqual(placement.machine_width_cm, 130);
-assert.strictEqual(placement.offset_left_cm, 3);
-assert.strictEqual(placement.offset_bottom_cm, 4);
+assert.strictEqual(placement.offset_left_cm, 8);
+assert.strictEqual(placement.offset_bottom_cm, 6);
+assert.strictEqual(placement.horizontal_stop_cm, 8);
+assert.strictEqual(placement.vertical_stop_cm, 6);
 assert.strictEqual(Object.prototype.hasOwnProperty.call(placement, "cutter_travel_left_extension_mm"), false);
 
 const program = {
@@ -157,7 +162,7 @@ assert.ok(!markup.includes("The dashed line shows the configured cutter travel b
 assert.ok(markup.includes("dco-cnc-cut-preview__sheet"));
 assert.ok(!/class="dco-cnc-cut-preview__sheet"[^>]*\bstroke=/.test(markup));
 assert.ok(!markup.includes("dco-cnc-cut-preview__frame"));
-assert.ok(markup.includes('transform="translate(30,40)"'));
+assert.ok(markup.includes('transform="translate(80,60)"'));
 
 const cornerState = { cncMachine: "Router A", sheetWidthCm: 120, sheetLengthCm: 240 };
 const cornerWorkspace = {
@@ -168,6 +173,8 @@ const cornerWorkspace = {
         length_cm: 400,
         enabled: true,
         work_zero_position: "Bottom Right",
+        width_stop_side: "Right Side",
+        length_stop_side: "Bottom Side",
         left_stop_cm: 99,
         right_stop_cm: 5,
         bottom_stop_cm: 10,
@@ -175,10 +182,18 @@ const cornerWorkspace = {
     }],
 };
 const cornerPlacement = ux.placementPreviewPayload(cornerWorkspace, cornerState);
-assert.strictEqual(cornerPlacement.offset_left_cm, 75);
-assert.strictEqual(cornerPlacement.offset_bottom_cm, 10);
+assert.strictEqual(cornerPlacement.offset_left_cm, 0);
+assert.strictEqual(cornerPlacement.offset_bottom_cm, 160);
+assert.strictEqual(cornerPlacement.right_clearance_cm, 80);
 const cornerMarkup = ux.cutPathPreviewMarkup(program, { layout: "page", placement: cornerPlacement, zoom: 1 });
-assert.ok(cornerMarkup.includes('transform="translate(750,100)"'));
+assert.ok(cornerMarkup.includes('transform="translate(0,1600)"'));
+const diagram = ux.placementDiagramMarkup(cornerPlacement);
+assert.ok(diagram.includes('data-stop-side="right"'));
+assert.ok(diagram.includes('data-stop-side="bottom"'));
+assert.ok(diagram.includes("data-work-zero-label"));
+assert.ok(diagram.includes("(0,0)"));
+assert.ok(diagram.includes("80 cm") || diagram.includes("80 سم"));
+assert.ok(!diagram.includes("<input"));
 assert.ok(!cornerMarkup.includes("Left Stop"));
 assert.ok(!cornerMarkup.includes("Right Stop"));
 assert.strictEqual(ux.validateSheetPlacementFits({

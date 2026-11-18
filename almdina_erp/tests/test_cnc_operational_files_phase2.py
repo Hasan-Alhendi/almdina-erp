@@ -127,6 +127,8 @@ def _machine(**overrides):
         "length_cm": 400,
         "enabled": True,
         "work_zero_position": "Bottom Left",
+        "width_stop_side": "Left Side",
+        "length_stop_side": "Bottom Side",
         "left_stop_cm": 0,
         "right_stop_cm": 0,
         "bottom_stop_cm": 0,

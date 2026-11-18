@@ -11,6 +11,7 @@ from almdina_erp.almdina_erp.application.cnc.nc_export import (
 from almdina_erp.almdina_erp.domain.cnc.operational_file import settings_fingerprint
 from almdina_erp.almdina_erp.domain.cnc.placement import (
     PLACEMENT_TRANSFORM_VERSION,
+    WORK_ZERO_POSITIONS,
     PlacementError,
     apply_placement_to_program,
     build_sheet_placement,
@@ -21,6 +22,7 @@ from almdina_erp.almdina_erp.domain.cnc.placement import (
     sheet_to_nc_xy,
     validate_program_within_machine,
     validate_sheet_fits_machine,
+    work_zero_origin_mm,
 )
 from almdina_erp.almdina_erp.domain.cutting.liner_geometry import extension_conflict
 
@@ -32,6 +34,8 @@ def _machine(**overrides):
         "length_cm": 250.0,
         "enabled": True,
         "work_zero_position": "Bottom Left",
+        "width_stop_side": "Left Side",
+        "length_stop_side": "Bottom Side",
         "left_stop_cm": 0,
         "bottom_stop_cm": 0,
     }
@@ -112,27 +116,23 @@ def test_sheet_fit_accepts_zero_and_decimal_offsets():
     )
 
 
-def test_sheet_fit_rejects_negative_and_overflow():
-    with pytest.raises(PlacementError) as negative:
+def test_sheet_fit_rejects_a_board_larger_than_the_machine():
+    with pytest.raises(PlacementError) as width:
+        validate_sheet_fits_machine(
+            machine_width_cm=130,
+            machine_length_cm=250,
+            sheet_width_cm=130.1,
+            sheet_length_cm=244,
+        )
+    assert width.value.code == "sheet_exceeds_machine_width"
+    with pytest.raises(PlacementError) as length:
         validate_sheet_fits_machine(
             machine_width_cm=130,
             machine_length_cm=250,
             sheet_width_cm=122,
-            sheet_length_cm=244,
-            offset_left_cm=-0.1,
-            offset_bottom_cm=0,
+            sheet_length_cm=250.1,
         )
-    assert negative.value.code == "offset_left_invalid"
-    with pytest.raises(PlacementError) as overflow:
-        validate_sheet_fits_machine(
-            machine_width_cm=130,
-            machine_length_cm=250,
-            sheet_width_cm=122,
-            sheet_length_cm=244,
-            offset_left_cm=10,
-            offset_bottom_cm=4,
-        )
-    assert overflow.value.code == "sheet_exceeds_machine_width"
+    assert length.value.code == "sheet_exceeds_machine_length"
 
 
 def test_reference_coordinate_transform_x100_y200():
@@ -161,17 +161,17 @@ def test_placement_does_not_mutate_sheet_program_and_applies_once():
     travel = machine_program["operations"][0]["toolpaths"][0]["motions"][0]
     cut = machine_program["operations"][0]["toolpaths"][0]["motions"][2]
     plunge = machine_program["operations"][0]["toolpaths"][0]["motions"][1]
-    assert travel["x_mm"] == 130
-    assert travel["y_mm"] == 240
-    assert cut["x_mm"] == 140
-    assert cut["y_mm"] == 240
+    assert travel["x_mm"] == 180
+    assert travel["y_mm"] == 260
+    assert cut["x_mm"] == 190
+    assert cut["y_mm"] == 260
     assert plunge["depth_mm"] == 6
     assert machine_program["coordinate_space"] == "g54_work_zero_y_up_mm"
     assert machine_program["sheet_coordinate_space"] == "sheet_bottom_left_y_up_mm"
     # Applying again to already-translated program would double-shift — callers
     # must keep sheet program separate. Guard: sheet program still original.
     again = apply_placement_to_program(program, placement)
-    assert again["operations"][0]["toolpaths"][0]["motions"][0]["x_mm"] == 130
+    assert again["operations"][0]["toolpaths"][0]["motions"][0]["x_mm"] == 180
 
 
 @pytest.mark.parametrize("diameter_mm", (5.0, 8.0, 12.0))
@@ -295,11 +295,9 @@ def test_fingerprint_changes_with_machine_or_offsets():
         presets={"Finish": {"preset_name": "Finish", "tool_number": "T9"}},
         sheet_placement=placement_fingerprint_payload(
             _placed(
-                machine=_machine(),
+                machine=_machine(width_stop_side="Right Side"),
                 sheet_width_cm=122,
                 sheet_length_cm=244,
-                offset_left_cm=4,
-                offset_bottom_cm=4,
             )
         ),
     )
@@ -365,12 +363,12 @@ def test_simulation_nc_emits_machine_coordinates_for_g0_and_g1():
         sheet_placement=placement,
     )
     text = str(package.get("text") or "")
-    assert "G0 X130 Y240" in text
-    assert "G1 X140 Y240" in text
+    assert "G0 X180 Y260" in text
+    assert "G1 X190 Y260" in text
     assert "Z-6" in text
     assert package["coordinate_space"] == "g54_work_zero_y_up_mm"
-    assert package["sheet_placement"]["offset_left_mm"] == 30
-    assert package["sheet_placement"]["offset_bottom_mm"] == 40
+    assert package["sheet_placement"]["offset_left_mm"] == 80
+    assert package["sheet_placement"]["offset_bottom_mm"] == 60
     assert package["sheet_placement"]["placement_transform_version"] == PLACEMENT_TRANSFORM_VERSION
     # Original sheet program unchanged.
     assert program["operations"][0]["toolpaths"][0]["motions"][0]["x_mm"] == 100
@@ -390,9 +388,7 @@ def test_sheet_fit_rejects_length_overflow_and_accepts_boundary():
             machine_width_cm=130,
             machine_length_cm=250,
             sheet_width_cm=122,
-            sheet_length_cm=244,
-            offset_left_cm=3,
-            offset_bottom_cm=7,
+            sheet_length_cm=251,
         )
     assert overflow.value.code == "sheet_exceeds_machine_length"
 
@@ -441,21 +437,15 @@ def test_placement_applies_to_liner_handle_and_rear_groove_xy_only():
         travel = operation["toolpaths"][0]["motions"][0]
         plunge = operation["toolpaths"][0]["motions"][1]
         cut = operation["toolpaths"][0]["motions"][2]
-        assert travel["x_mm"] == 40
-        assert travel["y_mm"] == 60
-        assert cut["x_mm"] == 45
-        assert cut["y_mm"] == 65
+        assert travel["x_mm"] == 90
+        assert travel["y_mm"] == 80
+        assert cut["x_mm"] == 95
+        assert cut["y_mm"] == 85
         assert plunge["depth_mm"] == 3
     assert program["operations"][0]["toolpaths"][0]["motions"][0]["x_mm"] == 10
 
 
 REFERENCE_SHEET_CM = (120.0, 240.0)
-REFERENCE_NC = {
-    "Bottom Left": ((50.0, 100.0), (250.0, 400.0)),
-    "Bottom Right": ((750.0, 100.0), (-1050.0, 400.0)),
-    "Top Left": ((50.0, 1500.0), (250.0, -2200.0)),
-    "Top Right": ((750.0, 1500.0), (-1050.0, -2200.0)),
-}
 
 
 def _reference_machine(position="Bottom Left", *, hidden=0):
@@ -468,6 +458,8 @@ def _reference_machine(position="Bottom Left", *, hidden=0):
         "bottom_stop_cm": hidden,
         "top_stop_cm": hidden,
         "work_zero_position": position,
+        "width_stop_side": "Left Side",
+        "length_stop_side": "Bottom Side",
         "enabled": True,
     }
     if position in {"Bottom Left", "Top Left"}:
@@ -524,6 +516,8 @@ def test_machine_settings_round_trip_and_reject_bad_stops():
         width_cm=200,
         length_cm=400,
         work_zero_position="Bottom Right",
+        width_stop_side="Right Side",
+        length_stop_side="Top Side",
         left_stop_cm=5,
         right_stop_cm=5,
         bottom_stop_cm=10,
@@ -538,7 +532,11 @@ def test_machine_settings_round_trip_and_reject_bad_stops():
         right_stop_cm=created.right_stop_cm,
         bottom_stop_cm=created.bottom_stop_cm,
         top_stop_cm=created.top_stop_cm,
+        width_stop_side=created.width_stop_side,
+        length_stop_side=created.length_stop_side,
     )
+    assert reloaded.width_stop_side == "Right Side"
+    assert reloaded.length_stop_side == "Top Side"
     assert reloaded.work_zero_position == "Bottom Right"
     assert reloaded.right_stop_cm == 5
     assert reloaded.bottom_stop_cm == 10
@@ -548,6 +546,8 @@ def test_machine_settings_round_trip_and_reject_bad_stops():
         machine_name="Router A",
         width_cm=200,
         length_cm=400,
+        width_stop_side="Left Side",
+        length_stop_side="Bottom Side",
         left_stop_cm=0,
         bottom_stop_cm=0,
     )
@@ -559,6 +559,8 @@ def test_machine_settings_round_trip_and_reject_bad_stops():
             machine_name="Router A",
             width_cm=200,
             length_cm=400,
+            width_stop_side="Left Side",
+            length_stop_side="Bottom Side",
             left_stop_cm=-1,
             bottom_stop_cm=0,
         )
@@ -568,39 +570,48 @@ def test_machine_settings_round_trip_and_reject_bad_stops():
             machine_name="Router A",
             width_cm=200,
             length_cm=400,
-            left_stop_cm=None,
-            bottom_stop_cm=0,
+            left_stop_cm=5,
+            bottom_stop_cm=10,
+            right_stop_cm=None,
         )
-    assert missing.value.code == "cnc_machine_stops_unconfigured"
+    assert missing.value.code == "cnc_machine_stop_sides_required"
 
 
-@pytest.mark.parametrize("position,expected", tuple(REFERENCE_NC.items()))
-def test_reference_work_zero_and_stops(position, expected):
-    origin_mm, nc_point = expected
+@pytest.mark.parametrize("position", WORK_ZERO_POSITIONS)
+@pytest.mark.parametrize("width_side", ("Left Side", "Right Side"))
+@pytest.mark.parametrize("length_side", ("Bottom Side", "Top Side"))
+def test_every_work_zero_and_stop_side_combination(position, width_side, length_side):
+    machine = _reference_machine(position, hidden=99)
+    machine["width_cm"] = 210
+    machine["length_cm"] = 310
+    machine["width_stop_side"] = width_side
+    machine["length_stop_side"] = length_side
     placement = build_sheet_placement(
-        machine=_reference_machine(position, hidden=99),
-        sheet_width_cm=REFERENCE_SHEET_CM[0],
-        sheet_length_cm=REFERENCE_SHEET_CM[1],
+        machine=machine,
+        sheet_width_cm=183,
+        sheet_length_cm=280,
     )
-    assert (placement.offset_left_mm, placement.offset_bottom_mm) == origin_mm
-    assert sheet_to_nc_xy(200, 300, placement) == nc_point
+    assert placement.horizontal_stop_cm == 27
+    assert placement.vertical_stop_cm == 30
+    assert placement.offset_left_cm == (27 if width_side == "Left Side" else 0)
+    assert placement.offset_bottom_cm == (30 if length_side == "Bottom Side" else 0)
+    assert placement.horizontal_stop_side == ("left" if width_side == "Left Side" else "right")
+    assert placement.vertical_stop_side == ("bottom" if length_side == "Bottom Side" else "top")
+    zero_x, zero_y = work_zero_origin_mm(
+        position,
+        machine_width_mm=2100,
+        machine_length_mm=3100,
+    )
+    nc_point = (placement.offset_left_mm - zero_x, placement.offset_bottom_mm - zero_y)
+    assert sheet_to_nc_xy(0, 0, placement) == nc_point
+    travel_nc = sheet_to_nc_xy(200, 300, placement)
     placed = apply_placement_to_program(_nc_program([(200, 300), (300, 300)]), placement)
     travel = placed["operations"][0]["toolpaths"][0]["motions"][0]
-    assert (travel["x_mm"], travel["y_mm"]) == nc_point
+    assert (travel["x_mm"], travel["y_mm"]) == travel_nc
     home = placed["operations"][0]["toolpaths"][0]["home"]
     assert (home["x_mm"], home["y_mm"], home["z_mm"]) == (0, 100, 120)
     assert placed["coordinate_space"] == "g54_work_zero_y_up_mm"
     assert placed["work_zero_position"] == position
-    package = build_post_processed_nc(
-        _nc_program([(200, 300), (300, 300)]),
-        post_processor_id="ima_wh_ncstudio",
-        sheet_placement=placement,
-        sheet_no=1,
-    )
-    assert f"X{nc_point[0]:.4f} Y{nc_point[1]:.4f}" in package["text"]
-    assert "G53 X1500.0 Y3500.0 Z0" in package["text"]
-    assert "G53 Z0" in package["text"]
-    assert "X0.0000 Y100.0000" in package["text"]
 
 
 def test_same_machine_places_a_different_sheet_without_reusing_hidden_stops():
@@ -609,12 +620,12 @@ def test_same_machine_places_a_different_sheet_without_reusing_hidden_stops():
         sheet_width_cm=100,
         sheet_length_cm=200,
     )
-    assert (placement.offset_left_mm, placement.offset_bottom_mm) == (50.0, 1900.0)
-    assert sheet_to_nc_xy(0, 0, placement) == (50.0, -2100.0)
+    assert (placement.offset_left_mm, placement.offset_bottom_mm) == (1000.0, 2000.0)
+    assert sheet_to_nc_xy(0, 0, placement) == (1000.0, -2000.0)
     assert placement.horizontal_stop_side == "left"
-    assert placement.vertical_stop_side == "top"
-    assert placement.horizontal_stop_cm == 5
-    assert placement.vertical_stop_cm == 10
+    assert placement.vertical_stop_side == "bottom"
+    assert placement.horizontal_stop_cm == 100
+    assert placement.vertical_stop_cm == 200
 
 
 def test_center_and_missing_corner_stops_are_rejected_for_new_files():
@@ -646,7 +657,7 @@ def test_center_and_missing_corner_stops_are_rejected_for_new_files():
             sheet_width_cm=120,
             sheet_length_cm=240,
         )
-    assert copied.value.code == "cnc_machine_stops_unconfigured"
+    assert copied.value.code == "cnc_machine_stop_sides_required"
 
 
 def test_edge_cut_keeps_its_geometry_without_an_added_margin():
@@ -655,7 +666,7 @@ def test_edge_cut_keeps_its_geometry_without_an_added_margin():
         sheet_width_cm=120,
         sheet_length_cm=240,
     )
-    assert sheet_to_nc_xy(0, 0, placement) == (50.0, 100.0)
+    assert sheet_to_nc_xy(0, 0, placement) == (800.0, 1600.0)
     outside = build_sheet_placement(
         machine=_machine(width_cm=400, length_cm=400, left_stop_cm=0, bottom_stop_cm=0),
         sheet_width_cm=400,
@@ -678,7 +689,7 @@ def test_stops_and_work_zero_are_applied_once_and_do_not_reverse_axes():
     second = placed["operations"][0]["toolpaths"][0]["motions"][2]
     assert second["x_mm"] - first["x_mm"] == 100
     assert second["y_mm"] - first["y_mm"] == 150
-    assert first["x_mm"] == -1050
+    assert first["x_mm"] == -1000
     again = apply_placement_to_program(program, placement)
     assert again["operations"][0]["toolpaths"][0]["motions"][0]["x_mm"] == first["x_mm"]
     doubled = apply_placement_to_program(placed, placement)
@@ -689,8 +700,8 @@ def test_stops_and_work_zero_are_applied_once_and_do_not_reverse_axes():
         sheet_width_cm=120,
         sheet_length_cm=240,
     )
-    assert ignored.offset_left_cm == 5
-    assert ignored.offset_bottom_cm == 10
+    assert ignored.offset_left_cm == 80
+    assert ignored.offset_bottom_cm == 160
 
 
 def test_same_machine_stops_apply_to_different_tools():
@@ -708,8 +719,8 @@ def test_same_machine_stops_apply_to_different_tools():
             sheet_no=1,
         )
         texts.append(package["text"])
-    assert "X-1050.0000 Y400.0000" in texts[0]
-    assert "X-1050.0000 Y400.0000" in texts[1]
+    assert "X-1000.0000 Y1900.0000" in texts[0]
+    assert "X-1000.0000 Y1900.0000" in texts[1]
     assert "T9" in texts[0]
     assert "T4" in texts[1]
     assert "F10200.0" in texts[0]

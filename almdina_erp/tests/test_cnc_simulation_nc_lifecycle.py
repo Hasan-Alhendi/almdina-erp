@@ -92,11 +92,12 @@ def test_generate_returns_content_without_saving_a_file_or_settings():
     assert "resolve_sheet_placement(" in generate
     assert "save_sheet(" not in generate
     assert "save_file(" not in generate
+    assert "record_nc_generation(" in generate
+    assert "generated_file" not in generate
     for retired in (
         "simulation_nc_filename",
         "attach_simulation_nc",
         "build_generation_snapshot",
-        "record_nc_generation",
         "discard_orphan_file",
         "read_simulation_nc_bytes",
         "file_url",
@@ -107,10 +108,14 @@ def test_generate_returns_content_without_saving_a_file_or_settings():
     assert "stored_nc_unavailable" in download
     assert "filecontent" not in download
     assert "save_file" not in repo
+    assert "def record_nc_generation" in repo
+    receipt = repo.split("def record_nc_generation", 1)[1].split("def update_machining_json", 1)[0]
+    assert "nc_generation_fingerprint" in receipt
+    assert "nc_generation_sha256" in receipt
+    assert "generated_file" not in receipt
     for retired in (
         "def attach_simulation_nc",
         "def read_simulation_nc_bytes",
-        "def record_nc_generation",
         "def discard_orphan_file",
         "def sync_status",
         "generation_snapshot_is_complete",
@@ -254,6 +259,90 @@ def test_workspace_status_follows_saved_settings_not_a_stored_nc_file():
     assert saved["sheets"][0]["status"] == SETTINGS_SAVED
     assert saved["sheets"][0]["operational_file"] == "CNC-FILE-1"
     assert "generated_file" not in saved["sheets"][0]
+    assert saved["sheets"][0]["nc_file_current"] is False
+
+
+def test_nc_ready_mark_follows_the_saved_generation_receipt():
+    plan = ApprovedPlanRef(name="PLAN-1", revision=1, source_type="System", status="Approved")
+    piece = {
+        "piece_instance_id": "p1",
+        "label": "1.1",
+        "sheet_no": 1,
+        "extra_liner": 0,
+        "extra_back_groove": 0,
+        "extra_recessed_handle_cutout": 0,
+        "geometry": {
+            "schema_version": 1,
+            "unit": "mm",
+            "coordinate_space": "usable_sheet",
+            "outer": [[0, 0], [100, 0], [100, 40], [0, 40]],
+            "holes": [],
+        },
+    }
+    presets = {
+        "Finish": {
+            "preset_name": "Finish",
+            "tool_name": "Finish",
+            "tool_number": "T9",
+            "tool_diameter_mm": 5,
+            "enabled": True,
+        }
+    }
+    saved_row = {
+        "name": "CNC-FILE-1",
+        "cutting_plan": "PLAN-1",
+        "plan_revision": 1,
+        "plan_source_type": "System",
+        "sheet_no": 1,
+        "status": "Settings Saved",
+        "settings_fingerprint": "",
+        "cut_path_early_confirmed": False,
+        "cnc_machine": "Router A",
+        "operations": [{
+            "operation_key": "cut_path",
+            "dxf_layer": "CUT_PATH",
+            "sequence": 1,
+            "tool_preset": "",
+            "preset_source": "Factory",
+        }],
+        "paths": [],
+    }
+    common = dict(
+        order_name="DCO-1",
+        approved_plan=plan,
+        plan_is_current=True,
+        pieces=[piece],
+        factory_defaults={"cut_path": "Finish"},
+        known_presets=presets,
+        machine_profile={"production_approved": False, "source_note": "sample", "fingerprint_payload": {"tool_number": "T9"}},
+        cnc_machines=[{
+            "name": "Router A",
+            "machine_name": "Router A",
+            "width_cm": 210,
+            "length_cm": 310,
+            "enabled": True,
+            "work_zero_position": "Bottom Left",
+            "width_stop_side": "Left Side",
+            "length_stop_side": "Bottom Side",
+        }],
+        plan_snapshot={"sheets": [{"sheet_no": 1, "full_width_cm": 183, "full_length_cm": 280}]},
+        can_prepare=True,
+    )
+    current = build_operational_workspace(saved_files=[saved_row], **common)
+    fingerprint = current["sheets"][0]["settings_fingerprint"]
+    assert current["sheets"][0]["nc_file_current"] is False
+    ready = build_operational_workspace(
+        saved_files=[{**saved_row, "nc_generation_fingerprint": fingerprint, "nc_generation_sha256": "abc"}],
+        **common,
+    )
+    assert ready["sheets"][0]["nc_file_current"] is True
+    stale = build_operational_workspace(
+        saved_files=[{**saved_row, "nc_generation_fingerprint": "stale"}],
+        **common,
+    )
+    assert stale["sheets"][0]["nc_file_current"] is False
+    missing = build_operational_workspace(saved_files=[], **common)
+    assert missing["sheets"][0]["nc_file_current"] is False
 
 
 def test_legacy_status_migration_preserves_saved_sheet_meaning():

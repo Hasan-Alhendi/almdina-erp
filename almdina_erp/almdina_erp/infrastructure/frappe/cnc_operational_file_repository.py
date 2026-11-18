@@ -245,6 +245,8 @@ def saved_operational_files(order_name: str) -> list[dict[str, Any]]:
                 "vector_associations": _object_list(getattr(document, "vector_associations_json", None)),
                 "toolpath_snapshots": _object_list(getattr(document, "toolpath_snapshots_json", None)),
                 "reversed_path_keys": _object_list(getattr(document, "reversed_path_keys", None)),
+                "nc_generation_fingerprint": str(getattr(document, "nc_generation_fingerprint", "") or ""),
+                "nc_generation_sha256": str(getattr(document, "nc_generation_sha256", "") or ""),
             }
         )
     return rows
@@ -444,6 +446,25 @@ def machine_profile_view() -> dict[str, Any]:
     return machine_profile_for_workspace(raw)
 
 
+def _cnc_machine_fields() -> list[str]:
+    fields = [
+        "name",
+        "machine_name",
+        "width_cm",
+        "length_cm",
+        "enabled",
+        "work_zero_position",
+        "left_stop_cm",
+        "right_stop_cm",
+        "bottom_stop_cm",
+        "top_stop_cm",
+        "post_processor",
+    ]
+    if frappe.db.has_column("CNC Machine", "width_stop_side"):
+        fields[6:6] = ["width_stop_side", "length_stop_side"]
+    return fields
+
+
 def list_cnc_machines(*, enabled_only: bool = False) -> list[dict[str, Any]]:
     """Return CNC machines registered for this factory site."""
 
@@ -455,19 +476,7 @@ def list_cnc_machines(*, enabled_only: bool = False) -> list[dict[str, Any]]:
     rows = frappe.get_all(
         "CNC Machine",
         filters=filters,
-        fields=[
-            "name",
-            "machine_name",
-            "width_cm",
-            "length_cm",
-            "enabled",
-            "work_zero_position",
-            "left_stop_cm",
-            "right_stop_cm",
-            "bottom_stop_cm",
-            "top_stop_cm",
-            "post_processor",
-        ],
+        fields=_cnc_machine_fields(),
         order_by="machine_name asc",
         ignore_permissions=True,
     )
@@ -480,6 +489,8 @@ def list_cnc_machines(*, enabled_only: bool = False) -> list[dict[str, Any]]:
                 "length_cm": row.length_cm,
                 "enabled": bool(cint(row.enabled)),
                 "work_zero_position": row.work_zero_position,
+                "width_stop_side": getattr(row, "width_stop_side", None),
+                "length_stop_side": getattr(row, "length_stop_side", None),
                 "left_stop_cm": row.left_stop_cm,
                 "right_stop_cm": row.right_stop_cm,
                 "bottom_stop_cm": row.bottom_stop_cm,
@@ -504,6 +515,8 @@ def get_cnc_machine(name: str) -> dict[str, Any] | None:
             "length_cm": document.length_cm,
             "enabled": bool(cint(document.enabled)),
             "work_zero_position": getattr(document, "work_zero_position", None),
+            "width_stop_side": getattr(document, "width_stop_side", None),
+            "length_stop_side": getattr(document, "length_stop_side", None),
             "left_stop_cm": getattr(document, "left_stop_cm", None),
             "right_stop_cm": getattr(document, "right_stop_cm", None),
             "bottom_stop_cm": getattr(document, "bottom_stop_cm", None),
@@ -540,6 +553,22 @@ def manufacturing_source(order: Any) -> dict[str, Any]:
         "saw_center_status": str(getattr(plan, "saw_center_status", "") or "Unknown"),
         "dxf_path": _dxf_disk_path(str(getattr(plan, "dxf_file", "") or "")),
     }
+
+
+def record_nc_generation(name: str, *, fingerprint: str, content_sha256: str) -> None:
+    """Remember a successful NC generation without storing the NC text.
+
+    Previously generated files are not rewritten. A later settings change
+    makes this fingerprint differ from the current one, so the board card
+    stops showing the file as current.
+    """
+
+    document = _without_permission_check(lambda: frappe.get_doc("CNC Operational File", name))
+    document.nc_generation_fingerprint = str(fingerprint or "")
+    document.nc_generation_sha256 = str(content_sha256 or "")
+    document.flags.ignore_permissions = True
+    document.flags.ignore_links = True
+    document.save()
 
 
 def update_machining_json(

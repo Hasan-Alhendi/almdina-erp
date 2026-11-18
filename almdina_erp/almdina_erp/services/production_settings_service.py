@@ -1005,21 +1005,24 @@ def _optional_pass_depth(value: Any) -> Any:
 def _cnc_machine_catalog() -> list[dict[str, Any]]:
     if not frappe.db.exists("DocType", "CNC Machine"):
         return []
+    fields = [
+        "name",
+        "machine_name",
+        "width_cm",
+        "length_cm",
+        "enabled",
+        "work_zero_position",
+        "left_stop_cm",
+        "right_stop_cm",
+        "bottom_stop_cm",
+        "top_stop_cm",
+        "post_processor",
+    ]
+    if frappe.db.has_column("CNC Machine", "width_stop_side"):
+        fields[6:6] = ["width_stop_side", "length_stop_side"]
     rows = frappe.get_all(
         "CNC Machine",
-        fields=[
-            "name",
-            "machine_name",
-            "width_cm",
-            "length_cm",
-            "enabled",
-            "work_zero_position",
-            "left_stop_cm",
-            "right_stop_cm",
-            "bottom_stop_cm",
-            "top_stop_cm",
-            "post_processor",
-        ],
+        fields=fields,
         order_by="machine_name asc",
         limit_page_length=0,
     )
@@ -1034,6 +1037,8 @@ def _cnc_machine_catalog() -> list[dict[str, Any]]:
                 "length_cm": row.length_cm,
                 "enabled": bool(cint(row.enabled)),
                 "work_zero_position": row.work_zero_position,
+                "width_stop_side": getattr(row, "width_stop_side", None),
+                "length_stop_side": getattr(row, "length_stop_side", None),
                 "left_stop_cm": row.left_stop_cm,
                 "right_stop_cm": row.right_stop_cm,
                 "bottom_stop_cm": row.bottom_stop_cm,
