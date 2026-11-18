@@ -171,7 +171,7 @@
                             <div class="aps-section-titles">
                                 <span class="aps-section-kicker">${t("Operational files")}</span>
                                 <h3>${t("CNC Machines")}</h3>
-                                <div class="aps-section-desc">${t("Register each CNC machine by name, bed width (X), and bed length (Y). Choose a corner work zero, then set the two stops for that corner. Sheet geometry stays bottom-left, with X to the right and Y upward.")}</div>
+                                <div class="aps-section-desc">${t("Register each CNC machine by name, bed width (X), and bed length (Y). Choose a corner work zero, the width stop side, and the length stop side. The stop gap is calculated from the full board. Sheet geometry stays bottom-left, with X to the right and Y upward.")}</div>
                             </div>
                         </div>
                         <div class="aps-section-tools aps-cnc-presets__actions">${machineActions}</div>

@@ -72,7 +72,14 @@ def test_tool_machine_and_profile_fields_are_required_english_labels():
         label = str(field.get("label") or "")
         assert label, field["fieldname"]
         assert not any(_ARABIC.start <= ord(character) <= _ARABIC.stop - 1 for character in label)
-        if field["fieldname"] in {"left_stop_cm", "right_stop_cm", "bottom_stop_cm", "top_stop_cm"}:
+        if field["fieldname"] in {
+            "left_stop_cm",
+            "right_stop_cm",
+            "bottom_stop_cm",
+            "top_stop_cm",
+            "width_stop_side",
+            "length_stop_side",
+        }:
             assert field.get("reqd", 0) == 0, field["fieldname"]
             continue
         assert field.get("reqd") == 1, field["fieldname"]

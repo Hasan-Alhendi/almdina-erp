@@ -9,6 +9,8 @@
     "width_cm",
     "length_cm",
     "work_zero_position",
+    "width_stop_side",
+    "length_stop_side",
     "left_stop_cm",
     "right_stop_cm",
     "bottom_stop_cm",
@@ -57,35 +59,51 @@
     },
     {
       "allow_in_quick_entry": 1,
-      "description": "Used only for Bottom Left and Top Left. Distance from the machine left edge to the sheet left edge, in centimetres. Zero is valid.",
+      "description": "Side of the width stop. It is independent of the work zero. The gap is calculated from the machine width and the full board width.",
+      "fieldname": "width_stop_side",
+      "fieldtype": "Select",
+      "label": "Width Stop Side",
+      "options": "\nLeft Side\nRight Side"
+    },
+    {
+      "allow_in_quick_entry": 1,
+      "description": "Side of the length stop. It is independent of the work zero. The gap is calculated from the machine length and the full board length.",
+      "fieldname": "length_stop_side",
+      "fieldtype": "Select",
+      "label": "Length Stop Side",
+      "options": "\nBottom Side\nTop Side"
+    },
+    {
+      "description": "Historical left stop distance kept for existing machines. New placement does not use it.",
       "fieldname": "left_stop_cm",
+      "hidden": 1,
       "fieldtype": "Float",
       "label": "Left Stop (cm)",
       "non_negative": 1,
       "precision": "3"
     },
     {
-      "allow_in_quick_entry": 1,
-      "description": "Used only for Bottom Right and Top Right. Distance from the machine right edge to the sheet right edge, in centimetres. Zero is valid.",
+      "description": "Historical right stop distance kept for existing machines. New placement does not use it.",
       "fieldname": "right_stop_cm",
+      "hidden": 1,
       "fieldtype": "Float",
       "label": "Right Stop (cm)",
       "non_negative": 1,
       "precision": "3"
     },
     {
-      "allow_in_quick_entry": 1,
-      "description": "Used only for Bottom Left and Bottom Right. Distance from the machine bottom edge to the sheet bottom edge, in centimetres. Zero is valid.",
+      "description": "Historical bottom stop distance kept for existing machines. New placement does not use it.",
       "fieldname": "bottom_stop_cm",
+      "hidden": 1,
       "fieldtype": "Float",
       "label": "Bottom Stop (cm)",
       "non_negative": 1,
       "precision": "3"
     },
     {
-      "allow_in_quick_entry": 1,
-      "description": "Used only for Top Left and Top Right. Distance from the machine top edge to the sheet top edge, in centimetres. Zero is valid.",
+      "description": "Historical top stop distance kept for existing machines. New placement does not use it.",
       "fieldname": "top_stop_cm",
+      "hidden": 1,
       "fieldtype": "Float",
       "label": "Top Stop (cm)",
       "non_negative": 1,

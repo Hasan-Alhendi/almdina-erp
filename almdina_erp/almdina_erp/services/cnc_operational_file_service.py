@@ -74,6 +74,7 @@ from almdina_erp.almdina_erp.infrastructure.frappe.cnc_operational_file_reposito
     machine_profile_view,
     manufacturing_source,
     placed_piece_views,
+    record_nc_generation,
     save_sheet,
     saved_operational_files,
     update_machining_json,
@@ -215,6 +216,9 @@ _MESSAGES = {
         "Set the two stops for this work zero on the CNC machine. "
         "A stop from another edge is not copied across."
     ),
+    "cnc_machine_stop_sides_required": (
+        "Choose the width stop side and the length stop side on the CNC machine before generating a new file."
+    ),
     "work_zero_invalid": "The selected work zero is not supported.",
     "work_zero_center_retired": (
         "This CNC machine still uses Center as its work zero. "
@@ -222,8 +226,8 @@ _MESSAGES = {
     ),
     "sheet_width_invalid": "The approved sheet width is not valid.",
     "sheet_length_invalid": "The approved sheet length is not valid.",
-    "sheet_exceeds_machine_width": "The sheet does not fit the machine width with the stops for this work zero.",
-    "sheet_exceeds_machine_length": "The sheet does not fit the machine length with the stops for this work zero.",
+    "sheet_exceeds_machine_width": "The board is larger than the machine width. NC cannot be generated.",
+    "sheet_exceeds_machine_length": "The board is larger than the machine length. NC cannot be generated.",
     "placement_incomplete": "Sheet placement on the CNC machine is incomplete.",
     "post_processor_required": "Choose a post processor before generating the NC file.",
     "post_processor_unsupported": "The selected post processor is not supported.",
@@ -1634,7 +1638,17 @@ def generate_cnc_sheet_nc(
     except ValueError as exc:
         frappe.throw(_message("nc_verification_failed"), frappe.ValidationError)
         raise AssertionError("unreachable") from exc
+    if existing and existing.get("name"):
+        record_nc_generation(
+            str(existing["name"]),
+            fingerprint=fingerprint,
+            content_sha256=nc_content_sha256(text),
+        )
+        download_nc_current = True
+    else:
+        download_nc_current = False
     download["message"] = _("NC file generated successfully.")
+    download["nc_file_current"] = download_nc_current
     download["production"] = False
     download["content_sha256"] = nc_content_sha256(text)
     download["tool_number"] = package.get("tool_number")

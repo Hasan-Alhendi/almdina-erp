@@ -40,6 +40,8 @@ def test_cnc_machine_bed_has_no_cutter_travel_extension_fields():
         "width_cm",
         "length_cm",
         "work_zero_position",
+        "width_stop_side",
+        "length_stop_side",
         "left_stop_cm",
         "right_stop_cm",
         "bottom_stop_cm",
@@ -63,7 +65,15 @@ def test_cnc_machine_bed_has_no_cutter_travel_extension_fields():
         assert fields[fieldname]["fieldtype"] == "Float"
         assert fields[fieldname].get("reqd", 0) == 0
         assert "default" not in fields[fieldname]
-        assert fields[fieldname]["allow_in_quick_entry"] == 1
+        assert fields[fieldname].get("hidden") == 1
+        assert "allow_in_quick_entry" not in fields[fieldname]
+    assert fields["width_stop_side"]["options"] == "\nLeft Side\nRight Side"
+    assert fields["length_stop_side"]["options"] == "\nBottom Side\nTop Side"
+    assert "default" not in fields["width_stop_side"]
+    assert "default" not in fields["length_stop_side"]
+    stop_patch = (APP_ROOT / "patches" / "v1_0" / "configure_cnc_machine_stop_sides.py").read_text(encoding="utf-8")
+    assert "set_value" not in stop_patch
+    assert PATCHES.read_text(encoding="utf-8").count("configure_cnc_machine_stop_sides") == 1
     assert all(row.get("fieldtype") not in {"Section Break", "Column Break"} for row in metadata["fields"])
     assert fields["width_cm"]["label"] == "Machine Width (cm)"
     assert "machine bed" in fields["width_cm"]["description"].lower()
