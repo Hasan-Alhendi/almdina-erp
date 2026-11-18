@@ -224,7 +224,12 @@ class SearchReport:
                     pieces.append(item)
                 drawing["pieces"] = pieces
                 sheets.append(drawing)
-            geometry = dict(signature=signature, units="cm", sheets=sheets)
+            geometry = dict(
+                signature=signature,
+                units="cm",
+                coordinate_system="sheet_top_left_x_right_y_down",
+                sheets=sheets,
+            )
             size = len(canonical_json(geometry).encode("utf-8"))
             if self._geometry_bytes + size > self._max_geometry_bytes:
                 self._omitted.add(signature)

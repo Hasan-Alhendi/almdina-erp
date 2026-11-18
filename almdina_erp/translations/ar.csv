@@ -4302,3 +4302,21 @@ An existing board pattern has better measured path and remnant criteria,يتفو
 A better measured board pattern replaced the previous pattern,استبدل نمط لوح أفضل بالقياس النمط السابق
 The board pattern capacity was reached,بلغ عدد أنماط الألواح الحد المتاح
 The board pattern entered the private pattern pool,دخل نمط اللوح إلى مجموعة الأنماط الخاصة
+The stage completed its work,أكملت المرحلة عملها
+The available neighborhoods were exhausted,استُنفدت الترتيبات المجاورة المتاحة
+Accepted,مقبول
+Manufacturing validation,التحقق الصناعي
+Placement permission validation,التحقق من صلاحيات وضع الدرف
+Candidate offered to the portfolio,عُرض المرشح على مجموعة الخطط
+Raw packing arrangement,ترتيب التعبئة الأولي
+"Intermediate scaffold, not a manufacturing plan",ترتيب وسيط لا يمثل خطة تصنيع
+Expanded kerf arrangement has no worse placement key,ترتيب القاطع الموسع لا يتراجع في معيار الوضع
+Kerf expansion failed or had a worse placement key,تعذر توسيع القاطع أو تراجع معيار الوضع
+A board pattern is not a complete order plan,نمط لوح واحد لا يمثل خطة الطلب كاملة
+The same packing input order was already tried,جُرب ترتيب الإدخال نفسه سابقًا
+Measured cutter center criteria were available,توفرت معايير مركز الريشة المقاسة
+No usable openings were found,لم توجد فتحات قابلة للتعشيق
+No time budget was available,لم تتوفر ميزانية زمنية
+Industrial ranking before nesting coverage reservation,الترتيب الصناعي قبل حجز تنوع التعشيق
+"Machine, industrial rank or kerf evidence is unavailable",لم تثبت بيانات الماكينة أو الترتيب الصناعي أو القاطع
+The first candidate has no incumbent competitor,المرشح الأول دون خطة حالية منافسة

@@ -116,6 +116,8 @@ A board pattern containing a subset of the order is incomplete even if its own
 different ranks; geometry remains deduplicated. Missing/unproven contours are
 disclosed and omitted rather than drawn as bounding rectangles. Glass holes and
 L/Clipped contours come from the existing manufacturing geometry functions.
+The coordinate system is the existing sheet top-left origin, x right and y down;
+SVG preserves it without an additional reflection.
 
 Rank keys are the original signed sort values (lower sorts first). Their actual
 order is preserved: industrial inventory/boards/machine/remnant criteria, then

@@ -595,10 +595,13 @@ function drawing(id) {
     code(id),
     el("p", t("Source") + ": " + t(c.source || "—") + " · " + c.method_key),
     el("p", t("Boards") + ": " + c.board_count),
-    jsonBox(c.industrial_rank),
   );
+  const evidence = el("details");
+  add(evidence,el("summary",t("Technical evidence")+' · '+t("Reason")+' ('+(c.reasons||[]).length+')'),
+    jsonBox(c.industrial_rank));
   for (const r of c.reasons || [])
-    host.append(el("p", "#" + r.seq + " · " + t(r.reason)));
+    evidence.append(el("p", "#" + r.seq + " · " + t(r.reason)));
+  host.append(evidence);
   const geometry = G[c.geometry_fingerprint];
   if (!geometry)
     return add(host, el("p", t("No recorded geometry is available.")));
@@ -617,7 +620,6 @@ function drawing(id) {
       t("Boards") + " " + (index + 1) + " · " + w + " × " + h + " cm";
     svg.append(title);
     const group = document.createElementNS(ns, "g");
-    group.setAttribute("transform", `translate(0 ${h}) scale(1 -1)`);
     let missing = false;
     for (const piece of sheet.pieces) {
       if (!piece.outline_cm) {

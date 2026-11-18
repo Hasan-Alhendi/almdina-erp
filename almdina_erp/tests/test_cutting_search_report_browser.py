@@ -89,6 +89,9 @@ def test_report_offline_pages_rounds_and_exact_svg_contours(browser, tmp_path):
     numbers = lambda value: [float(n) for n in re.findall(r"-?\d+(?:\.\d+)?", value)]
     assert numbers(path) == numbers(expected)
     assert path.count("M ") == 1 + len(recorded["holes_cm"])
+    # The manufacturing contract uses a top-left origin, y down, as does SVG.
+    # Applying a y-up transform would silently mirror real Glass/Corner poses.
+    assert page.locator("#candidates svg g").first.get_attribute("transform") is None
     assert not page.locator("img").count()
     assert page.evaluate("window.injected") is None
     page.locator("#rounds select").select_option("1")
