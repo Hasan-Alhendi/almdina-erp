@@ -2165,11 +2165,36 @@
             return "The reference image could not be loaded.";
         }
 
-        function toggleReferenceMenu() {
+        function referenceFileInput() {
+            const doc = window.document;
+            if (!doc || !doc.body || typeof doc.createElement !== "function") return null;
+            let input = doc.body.querySelector("[data-abe-reference-file-persistent]");
+            if (input) return input;
+            input = doc.createElement("input");
+            input.type = "file";
+            input.accept = "image/*,.svg,.heic";
+            input.hidden = true;
+            input.setAttribute("data-abe-reference-file-persistent", "1");
+            input.addEventListener("change", () => {
+                const files = input.files ? Array.prototype.slice.call(input.files) : [];
+                input.value = "";
+                if (files.length) uploadReferenceFiles(files);
+            });
+            doc.body.appendChild(input);
+            return input;
+        }
+
+        function openReferencePicker() {
             const view = store && store.snapshot();
             if (!view || view.editorMode !== "drawing" || !view.drawingTarget || view.drawingTarget.canEdit !== true) return;
-            referenceMenuOpen = referenceMenuOpen !== true;
+            referenceMenuOpen = true;
+            const input = referenceFileInput();
+            if (input && typeof input.click === "function") input.click();
             syncDrawing();
+        }
+
+        function toggleReferenceMenu() {
+            openReferencePicker();
         }
 
         function referenceAction(action, referenceId) {
@@ -3679,6 +3704,7 @@
                 setDrawingTool: (tool) => setDrawingTool(tool),
                 toggleSnapMenu: () => toggleSnapMenu(),
                 toggleReferenceMenu: () => toggleReferenceMenu(),
+                openReferencePicker: () => openReferencePicker(),
                 uploadReferenceFiles: (files) => uploadReferenceFiles(files),
                 selectReference: (id) => {
                     if (drawingSession.selectReference(id)) syncDrawing();

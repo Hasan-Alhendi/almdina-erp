@@ -511,10 +511,16 @@
     }
 
     function deleteReference(record, referenceId) {
-        if (!referenceById(record, referenceId)) return false;
+        const rows = record.document.references || [];
+        const index = rows.findIndex((row) => row.id === referenceId);
+        if (index < 0) return false;
         remember(record);
-        record.document.references = (record.document.references || []).filter((row) => row.id !== referenceId);
-        if (record.selection && record.selection.referenceId === referenceId) record.selection = null;
+        const remaining = rows.filter((row) => row.id !== referenceId);
+        record.document.references = remaining;
+        if (record.selection && record.selection.referenceId === referenceId) {
+            const next = remaining[Math.min(index, remaining.length - 1)];
+            record.selection = next ? selectionOf({ referenceId: next.id }) : null;
+        }
         clearStatus(record);
         return true;
     }

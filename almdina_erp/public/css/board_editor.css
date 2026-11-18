@@ -885,6 +885,7 @@
   flex: 1 1 auto;
   min-height: 0;
   overflow: auto;
+  overflow-x: hidden;
   padding: 8px;
 }
 
@@ -1733,4 +1734,173 @@ button.abe-drawing-tool:disabled {
     gap: 2px;
     padding: 4px 6px;
   }
+}
+
+.abe-draw-props .abe-prop-btn {
+  appearance: none;
+  border: 1px solid var(--alm-border, #e5e9f1);
+  background: var(--alm-surface, #fff);
+  color: var(--alm-text, #172033);
+  border-radius: 8px;
+  min-height: 28px;
+  padding: 0 10px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.2;
+  cursor: pointer;
+}
+
+.abe-draw-props .abe-prop-btn:hover:not(:disabled) {
+  background: var(--alm-secondary-hover-bg, #f2f4f7);
+}
+
+.abe-draw-props .abe-prop-btn:active:not(:disabled) {
+  background: #dbeafe;
+}
+
+.abe-draw-props .abe-prop-btn:focus-visible {
+  outline: 2px solid #0b5fff;
+  outline-offset: 1px;
+}
+
+.abe-draw-props .abe-prop-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.abe-draw-props .abe-prop-btn.is-primary {
+  background: #0b5fff;
+  border-color: #0b5fff;
+  color: #fff;
+}
+
+.abe-draw-props .abe-prop-btn.is-primary:hover:not(:disabled) {
+  background: #0848c7;
+}
+
+.abe-draw-props .abe-prop-btn.is-danger {
+  color: #b42318;
+  background: #fff;
+  border-color: #fecdca;
+}
+
+.abe-draw-props .abe-prop-btn.is-active,
+.abe-draw-props .abe-prop-btn[aria-pressed="true"] {
+  background: #dbeafe;
+  border-color: #bfdbfe;
+  color: #0b5fff;
+}
+
+.abe-draw-props .abe-prop-btn-icon {
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.abe-draw-props .abe-prop-actions,
+.abe-draw-props .abe-shape-menu,
+.abe-draw-props .abe-snap-menu,
+.abe-draw-props .abe-reference-menu,
+.abe-draw-props .abe-reference-form,
+.abe-draw-props .abe-path-form {
+  width: 100%;
+  max-width: none;
+  align-items: stretch;
+}
+
+.abe-draw-props .abe-shape-menu {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.abe-draw-props .abe-shape-kind {
+  width: 100%;
+  aspect-ratio: 1;
+  min-height: 0;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.abe-draw-props .abe-shape-glyph {
+  width: 28px;
+  height: 28px;
+}
+
+.abe-draw-props .abe-metric,
+.abe-draw-props .abe-metric.abe-metric-wide {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-width: 0;
+}
+
+.abe-draw-props .abe-metric input,
+.abe-draw-props .abe-metric select,
+.abe-draw-props .abe-metric textarea,
+.abe-draw-props .abe-shape-form input[type="text"],
+.abe-draw-props .abe-reference-form input[type="text"] {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.abe-draw-props textarea {
+  min-height: 96px;
+  resize: vertical;
+}
+
+.abe-draw-props .abe-reference-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+}
+
+.abe-draw-props .abe-reference-list {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 4px;
+  width: 100%;
+}
+
+.abe-draw-props .abe-reference-pick {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  min-height: 36px;
+}
+
+.abe-draw-props .abe-reference-pick img {
+  width: 28px;
+  height: 28px;
+  object-fit: cover;
+  border-radius: 4px;
+}
+
+.abe-draw-props .abe-opacity {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.abe-draw-props .abe-opacity input[type="range"] {
+  width: 100%;
+}
+
+.abe-draw-props .abe-snap-menu label {
+  display: flex;
+  width: 100%;
 }

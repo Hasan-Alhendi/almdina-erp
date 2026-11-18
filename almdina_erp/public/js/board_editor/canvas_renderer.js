@@ -2614,7 +2614,8 @@
         host.querySelectorAll("[data-abe-reference-toggle]").forEach((button) => {
             button.addEventListener("click", (event) => {
                 event.stopPropagation();
-                if (handlers && handlers.toggleReferenceMenu) handlers.toggleReferenceMenu();
+                if (handlers && handlers.openReferencePicker) handlers.openReferencePicker();
+                else if (handlers && handlers.toggleReferenceMenu) handlers.toggleReferenceMenu();
             });
         });
         host.querySelectorAll("[data-abe-reference-menu], [data-abe-reference-form], [data-abe-path-form]").forEach((panel) => {

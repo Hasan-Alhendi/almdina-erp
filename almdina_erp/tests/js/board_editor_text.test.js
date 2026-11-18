@@ -111,4 +111,4 @@ const page = fs.readFileSync(path.join(root, "almdina_erp/page/board_editor/boar
 const renderer = fs.readFileSync(path.join(root, "public/js/board_editor/canvas_renderer.js"), "utf8");
 assert.match(renderer, /text:\s*"type"/);
 assert.match(page, /editor_mode\.js\?v=2/);
-assert.match(page, /drawing_model\.js\?v=10/);
+assert.match(page, /drawing_model\.js\?v=11/);

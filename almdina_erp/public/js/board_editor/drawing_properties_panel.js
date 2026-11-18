@@ -16,9 +16,31 @@
         return `<svg class="icon icon-sm abe-tool-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-${esc(name)}"></use></svg>`;
     }
 
-    function iconAction(iconName, label, attrs, alreadyTranslated) {
+    function propButton(label, attrs, tone) {
+        const kind = tone || "secondary";
+        return `<button type="button" class="abe-prop-btn is-${kind}" ${attrs || ""}>${esc(__(label))}</button>`;
+    }
+
+    function iconAction(iconName, label, attrs, alreadyTranslated, tone) {
         const translated = alreadyTranslated ? label : __(label);
-        return `<button type="button" class="alm-btn-secondary abe-tool-btn" ${attrs || ""} title="${esc(translated)}" aria-label="${esc(translated)}">${frappeIcon(iconName)}</button>`;
+        const kind = tone || "secondary";
+        return `<button type="button" class="abe-prop-btn is-${kind} abe-prop-btn-icon" ${attrs || ""} title="${esc(translated)}" aria-label="${esc(translated)}">${frappeIcon(iconName)}</button>`;
+    }
+
+    function shapeGlyph(id) {
+        const common = `viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round" aria-hidden="true"`;
+        const marks = {
+            rectangle: `<rect x="4" y="6" width="16" height="12" rx="1"/>`,
+            circle: `<circle cx="12" cy="12" r="7"/>`,
+            ellipse: `<ellipse cx="12" cy="12" rx="8" ry="5"/>`,
+            arc: `<path d="M5 16a7 7 0 0 1 14 0"/>`,
+            polygon: `<path d="M12 4 20 10 17 19H7L4 10Z"/>`,
+            trapezoid: `<path d="M7 6h10l3 12H4Z"/>`,
+            l_shape: `<path d="M5 4h6v8h8v8H5Z"/>`,
+            clipped_corner: `<path d="M5 5h8l6 6v8H5Z"/>`,
+            bezier: `<path d="M4 17C8 5 16 5 20 17"/><circle cx="4" cy="17" r="1.2" fill="currentColor" stroke="none"/><circle cx="20" cy="17" r="1.2" fill="currentColor" stroke="none"/>`,
+        };
+        return `<svg class="abe-shape-glyph" ${common}>${marks[id] || marks.rectangle}</svg>`;
     }
 
     function pageDirection() {
@@ -87,8 +109,8 @@
         return `<div class="abe-cut-problem" data-abe-cut-problem="1" role="alert">
             <strong>${esc(__("Invalid cut outline"))}</strong>
             <span>${esc(size)}</span>
-            <button type="button" data-abe-drawing-action="select-problem">${esc(__("Select the problem path"))}</button>
-            <button type="button" data-abe-drawing-action="clear-problem">${esc(__("Clear cut outline"))}</button>
+            ${propButton("Select the problem path", `data-abe-drawing-action="select-problem"`)}
+            ${propButton("Clear cut outline", `data-abe-drawing-action="clear-problem"`, "danger")}
         </div>`;
     }
 
@@ -129,10 +151,10 @@
 
     function polylineActions(drawing, enabled) {
         if (!enabled || !drawing || drawing.tool !== "polyline") return "";
-        return `<div class="abe-drawing-actions">
-            <button type="button" data-abe-drawing-action="finish"${drawing.canFinish ? "" : " disabled"}>${esc(__("Finish path"))}</button>
-            <button type="button" data-abe-drawing-action="close"${drawing.canClose ? "" : " disabled"}>${esc(__("Close path"))}</button>
-            <button type="button" data-abe-drawing-action="cancel"${drawing.canCancel ? "" : " disabled"}>${esc(__("Cancel path"))}</button>
+        return `<div class="abe-prop-actions">
+            ${propButton("Finish path", `data-abe-drawing-action="finish"${drawing.canFinish ? "" : " disabled"}`, "primary")}
+            ${propButton("Close path", `data-abe-drawing-action="close"${drawing.canClose ? "" : " disabled"}`)}
+            ${propButton("Cancel path", `data-abe-drawing-action="cancel"${drawing.canCancel ? "" : " disabled"}`, "danger")}
         </div>`;
     }
 
@@ -142,16 +164,20 @@
         const role = form.role || "construction";
         const current = { construction: "role-construction", annotation: "role-annotation", manufacturing_outer: "role-manufacturing" }[role];
         const valid = role === "manufacturing_outer" && !(drawing.cutProblem && drawing.cutProblem.messageKey);
-        const button = (value, label) => `<button type="button" class="${value === "role-manufacturing" && valid ? "is-valid-cut" : ""}" data-abe-drawing-action="${value}"${current === value ? ' aria-pressed="true"' : ""}>${esc(__(label))}</button>`;
+        const button = (value, label) => {
+            const pressed = current === value;
+            const classes = ["abe-prop-btn", "is-secondary", pressed ? "is-active" : "", value === "role-manufacturing" && valid ? "is-valid-cut" : ""].filter(Boolean).join(" ");
+            return `<button type="button" class="${classes}" data-abe-drawing-action="${value}"${pressed ? ' aria-pressed="true"' : ""}>${esc(__(label))}</button>`;
+        };
         const clear = role === "manufacturing_outer"
-            ? `<button type="button" data-abe-drawing-action="role-clear">${esc(__("Clear cut outline"))}</button>`
+            ? propButton("Clear cut outline", `data-abe-drawing-action="role-clear"`, "danger")
             : "";
         const validate = role === "manufacturing_outer"
-            ? `<button type="button" data-abe-drawing-action="validate-path">${esc(__("Validate cut outline"))}</button>`
+            ? propButton("Validate cut outline", `data-abe-drawing-action="validate-path"`, "primary")
             : "";
         return `<div class="abe-path-form" data-abe-path-form="1">
             <span class="abe-prop-label">${esc(__("Path purpose"))}</span>
-            <div class="abe-drawing-actions">
+            <div class="abe-prop-actions">
                 ${button("role-construction", "Guide line")}
                 ${button("role-annotation", "Note")}
                 ${button("role-manufacturing", "Cut outline")}
@@ -159,10 +185,10 @@
                 ${validate}
             </div>
             <div class="abe-prop-grid">
-                <label class="abe-metric">${esc(__("Move X (mm)"))}<input data-abe-path-dx="1" inputmode="decimal" dir="ltr" value="0"></label>
-                <label class="abe-metric">${esc(__("Move Y (mm)"))}<input data-abe-path-dy="1" inputmode="decimal" dir="ltr" value="0"></label>
+                <label class="abe-metric"><span>${esc(__("Move X (mm)"))}</span><input data-abe-path-dx="1" inputmode="decimal" dir="ltr" value="0" aria-label="${esc(__("Move X (mm)"))}"></label>
+                <label class="abe-metric"><span>${esc(__("Move Y (mm)"))}</span><input data-abe-path-dy="1" inputmode="decimal" dir="ltr" value="0" aria-label="${esc(__("Move Y (mm)"))}"></label>
             </div>
-            <button type="button" data-abe-drawing-action="move-path">${esc(__("Move path"))}</button>
+            ${propButton("Move path", `data-abe-drawing-action="move-path"`, "primary")}
         </div>`;
     }
 
@@ -172,7 +198,8 @@
         const tools = Space && Space.shapeTools ? Space.shapeTools() : [];
         return `<div class="abe-shape-menu" role="group" aria-label="${esc(__("Shapes"))}">${tools.map((tool) => {
             const active = drawing.shapeKind === tool.id;
-            return `<button type="button" class="abe-shape-kind${active ? " is-active" : ""}" data-abe-shape-kind="${esc(tool.id)}" aria-pressed="${active ? "true" : "false"}">${esc(__(tool.labelKey))}</button>`;
+            const label = __(tool.labelKey);
+            return `<button type="button" class="abe-prop-btn abe-shape-kind${active ? " is-active" : ""}" data-abe-shape-kind="${esc(tool.id)}" aria-pressed="${active ? "true" : "false"}" aria-label="${esc(label)}" title="${esc(label)}">${shapeGlyph(tool.id)}</button>`;
         }).join("")}</div>`;
     }
 
@@ -200,13 +227,13 @@
             ? `<p class="abe-drawing-measure-error" data-abe-shape-error="1" role="alert">${esc(__(form.errorKey))}</p>`
             : "";
         const buttons = [
-            actions.convert ? `<button type="button" data-abe-drawing-action="convert" title="${esc(__("Convert the shape into independent nodes and segments so its geometry can be edited."))}">${esc(__("Convert to path"))}</button>` : "",
-            actions.copy ? `<button type="button" data-abe-drawing-action="copy">${esc(__("Copy"))}</button>` : "",
-            actions.paste ? `<button type="button" data-abe-drawing-action="paste">${esc(__("Paste"))}</button>` : "",
-            actions.remove ? `<button type="button" data-abe-drawing-action="remove">${esc(__("Delete"))}</button>` : "",
-            actions.insert ? `<button type="button" data-abe-drawing-action="insert-node">${esc(__("Add node"))}</button>` : "",
+            actions.convert ? propButton("Convert to path", `data-abe-drawing-action="convert" title="${esc(__("Convert the shape into independent nodes and segments so its geometry can be edited."))}"`, "primary") : "",
+            actions.copy ? propButton("Copy", `data-abe-drawing-action="copy"`) : "",
+            actions.paste ? propButton("Paste", `data-abe-drawing-action="paste"`) : "",
+            actions.insert ? propButton("Add node", `data-abe-drawing-action="insert-node"`) : "",
+            actions.remove ? propButton("Delete", `data-abe-drawing-action="remove"`, "danger") : "",
         ].join("");
-        const actionRow = buttons ? `<div class="abe-drawing-actions">${buttons}</div>` : "";
+        const actionRow = buttons ? `<div class="abe-prop-actions">${buttons}</div>` : "";
         const grid = fields ? `<div class="abe-prop-grid">${fields}</div>` : "";
         return `<div class="abe-shape-form" data-abe-shape-form="1" data-abe-shape-mode="${esc(form.mode || "create")}" dir="${esc(pageDirection())}">${grid}${error}${actionRow}</div>`;
     }
@@ -219,11 +246,12 @@
         const closeDisabled = drawing.pen && drawing.pen.canClose ? "" : " disabled";
         return `<div class="abe-pen-settings" data-abe-pen-settings="1" dir="${esc(pageDirection())}">
             <span class="abe-prop-label">${esc(__("Smoothing"))}</span>
-            <div class="abe-drawing-actions" role="group" aria-label="${esc(__("Smoothing"))}">${levels.map((level) => {
+            <div class="abe-prop-actions" role="group" aria-label="${esc(__("Smoothing"))}">${levels.map((level) => {
                 const active = current === level.id;
-                return `<button type="button" class="abe-pen-level${active ? " is-active" : ""}" data-abe-pen-smoothing="${esc(level.id)}" aria-pressed="${active ? "true" : "false"}">${esc(__(level.labelKey))}</button>`;
+                const label = __(level.labelKey);
+                return `<button type="button" class="abe-prop-btn is-secondary abe-pen-level${active ? " is-active" : ""}" data-abe-pen-smoothing="${esc(level.id)}" aria-pressed="${active ? "true" : "false"}">${esc(label)}</button>`;
             }).join("")}</div>
-            <button type="button" data-abe-drawing-action="close-pen"${closeDisabled}>${esc(__("Close path"))}</button>
+            ${propButton("Close path", `data-abe-drawing-action="close-pen"${closeDisabled}`)}
         </div>`;
     }
 
@@ -245,26 +273,42 @@
             ${box("intersection", "Intersection")}
             ${box("alignment", "Horizontal / Vertical")}
             ${box("grid", "Grid")}
-            <label><span>${esc(__("Grid spacing"))}</span><select data-abe-snap-spacing="1" aria-label="${esc(__("Grid spacing"))}">${options}</select></label>
+            <label class="abe-metric abe-metric-wide"><span>${esc(__("Grid spacing"))}</span><select data-abe-snap-spacing="1" aria-label="${esc(__("Grid spacing"))}">${options}</select></label>
         </div>`;
     }
 
     function referenceMenuHtml(drawing, enabled) {
-        if (!enabled || !drawing || drawing.referenceMenuOpen !== true) return "";
-        const rows = (drawing.references || []).map((reference, index) => {
-            const selected = reference.selected ? " is-active" : "";
-            const selectLabel = `${__("Reference image")} ${index + 1}`;
-            return `<span class="abe-reference-row${selected}">
-                ${iconAction("image", selectLabel, `data-abe-reference-select="${esc(reference.id)}"`, true)}
-                ${iconAction(reference.hidden ? "eye" : "eye-off", reference.hidden ? "Show reference image" : "Hide reference image", `data-abe-reference-action="hide" data-abe-reference-id="${esc(reference.id)}"`)}
-                ${iconAction(reference.locked ? "lock-open" : "lock", reference.locked ? "Unlock reference image" : "Lock reference image", `data-abe-reference-action="lock" data-abe-reference-id="${esc(reference.id)}"`)}
-                ${iconAction("trash-2", "Delete reference image", `data-abe-reference-action="delete" data-abe-reference-id="${esc(reference.id)}"`)}
-            </span>`;
+        if (!enabled || !drawing) return "";
+        const references = drawing.references || [];
+        if (drawing.referenceMenuOpen !== true && !references.length) return "";
+        const cards = references.map((reference, index) => {
+            const label = `${__("Reference image")} ${index + 1}`;
+            const thumb = reference.href
+                ? `<img alt="" src="${esc(reference.href)}" />`
+                : frappeIcon("image");
+            return `<button type="button" class="abe-prop-btn abe-reference-pick${reference.selected ? " is-active" : ""}" data-abe-reference-select="${esc(reference.id)}" aria-pressed="${reference.selected ? "true" : "false"}" aria-label="${esc(label)}" title="${esc(label)}">${thumb}<span>${esc(label)}</span></button>`;
         }).join("");
+        const selected = references.find((reference) => reference.selected);
+        const actions = selected
+            ? `<div class="abe-prop-actions" data-abe-reference-actions="1">
+                ${iconAction(selected.hidden ? "eye" : "eye-off", selected.hidden ? "Show reference image" : "Hide reference image", `data-abe-reference-action="hide" data-abe-reference-id="${esc(selected.id)}"`)}
+                ${iconAction(selected.locked ? "lock-open" : "lock", selected.locked ? "Unlock reference image" : "Lock reference image", `data-abe-reference-action="lock" data-abe-reference-id="${esc(selected.id)}"`)}
+                ${iconAction("crosshair", "Calibrate", `data-abe-reference-action="calibrate" data-abe-reference-id="${esc(selected.id)}"`)}
+                ${iconAction("trash-2", "Delete reference image", `data-abe-reference-action="delete" data-abe-reference-id="${esc(selected.id)}"`, false, "danger")}
+            </div>`
+            : "";
+        const empty = references.length
+            ? ""
+            : `<p class="abe-drawing-note">${esc(__("Upload reference image"))}</p>`;
         return `<div class="abe-reference-menu" data-abe-reference-menu="1" dir="${esc(pageDirection())}">
-            ${iconAction("upload", "Upload reference image", `data-abe-reference-upload="1"`)}
-            <input type="file" accept="image/*,.svg,.heic" data-abe-reference-file="1" hidden />
-            ${rows}
+            <div class="abe-reference-head">
+                <span>${esc(__("Reference image"))}</span>
+                ${iconAction("upload", "Upload reference image", `data-abe-reference-upload="1"`)}
+                <input type="file" accept="image/*,.svg,.heic" data-abe-reference-file="1" hidden />
+            </div>
+            <div class="abe-reference-list">${cards}</div>
+            ${empty}
+            ${actions}
         </div>`;
     }
 
@@ -276,9 +320,11 @@
         const calibration = form.calibration
             ? `<p class="abe-reference-note" data-abe-reference-calibration="1">${esc(__("Calibrated"))}: <span dir="ltr">${esc(form.calibration.known_distance_mm)} mm</span></p>`
             : (form.calibrating
-                ? `<p class="abe-reference-note">${esc(__(form.calibrationMessage || "Pick the first point on the image."))}${form.currentDistance != null ? ` <span dir="ltr">${esc(form.currentDistance)} mm</span>` : ""}</p>
-                    <label><span>${esc(__("Known distance (mm)"))}</span><input type="text" inputmode="decimal" dir="ltr" data-abe-reference-known="1" value="${esc(form.knownText || "")}" /></label>
-                    ${iconAction("crosshair", "Apply calibration", `data-abe-reference-action="apply-calibration"`)}`
+                ? `<div class="abe-reference-note">
+                    <p>${esc(__(form.calibrationMessage || "Pick the first point on the image."))}${form.currentDistance != null ? ` <span dir="ltr">${esc(form.currentDistance)} mm</span>` : ""}</p>
+                    <label class="abe-metric"><span>${esc(__("Known distance (mm)"))}</span><input type="text" inputmode="decimal" dir="ltr" data-abe-reference-known="1" value="${esc(form.knownText || "")}" aria-label="${esc(__("Known distance (mm)"))}" /></label>
+                    ${iconAction("crosshair", "Apply calibration", `data-abe-reference-action="apply-calibration"`)}
+                </div>`
                 : "");
         return `<div class="abe-reference-form" data-abe-reference-form="1" dir="${esc(pageDirection())}">
             <div class="abe-prop-grid">
@@ -287,10 +333,9 @@
                 ${field("width_mm", "Width (mm)", form.width_mm)}
                 ${field("height_mm", "Height (mm)", form.height_mm)}
                 ${field("rotation_deg", "Angle (°)", form.rotation_deg)}
+                <label class="abe-metric"><span>${esc(__("Lock aspect ratio"))}</span><input type="checkbox" data-abe-reference-aspect="1"${form.aspectLocked !== false ? " checked" : ""} aria-label="${esc(__("Lock aspect ratio"))}" /></label>
             </div>
-            <label><span>${esc(__("Opacity (%)"))}</span><input type="range" min="0" max="100" step="1" dir="ltr" data-abe-reference-opacity="1" value="${esc(percent)}" aria-label="${esc(__("Opacity (%)"))}" /></label>
-            <label><input type="checkbox" data-abe-reference-aspect="1"${form.aspectLocked !== false ? " checked" : ""} />${esc(__("Lock aspect ratio"))}</label>
-            ${iconAction("crosshair", "Calibrate", `data-abe-reference-action="calibrate"`)}
+            <label class="abe-opacity"><span>${esc(__("Opacity (%)"))}</span><input type="range" min="0" max="100" step="1" dir="ltr" data-abe-reference-opacity="1" value="${esc(percent)}" aria-label="${esc(__("Opacity (%)"))}" /><output dir="ltr">${esc(percent)}%</output></label>
             ${calibration}
         </div>`;
     }
@@ -315,7 +360,7 @@
             textForm: drawing.textLive && drawing.textForm
                 ? Object.assign({}, drawing.textForm, { text: "", widthMm: null, heightMm: null })
                 : (drawing.textForm || null),
-            references: (drawing.references || []).map((row) => [row.id, row.selected, row.hidden, row.locked]),
+            references: (drawing.references || []).map((row) => [row.id, row.selected, row.hidden, row.locked, Boolean(row.href)]),
             measure: drawing.tool === "polyline" ? null : drawing.measure || null,
             problem: drawing.cutProblem || null,
             finish: [drawing.canFinish, drawing.canClose, drawing.canCancel],
@@ -415,6 +460,10 @@
         root.querySelectorAll("[data-abe-reference-upload]").forEach((button) => {
             button.addEventListener("click", (event) => {
                 event.stopPropagation();
+                if (handlers && handlers.openReferencePicker) {
+                    handlers.openReferencePicker();
+                    return;
+                }
                 const input = root.querySelector("[data-abe-reference-file]");
                 if (input && input.click) input.click();
             });
@@ -509,25 +558,25 @@
         if (!form) return "";
         const vector = form.state === "vector";
         const actions = vector
-            ? `<button type="button" data-abe-drawing-action="approve-text">${esc(__(form.exportApproved ? "Clear text export approval" : "Approve text for export"))}</button>`
-            : `<button type="button" data-abe-drawing-action="convert-text">${esc(__("Convert Text to Path"))}</button>`;
+            ? propButton(form.exportApproved ? "Clear text export approval" : "Approve text for export", `data-abe-drawing-action="approve-text"`, "primary")
+            : propButton("Convert Text to Path", `data-abe-drawing-action="convert-text"`, "primary");
         return `<div data-abe-text-form="1" class="abe-prop-grid">
             ${textField("text", "Text", form.text, "area")}
             <label class="abe-metric abe-metric-wide"><span>${esc(__("Font Family"))}</span><select data-abe-text-field="font_id" aria-label="${esc(__("Font Family"))}"><option value="noto-naskh-arabic" selected>Noto Naskh Arabic</option></select></label>
-            ${textChoice("font_weight", "Font Weight", form.fontWeight, [["regular", "Regular"], ["bold", "Bold"]])}
             ${textField("font_size_mm", "Font Size (mm)", formatMeasureMm(form.fontSizeMm))}
+            ${textChoice("font_weight", "Font Weight", form.fontWeight, [["regular", "Regular"], ["bold", "Bold"]])}
             ${textChoice("direction", "Text direction", form.direction, [["auto", "Auto"], ["rtl", "RTL"], ["ltr", "LTR"]])}
             ${textChoice("align", "Alignment", form.align, [["left", "Left"], ["center", "Center"], ["right", "Right"]])}
             ${textField("x_mm", "X (mm)", formatMeasureMm(form.xMm))}
             ${textField("y_mm", "Y (mm)", formatMeasureMm(form.yMm))}
             ${textField("width_mm", "Width (mm)", formatMeasureMm(form.widthMm))}
             ${textField("height_mm", "Height (mm)", formatMeasureMm(form.heightMm))}
-            <label class="abe-metric abe-metric-wide"><span>${esc(__("Lock aspect ratio"))}</span><input type="checkbox" data-abe-text-field="aspect_locked"${form.aspectLocked ? " checked" : ""} /></label>
             ${textField("rotation_deg", "Rotation (°)", formatMeasureAngle(form.rotationDeg))}
+            <label class="abe-metric"><span>${esc(__("Lock aspect ratio"))}</span><input type="checkbox" data-abe-text-field="aspect_locked"${form.aspectLocked ? " checked" : ""} aria-label="${esc(__("Lock aspect ratio"))}" /></label>
             <p class="abe-drawing-note">${esc(vector ? __("Vector text outlines") : __("Editable text"))}</p>
             <div class="abe-prop-actions">${actions}
-                <button type="button" data-abe-drawing-action="duplicate">${esc(__("Duplicate"))}</button>
-                <button type="button" data-abe-drawing-action="remove">${esc(__("Delete"))}</button>
+                ${propButton("Duplicate", `data-abe-drawing-action="duplicate"`)}
+                ${propButton("Delete", `data-abe-drawing-action="remove"`, "danger")}
             </div>
         </div>`;
     }
