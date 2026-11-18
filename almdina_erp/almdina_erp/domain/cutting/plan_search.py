@@ -348,7 +348,6 @@ def _regrouped_board_candidates(plan, pieces, board_w_cm, board_h_cm, kerf_cm, d
     for combo in neighborhoods[:3]:
         subset = [source[piece_id] for piece_id in sorted(
             int(piece["id"]) for sheet in combo for piece in sheet["pieces"])]
-        sheet_numbers = {sheet["sheet_no"] for sheet in combo}
         for ordering in ("long_side_desc", "area_desc", "short_side_desc"):
             for method in ("MaxRects Bottom Left", "MaxRects Contact Point",
                            "MaxRects Best Short Side", "MaxRects Best Area"):
@@ -365,7 +364,6 @@ def _regrouped_board_candidates(plan, pieces, board_w_cm, board_h_cm, kerf_cm, d
                         yield None
                     continue
                 candidate = deepcopy(plan)
-                kept = [sheet for sheet in candidate["sheets"] if sheet["sheet_no"] not in sheet_numbers]
                 # Keep full-board metadata while replacing packing caches and
                 # placements. Unselected sheets are copied without alterations.
                 replacements = []
@@ -375,7 +373,14 @@ def _regrouped_board_candidates(plan, pieces, board_w_cm, board_h_cm, kerf_cm, d
                         replacement.pop(cache, None)
                     replacement.update(new)
                     replacements.append(replacement)
-                candidate["sheets"] = kept + replacements
+                replacement_by_number = {old["sheet_no"]:new for old,new in zip(combo,replacements)}
+                selected_numbers = {sheet["sheet_no"] for sheet in combo}
+                candidate["sheets"] = [
+                    replacement_by_number[sheet["sheet_no"]]
+                    if sheet["sheet_no"] in replacement_by_number else sheet
+                    for sheet in candidate["sheets"]
+                    if sheet["sheet_no"] not in selected_numbers
+                    or sheet["sheet_no"] in replacement_by_number]
                 for number, sheet in enumerate(candidate["sheets"], 1):
                     sheet["sheet_no"] = number
                 if time.monotonic() >= deadline:

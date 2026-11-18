@@ -1050,6 +1050,8 @@ def smart_search(
     accepted_ranks = {}
     rejected_finals = {}
     finals: list[dict[str, Any]] = []
+    from .fragmentation import FragmentationNominee, has_complete_identity
+    fragmentation = FragmentationNominee(kerf_cm)
     research = (ABCSearchSession(research_abc, pieces, board_w_cm, board_h_cm, kerf_cm,
         machine_type, mirroring_allowed, metric_kwargs, overall_deadline)
         if research_abc is not None and research_abc.enabled and budget > 0
@@ -1067,6 +1069,8 @@ def smart_search(
             return
         if research is not None:
             research.observe_valid(candidate)
+        if machine_type in {"Auto", "CNC Router"} and has_complete_identity(candidate,pieces):
+            fragmentation.offer(candidate)
         signature = _layout_signature(candidate)
         rank=tuple(candidate['industrial_rank'])
         accepted_ranks[signature] = min(accepted_ranks.get(signature,rank),rank)
@@ -1280,6 +1284,12 @@ def smart_search(
             boards_before_after=[len(initial['sheets']), len(best['sheets'])])
         best['smart_search']['joint'] = joint_diagnostics
     best['smart_candidates'] = [dict(p) for p in finals]
+    nominee = fragmentation.plan
+    best['smart_fragmentation_candidates'] = (
+        [nominee] if nominee is not None and finals
+        and len(nominee['sheets']) == len(finals[0]['sheets']) else [])
+    best['smart_search']['fragmentation'] = dict(
+        observed=fragmentation.observed, nominees=len(best['smart_fragmentation_candidates']))
     if research is not None:
         nominee = research.nominee(finals)
         best['smart_research_candidates'] = [nominee] if nominee is not None else []

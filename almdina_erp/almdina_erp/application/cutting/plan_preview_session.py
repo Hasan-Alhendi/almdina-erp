@@ -97,17 +97,25 @@ class CuttingPlanPreviewSession:
 def merge_preview_candidates(current, previous, *, limit=5):
     """Keep the same final cutter contract when continuing a trusted preview."""
     from almdina_erp.almdina_erp.domain.cutting.optimizer import _candidate_is_better
-    from almdina_erp.almdina_erp.domain.cutting.cut_line_quality import final_system_sort_keys
+    from almdina_erp.almdina_erp.domain.cutting.plan_portfolio import retain_system_gallery
     by_geometry = {}
     for candidate in [*previous.values(),*current.values()]:
         signature = candidate['geometry_fingerprint']
         existing = by_geometry.get(signature)
         if existing is None or _candidate_is_better(candidate['snapshot'],existing['snapshot']):
             by_geometry[signature] = candidate
+        elif (tuple(candidate['snapshot'].get('industrial_rank') or ())
+              == tuple(existing['snapshot'].get('industrial_rank') or ())
+              and not existing['snapshot'].get('fragmentation_metrics')
+              and candidate['snapshot'].get('fragmentation_metrics')):
+            # A continued legacy preview can keep its native identity/default
+            # while receiving measurements of this exact trusted geometry.
+            by_geometry[signature] = dict(existing, snapshot=dict(existing['snapshot'],
+                fragmentation_metrics=candidate['snapshot']['fragmentation_metrics']))
     candidates = list(by_geometry.values())
-    keys = final_system_sort_keys([c['snapshot'] for c in candidates])
-    ranked = [candidate for _, candidate in
-              sorted(zip(keys, candidates), key=lambda item: item[0])][:limit]
+    selected = retain_system_gallery([c['snapshot'] for c in candidates],limit)
+    by_snapshot = {id(c["snapshot"]):c for c in candidates}
+    ranked = [by_snapshot[id(snapshot)] for snapshot in selected]
     return {c['candidate_id']:c for c in ranked}
 
 
