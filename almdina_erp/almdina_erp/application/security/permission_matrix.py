@@ -96,6 +96,7 @@ CAPABILITY_PRESENTATION: dict[str, dict[str, str]] = {
     Capability.VIEW_UPLOADED_CUTTING_PLAN: _presentation("View uploaded plan", "View the tab for the uploaded cutting plan (DXF / custom)."),
     Capability.VIEW_APPROVED_CUTTING_PLAN: _presentation("View approved plan", "View the tab for the plan approved for production."),
     Capability.RECALCULATE_PLAN: _presentation("Recalculate plan", "Rerun the engine that distributes pieces across boards.", "sensitive"),
+    Capability.DOWNLOAD_CUTTING_SEARCH_REPORT: _presentation("Download cutting search report", "Record and download private diagnostic evidence for a cutting search.", "sensitive"),
     Capability.EDIT_OPTIMIZER_SETTINGS: _presentation(
         "Edit cutting algorithm",
         "Change the cutting algorithm offered by the system, the margins, kerf, and search settings, then recalculate and view the result in 'System plan'. This permission is fully independent of 'Edit order': whoever can edit an order cannot change the algorithm without it.",
@@ -240,6 +241,8 @@ def normalize_capability_state(raw: Mapping[str, Any] | None) -> dict[str, bool]
     if state[Capability.EDIT_OPTIMIZER_SETTINGS]:
         state[Capability.RECALCULATE_PLAN] = True
     if state[Capability.RECALCULATE_PLAN]:
+        state[Capability.VIEW_SYSTEM_CUTTING_PLAN] = True
+    if state[Capability.DOWNLOAD_CUTTING_SEARCH_REPORT]:
         state[Capability.VIEW_SYSTEM_CUTTING_PLAN] = True
 
     # History is read-only Shop Floor visibility. It is deliberately excluded

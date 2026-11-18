@@ -1,4 +1,5 @@
 from __future__ import annotations
+from .search_trace import traced, trace_event, trace_enabled
 
 from copy import deepcopy
 from typing import Any, Callable
@@ -9,6 +10,7 @@ Packer = Callable[..., dict[str, Any]]
 _TOLERANCE = 1e-6
 
 
+@traced('pack_with_stable_kerf', kind='attempt')
 def pack_with_stable_kerf(
     packer: Packer,
     pieces: list[dict[str, Any]],
@@ -35,10 +37,12 @@ def pack_with_stable_kerf(
 
     kerf = max(0.0, num(kerf_cm))
     direct = packer(deepcopy(pieces), board_w_cm, board_h_cm, kerf, *args)
+    trace_event('candidate',plan=direct,source='direct_kerf',reason='raw_packer_result')
     if kerf <= _TOLERANCE:
         return direct
 
     base = packer(deepcopy(pieces), board_w_cm, board_h_cm, 0.0, *args)
+    trace_event('candidate',plan=base,source='zero_kerf_scaffold',reason='intermediate_not_manufacturing_plan')
     expanded = expand_plan_kerf(
         base,
         kerf,
@@ -46,14 +50,19 @@ def pack_with_stable_kerf(
         board_h_cm=board_h_cm,
     )
     if expanded is not None and _placement_quality(expanded) <= _placement_quality(direct):
+        if trace_enabled():
+            trace_event('candidate',plan=expanded,status='selected',reason='expanded_placement_quality_lte_direct',
+                direct_key=_placement_quality(direct),expanded_key=_placement_quality(expanded))
         if discarded_direct_callback is not None:
             # Research-only observation: callbacks cannot mutate the chosen plan.
             # These are raw packer coordinates; evaluate each copy once later.
             discarded_direct_callback(deepcopy(direct), deepcopy(expanded))
         return expanded
+    trace_event('candidate',plan=direct,status='selected',reason='expansion_failed_or_worse_placement_quality')
     return direct
 
 
+@traced('expand_plan_kerf', kind='attempt')
 def expand_plan_kerf(
     plan: dict[str, Any],
     kerf_cm: float,

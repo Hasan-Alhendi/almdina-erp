@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from typing import Any
+from almdina_erp.almdina_erp.domain.cutting.search_trace import observe_search, traced, trace_event
+from almdina_erp.almdina_erp.services.cutting_search_report_service import create_search_report, finish_search_report
 from datetime import datetime, timedelta
 
 import frappe
@@ -262,10 +264,12 @@ def _response(session,source,order):
         input_fingerprint=session.input_fingerprint,plan=first['snapshot'],summary=_selected_summary(order,source,session,first),
         candidate_id=first['candidate_id'],candidates=[{k:v for k,v in c.items() if k!='snapshot'} for c in candidates],
         is_first_system=source.name=='__new_system__',is_preview=True,search_round=session.search_round,
+        search_report=dict(report_id=session.search_report_id,retention_sec=86400) if session.search_report_id else None,
         can_continue=session.search_round<2,search_budget_sec=session.settings['optimization_time_limit_sec'],
         expires_at=session.expires_at,expires_in_sec=max(0,(datetime.fromisoformat(session.expires_at)-now_datetime()).total_seconds()) if session.expires_at else 900)
 
 
+@traced('build_preview_session')
 def _build_session(order,source,settings,*,previous=None):
     preview_plan = frappe.copy_doc(source)
     _apply_settings(preview_plan,settings)
@@ -277,19 +281,24 @@ def _build_session(order,source,settings,*,previous=None):
     eligible_seeds = []
     for index,snapshot in enumerate(outcome.candidate_snapshots or (outcome.snapshot,)):
         if not (snapshot.get('validation') or {}).get('is_valid'):
+            trace_event('candidate',plan=snapshot,status='rejected',reason='snapshot_manufacturing_validation')
             continue
         trial = frappe.copy_doc(source)
         _apply_settings(trial,settings)
         apply_calculation_outcome(order,trial,OptimizationOutcome(dict(snapshot),'',len(snapshot['sheets']),
             str(snapshot.get('method_label') or ''),outcome.expanded_pieces),
             fingerprint=snapshot.get('input_fingerprint') or plan_input_fingerprint(order,trial))
-        if validate_cutting_plan_issues(trial):
+        issues=validate_cutting_plan_issues(trial)
+        if issues:
+            trace_event('candidate',plan=snapshot,status='rejected',reason='preview_export_validation',
+                issue_codes=[str(getattr(issue,'code','validation_issue')) for issue in issues])
             continue
         key = frappe.generate_hash(length=24)
         saved_snapshot = sanitize_plan_snapshot(frappe.parse_json(trial.snapshot_json))
         saved_snapshot['preview_candidate_id'] = key
         signature = geometry_signature(saved_snapshot)
         if signature in seen:
+            trace_event('candidate',plan=saved_snapshot,status='duplicate',reason='duplicate_preview_geometry')
             continue
         seen.add(signature)
         if index<len(outcome.search_seeds):
@@ -334,6 +343,7 @@ def preview_cutting_plan(
     trim_margin_mm: float | None = None,
     optimization_time_limit_sec: float | None = None,
     deduct_edge_thickness: int | str | bool | None = None,
+    record_search_details: int | str | bool = False,
 ) -> dict[str, Any]:
     """Calculate a disposable System-plan preview without any DB mutation."""
 
@@ -384,7 +394,13 @@ def preview_cutting_plan(
     )
 
     _settings_authority(order,source_plan,settings)
-    session = _build_session(order,source_plan,settings)
+    if record_search_details not in (False,True,0,1,'0','1'):
+        frappe.throw(_("Invalid search recording option."),frappe.ValidationError)
+    recording=record_search_details in (True,1,'1')
+    report=create_search_report(order,settings) if recording else None
+    with observe_search(report):
+        session = _build_session(order,source_plan,settings)
+    session=finish_search_report(report,session)
     return _response(session,source_plan,order)
 
 
@@ -417,7 +433,10 @@ def continue_cutting_plan_search(order_name: str,preview_id: str):
     previous,source = _session(order,preview_id)
     if previous.search_round>=2:
         frappe.throw(_("The search batch limit was reached. Create a new preview."),frappe.ValidationError)
-    session = _build_session(order,source,previous.settings,previous=previous)
+    report=create_search_report(order,previous.settings,previous=previous) if previous.search_report_id else None
+    with observe_search(report):
+        session = _build_session(order,source,previous.settings,previous=previous)
+    session=finish_search_report(report,session)
     FrappeCuttingPlanPreviewStore().discard(previous.preview_id)
     return _response(session,source,order)
 

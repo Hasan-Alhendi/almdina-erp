@@ -1,5 +1,6 @@
 """Temporary geometry identity for completed optimizer alternatives (no storage)."""
 from __future__ import annotations
+from .search_trace import traced, trace_event, trace_enabled
 import hashlib
 import json
 from typing import Any
@@ -43,6 +44,7 @@ def nesting_coverage(plan: dict[str, Any]) -> frozenset[str]:
     return frozenset(coverage)
 
 
+@traced('retain_diverse_finals')
 def retain_diverse_finals(candidates: list[dict[str, Any]], limit: int = 5) -> list[dict[str, Any]]:
     """Industrial winner first; preserve useful coverage on the same board count.
 
@@ -50,6 +52,9 @@ def retain_diverse_finals(candidates: list[dict[str, Any]], limit: int = 5) -> l
     gallery, but can never replace the winner or reserve an extra-board slot.
     """
     ranked = sorted(candidates,key=lambda p:tuple(p['industrial_rank']))
+    if trace_enabled():
+        trace_event('comparison',plans=candidates,keys=[tuple(p['industrial_rank']) for p in candidates],
+            comparator='industrial_rank',cutter_center_available=False,reason='portfolio_rank_before_coverage_reservation')
     if len(ranked)<=limit:
         return ranked
     selected=[ranked[0]]
@@ -59,13 +64,19 @@ def retain_diverse_finals(candidates: list[dict[str, Any]], limit: int = 5) -> l
             continue
         candidate=next((p for p in ranked if len(p.get('sheets') or [])==boards and kind in nesting_coverage(p)),None)
         if candidate is not None and all(candidate is not p for p in selected):
+            trace_event('candidate',plan=candidate,status='reserved',reason='same_board_nesting_coverage',coverage=kind)
             selected.append(candidate)
     for candidate in ranked:
         if len(selected)>=limit:
             break
         if all(candidate is not p for p in selected):
             selected.append(candidate)
-    return sorted(selected[:limit],key=lambda p:tuple(p['industrial_rank']))
+    retained = sorted(selected[:limit],key=lambda p:tuple(p['industrial_rank']))
+    if trace_enabled():
+        for candidate in ranked:
+            if all(candidate is not p for p in retained):
+                trace_event('candidate',plan=candidate,status='not_selected',reason='portfolio_capacity_or_coverage_priority')
+    return retained
 
 
 def _canonical(value: Any) -> Any:
@@ -165,6 +176,7 @@ def manufacturing_failure_sentences(rejections) -> tuple[str, ...]:
     return tuple(found) or (MANUFACTURING_FAILURE,)
 
 
+@traced('manufacturing_export_rejection')
 def manufacturing_export_rejection(plan):
     """Known unsupported identity paths; validators/export contracts stay intact."""
     if not supports_manufacturing_rotation(plan):

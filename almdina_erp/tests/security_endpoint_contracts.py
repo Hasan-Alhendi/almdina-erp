@@ -49,6 +49,7 @@ _GROUPS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
     ),
     ("almdina_erp.almdina_erp.services.cutting_plan_preview_service", C, ("commit_cutting_plan_preview", "preview_cutting_plan", "select_cutting_plan_candidate", "continue_cutting_plan_search", "discard_cutting_plan_preview")),
     ("almdina_erp.almdina_erp.services.cutting_plan_workspace_query_service", C, ("get_plan_workspace_snapshot",)),
+    ("almdina_erp.almdina_erp.services.cutting_search_report_service", C, ("download_cutting_search_report",)),
     ("almdina_erp.almdina_erp.services.board_editor_query_service", C, ("get_board_editor_projection",)),
     ("almdina_erp.almdina_erp.services.board_editor_draft_service", C, ("save_board_editor_draft", "begin_board_editor_draft_from_current_source")),
     ("almdina_erp.almdina_erp.services.board_editor_draft_review_service", C, ("validate_board_editor_draft",)),

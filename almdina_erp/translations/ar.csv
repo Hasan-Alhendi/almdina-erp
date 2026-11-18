@@ -4152,3 +4152,153 @@ Top Side,أعلى
 "The operational file has been generated.",تم توليد الملف التشغيلي
 CNC machine bed,سطح الماكينة
 Full board,اللوح الكامل
+Record search details,تسجيل تفاصيل البحث
+Download HTML,تحميل HTML
+Download JSON,تحميل JSON
+Download cutting search report,تنزيل تقرير بحث القص
+Record and download private diagnostic evidence for a cutting search.,تسجيل وتنزيل أدلة تشخيص خاصة لرحلة بحث القص.
+Invalid search report format.,صيغة تقرير البحث غير صالحة.
+The search report is unavailable or has expired.,تقرير البحث غير متاح أو انتهت مدة الاحتفاظ به.
+Invalid search recording option.,خيار تسجيل البحث غير صالح.
+Cutting search report,تقرير رحلة بحث القص
+Management summary,الملخص الإداري
+Actual search journey,رحلة البحث الحقيقية
+Recorded candidates,جميع المرشحين المسجلين
+Why these five plans?,لماذا أفضل خمس خطط؟
+Technical evidence,الأدلة التقنية
+Read-only diagnostic evidence. This report cannot be saved or approved as a cutting plan.,أدلة تشخيص للقراءة فقط. لا يمكن حفظ هذا التقرير أو اعتماده كخطة قص.
+Evidence status,حالة اكتمال الأدلة
+Recorded attempts,المحاولات المسجلة
+Completed arrangements,الترتيبات المكتملة المسجلة
+Incomplete arrangements,الترتيبات غير المكتملة
+Rejected candidates,المرشحون المرفوضون
+Duplicate candidates,المرشحون المتكررون
+Selected plans,الخطط المختارة
+Boards in the first plan,ألواح الخطة الأولى
+Search candidates,بحث ضمن المرشحين
+Complete,مكتمل
+Incomplete,غير مكتمل
+Duplicate,متكرر
+Selected,مختار
+Candidate,المرشح
+Compare two plans,مقارنة خطتين
+Select up to two candidates to compare their recorded geometry.,اختر مرشحين كحد أقصى لمقارنة هندستهما المسجلة.
+Inputs,ماذا استقبلت؟
+Outputs,ماذا أنتجت؟
+What happened,ماذا جرى؟
+Stop reason,سبب التوقف
+Duration (seconds),المدة بالثواني
+No recorded geometry is available.,لا تتوفر هندسة مسجلة لهذا المرشح.
+An unproven contour is omitted. A bounding rectangle is not a substitute.,أُخفي محيط لم تثبت هندسته. المستطيل المحيط ليس بديلًا عن الشكل الحقيقي.
+Before,قبل القرار
+After,بعد القرار
+Removed,الخطط التي خرجت
+Comparison rule,معيار المفاضلة
+First decisive criterion,أول معيار حاسم
+Cutter center available,تقييم مركز الريشة الحقيقي متاح
+Equal comparison keys,تعادل معايير المقارنة
+No competing candidate,لا يوجد مرشح منافس
+No recorded entries.,لا توجد سجلات لهذه النقطة.
+The largest eligible remnant is a ranking measure; it does not prove the best industrial reuse.,مساحة أكبر فضلة مؤهلة معيار للترتيب؛ لا تثبت أن الفضلة هي الأفضل لإعادة الاستخدام الصناعي.
+Panel saw constraint penalty,عقوبة قيود منشار الألواح
+Largest eligible remnant area,مساحة أكبر فضلة مؤهلة
+Estimated cut count,عدد القصات التقديري
+Estimated cut length,طول القص التقديري
+Rotation count,عدد الدرف المدورة
+Method complexity,تعقيد الطريقة
+Actual cutter center length,الطول الحقيقي لمسارات مركز الريشة
+Longest continuous internal cutter center,أطول مسار داخلي متصل لمركز الريشة
+Disconnected cutter center segments,عدد مقاطع مركز الريشة المنفصلة
+The observed call returned.,انتهى الاستدعاء المرصود وأعاد نتيجته.
+The time budget expired.,انتهت المهلة الزمنية.
+The generator exhausted its available proposals.,انتهت المقترحات المتاحة لدى المولد.
+The caller stopped consuming proposals.,توقف المستدعي عن طلب مقترحات إضافية.
+The attempt produced no arrangement.,لم تنتج المحاولة ترتيبًا.
+Manufacturing validation failed.,فشل التحقق الصناعي.
+This geometry was already observed.,سُجلت هذه الهندسة سابقًا.
+This raw geometry was already observed.,سُجل هذا الترتيب الأولي سابقًا.
+This projected geometry is already in the preview.,الهندسة النهائية موجودة في المعاينة بالفعل.
+The same geometry has no better industrial rank.,الهندسة مكررة ولا تملك تقييمًا صناعيًا أفضل.
+This seed was outside the batch shortlist.,لم تدخل هذه البذرة القائمة المختصرة للدفعة.
+The batch leader or diverse second seed was promoted.,انتقلت البذرة الأولى أو الثانية المختلفة هندسيًا إلى الإكمال.
+The completion limit was reached.,بلغ البحث الحد الداخلي لإكمال المرشحين.
+The final comparison did not improve the incumbent.,لم تتفوق الخطة في المفاضلة النهائية على الخطة الحالية.
+Placement validation or orientation permission failed.,فشل التحقق من التوزيع أو صلاحيات اتجاه الدرف.
+The physical snapshot failed manufacturing validation.,فشلت اللقطة ذات الأبعاد الفعلية في التحقق الصناعي.
+The preview failed export validation.,فشلت المعاينة في التحقق من صلاحية التصدير.
+The repair could not complete an arrangement.,تعذر إكمال الترتيب أثناء الإصلاح.
+The candidate worsened the protected remnant criteria.,تراجعت معايير الفضلة المحمية في هذا المرشح.
+The board count violates this operator policy.,عدد الألواح يخالف سياسة هذه المحاولة.
+The proposal changed protected geometry.,غيّر المقترح هندسة محمية.
+The cutter network organization regressed.,تراجع تنظيم شبكة مسارات الريشة.
+The proposal passed the final improvement gates.,اجتاز المقترح شروط التحسين النهائي.
+Validation failed before refinement.,فشل التحقق قبل تحسين الترتيب.
+Observed,مرصود
+Not promoted,لم ينتقل للإكمال
+Promoted,انتقل للإكمال
+Reserved for nesting coverage,محجوز لتنوع التعشيق
+Offered to the portfolio,عُرض على المعرض
+Improved,مُحسّن
+Smart search,البحث الذكي
+Automatic packing,التوزيع التلقائي
+Deep search,البحث العميق
+Order plan optimization,تحسين خطة الطلب
+Domain optimization,محرك تحسين التوزيع
+Engine execution,تشغيل المحرك
+Preview generation,توليد المعاينة
+Complete a seed,إكمال بذرة بحث
+Complete a selected seed,إكمال بذرة مختارة
+Select seeds from the batch,اختيار بذور الدفعة
+Packing strategy attempt,محاولة استراتيجية توزيع
+Ordered packing attempt,محاولة توزيع بترتيب درف محدد
+Compare direct and expanded kerf,مقارنة التوزيع المباشر وتوسيع فراغ الريشة
+Expand physical kerf,توسيع فراغ الريشة الفعلي
+Glass opening nesting,تعشيق فتحات الزجاج
+Shape nesting,تعشيق الدرف المشكلة
+Board cancellation and repair,إلغاء الألواح وإصلاح التوزيع
+Consolidate nested boards,دمج الألواح المعشقة
+Improve layout on the same board count,تحسين التوزيع دون زيادة الألواح
+Adaptive neighborhood search,البحث التكيفي في الترتيبات المجاورة
+Neighborhood operator attempt,محاولة تغيير توزيع مجاور
+System layout refinement,تحسين ترتيب خطة النظام
+Pattern search,بحث الأنماط
+Corner frame search,بحث إطارات الزوايا
+Physical snapshot and validation,إسقاط الهندسة الفعلية والتحقق
+Retain diverse finalists,الاحتفاظ بالمرشحين المتنوعين
+Merge search rounds,دمج جولات البحث
+Native gallery after projection and duplicate removal,المعرض الأساسي بعد الإسقاط وإزالة التكرار
+Gallery after adaptive search,المعرض بعد البحث التكيفي
+Gallery after pattern search,المعرض بعد بحث الأنماط
+Gallery after corner search,المعرض بعد بحث الزوايا
+Published preview gallery,المعرض المنشور في المعاينة
+Industrial ranking with same-board nesting coverage,الترتيب الصناعي مع الحفاظ على تنوع التعشيق عند تساوي الألواح
+"Continue search: merge, compare, remove duplicates and retain five",مواصلة البحث: دمج ومقارنة وإزالة التكرار والاحتفاظ بخمس خطط
+Coordinate probes and uninstrumented inner solver states are not captured.,لا يشمل التسجيل فحوص إحداثيات المواضع والحالات الداخلية غير المرصودة للمحلل.
+Some recorded pieces have unproven contours; no bounding-box substitute is drawn.,بعض الدرف المسجلة ذات محيط غير مثبت؛ لا يُرسم مستطيل بديل عنها.
+Previous round evidence was not recorded or has expired.,لم تسجل أدلة الجولة السابقة أو انتهت مدة الاحتفاظ بها.
+Previous round,الجولة السابقة
+Evidence limitations,حدود الأدلة
+Dropped events,أحداث لم تُحفظ بسبب الحدود
+Omitted geometries,هندسات لم تُحفظ بسبب الحدود
+Search round,جولة البحث
+Recorded comparison events,أحداث المقارنة المسجلة
+The deployed Git revision could not be resolved.,تعذر تحديد مراجعة Git للنسخة المشغلة.
+Glass assignment attempt,محاولة إسناد الدرف لفتحات الزجاج
+Prepare a glass nesting proposal,تجهيز مقترح التعشيق داخل الزجاج
+Rank seeds before promotion,ترتيب البذور قبل اختيار الإكمال
+These are actual sort keys; lower values sort first.,هذه مفاتيح الفرز الفعلية؛ تتقدم القيم الأصغر في الترتيب.
+Keep sixteen system alternatives by the existing priority policy,الاحتفاظ بستة عشر بديلًا وفق سياسة الأولوية الحالية
+Keep a measured remnant and cutter path trade-off,الاحتفاظ بمفاضلة مقاسة بين الفضلة ومسار الريشة
+An existing proposal dominates these measured criteria,يوجد مقترح يتفوق على هذه المعايير المقاسة
+Some input pieces remain unplaced,بعض الدرف المدخلة لم توضع على الألواح
+This arrangement does not contain the full input inventory,هذا الترتيب لا يضم جميع الدرف المدخلة
+The portfolio capacity and nesting coverage policy excluded this candidate,استبعدت سعة المعرض وسياسة تنوع التعشيق هذا المرشح
+The search report could not be stored. The cutting plan preview is still available.,تعذر حفظ تقرير البحث. ما زالت معاينة خطة القص متاحة.
+"The board pattern violates its size, capacity or resource guards",نمط اللوح يخالف حدود المقاس أو عدد الدرف أو نوع المورد
+This board pattern contains unsupported source or nested geometry,يتضمن نمط اللوح مصدرًا أو هندسة تعشيق غير مدعومة
+The actual contour could not be proven,تعذر إثبات المحيط الفعلي
+The actual cutter network could not be proven,تعذر إثبات شبكة مركز الريشة الفعلية
+An existing board pattern has better measured path and remnant criteria,يتفوق نمط لوح موجود في معايير المسار والفضلة المقاسة
+A better measured board pattern replaced the previous pattern,استبدل نمط لوح أفضل بالقياس النمط السابق
+The board pattern capacity was reached,بلغ عدد أنماط الألواح الحد المتاح
+The board pattern entered the private pattern pool,دخل نمط اللوح إلى مجموعة الأنماط الخاصة

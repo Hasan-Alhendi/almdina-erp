@@ -1,4 +1,5 @@
 from __future__ import annotations
+from almdina_erp.almdina_erp.domain.cutting.search_trace import traced, trace_event, trace_enabled
 
 import math
 from copy import deepcopy
@@ -132,6 +133,7 @@ class OptimizationOutcome:
     search_seeds: tuple[dict[str, Any], ...] = ()
 
 
+@traced('optimize_order_plan')
 def optimize_order_plan(
     command: OptimizeOrderPlanCommand,
     *,
@@ -208,6 +210,7 @@ def optimize_order_plan(
         # Never mix unproven special geometry with exact scores.
         from almdina_erp.almdina_erp.domain.cutting.cut_line_quality import final_system_sort_keys
         keys = final_system_sort_keys(snapshots)
+        native_before = list(snapshots) if trace_enabled() else None
         ranked = [(snapshot, seed) for _, snapshot, seed in
                   sorted(zip(keys, snapshots, raw_seeds), key=lambda item: item[0])]
         snapshots = [snapshot for snapshot, _ in ranked]
@@ -223,6 +226,8 @@ def optimize_order_plan(
                 seen.add(signature)
                 unique.append(snapshot)
         snapshots = unique[:5]
+        if native_before is not None:
+            trace_event('gallery',before=native_before,after=snapshots,reason='native_projection_final_sort_and_dedup')
         # Preserve the completed native gallery, including its full alignment
         # allowance. Refinement has its own *additional*, bounded stage; it
         # never steals discoveries or alignment time from this incumbent.
@@ -236,6 +241,7 @@ def optimize_order_plan(
             if math.isfinite(configured_patterns) and configured_patterns>0 else 0.0)
         formation_seeds = []
         if snapshots and raw_seeds and alns_seconds > 0:
+            gallery_before = list(snapshots) if trace_enabled() else None
             additions, alns_trace = _refine_smart_gallery(command, engine, expanded,
                 raw_seeds[0], snapshots[0], applied_trim, trim_decision, plan_settings, alns_seconds,
                 formation_seeds=formation_seeds if pattern_seconds>0 else None)
@@ -257,8 +263,11 @@ def optimize_order_plan(
                 # Keep visible seed correspondence first, then remaining native
                 # warm discoveries. Continuation still receives at most five.
                 raw_seeds = [seed for _, seed in selected[:5]] + raw_seeds
+            if gallery_before is not None:
+                trace_event('gallery',before=gallery_before,after=snapshots,reason='after_alns_projection',diagnostics=alns_trace)
         pattern_trace = None
         if snapshots and raw_seeds and pattern_seconds>0:
+            gallery_before = list(snapshots) if trace_enabled() else None
             additions,pattern_trace = _refine_pattern_gallery(command,engine,expanded,raw_seeds,
                 snapshots[0],applied_trim,trim_decision,plan_settings,pattern_seconds,formation_seeds)
             if additions:
@@ -275,12 +284,15 @@ def optimize_order_plan(
                         selected.append(record)
                 snapshots = [s for s,_ in selected[:5]]
                 raw_seeds = [r for _,r in selected[:5]] + raw_seeds
+            if gallery_before is not None:
+                trace_event('gallery',before=gallery_before,after=snapshots,reason='after_pattern_projection',diagnostics=pattern_trace)
         corner_trace = None
         configured_corners=command.optimizer.corner_search_budget_sec
         corner_seconds=(min(10.0,configured_corners,max(0.,command.optimizer.time_limit_sec))
             if math.isfinite(configured_corners) and configured_corners>0 else 0.)
         if (snapshots and raw_seeds and corner_seconds>0
                 and any(p.get('piece_type') in {'L-Shaped Corner','Clipped Corner'} for p in expanded)):
+            gallery_before = list(snapshots) if trace_enabled() else None
             additions,corner_trace=_refine_pattern_gallery(command,engine,expanded,raw_seeds,
                 snapshots[0],applied_trim,trim_decision,plan_settings,corner_seconds,corner_only=True)
             if additions:
@@ -295,6 +307,8 @@ def optimize_order_plan(
                         selected.append(record)
                 snapshots=[s for s,_ in selected[:5]]
                 raw_seeds=[r for _,r in selected[:5]]+raw_seeds
+            if gallery_before is not None:
+                trace_event('gallery',before=gallery_before,after=snapshots,reason='after_corner_projection',diagnostics=corner_trace)
         if snapshots:
             outcome = replace(
                 outcome,
@@ -316,6 +330,7 @@ def optimize_order_plan(
     return replace(outcome,candidate_snapshots=tuple(snapshots),search_seeds=tuple(raw_seeds))
 
 
+@traced('_refine_smart_gallery')
 def _refine_smart_gallery(command, engine, expanded, raw, incumbent, applied_trim,
                           trim_decision, plan_settings, seconds, *, formation_seeds=None):
     """One shared refinement deadline, then the existing snapshot/validation port.
@@ -371,6 +386,7 @@ def _refine_smart_gallery(command, engine, expanded, raw, incumbent, applied_tri
     return additions, summary
 
 
+@traced('_refine_pattern_gallery')
 def _refine_pattern_gallery(command,engine,expanded,seeds,incumbent,applied_trim,
                             trim_decision,plan_settings,seconds,formation_seeds=(),*,corner_only=False):
     from almdina_erp.almdina_erp.domain.cutting.pattern_layout_search import refine_pattern_layout
@@ -433,6 +449,7 @@ def _refine_pattern_gallery(command,engine,expanded,seeds,incumbent,applied_trim
     return additions,trace
 
 
+@traced('_snapshot_outcome')
 def _snapshot_outcome(command, engine, plan, expanded, applied_trim, trim_decision, plan_settings, *,
                       alignment_budget=None):
     """One manufacturing snapshot projection for the default and every alternative."""
@@ -714,6 +731,7 @@ def _canonical_trace_settings(command: OptimizeOrderPlanCommand) -> PlanSettings
     )
 
 
+@traced('_run_engine')
 def _run_engine(
     command: OptimizeOrderPlanCommand,
     *,

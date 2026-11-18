@@ -5,6 +5,7 @@ Only a complete independently validated winner can enter the output gallery.
 No designer geometry, fabricated parts, persisted learning, or new stock.
 """
 from __future__ import annotations
+from .search_trace import traced, trace_event, trace_enabled
 
 from copy import deepcopy
 from collections import defaultdict, deque
@@ -54,6 +55,7 @@ def _body_rotations(body, sources):
     return [variants[i] for i in (0, 2, 1, 3)]
 
 
+@traced('_skeletons')
 def _skeletons(plan, sources, width, height, kerf, mirror, deadline, pattern_sink=None):
     """Fair repair scheduling: a large first family cannot consume every probe."""
     variations = iter(_skeleton_variations(plan, sources, width, height, kerf, mirror, deadline))
@@ -137,6 +139,7 @@ def _repair_variation(skeleton, sources, remaining, event, width, height, kerf, 
             heuristic=heuristic, prioritize_receivers=priority)
 
 
+@traced('_skeleton_variations')
 def _skeleton_variations(plan, sources, width, height, kerf, mirror, deadline):
     # Other cohorts retain the proven native nesting pipeline unchanged.
     if (not any(p.get('piece_type') in shape._CORNER_TYPES for p in sources)
@@ -318,6 +321,7 @@ def _ranked(plans):
     return [p for _, p in sorted(zip(keys, plans), key=lambda item:item[0])]
 
 
+@traced('refine_system_layout')
 def refine_system_layout(plan, sources, width, height, kerf, *, deadline,
                          machine_type, mirroring_allowed, metric_kwargs, pattern_sink=None):
     """Preserve the original; explore compound moves before accepting by quality."""
@@ -377,20 +381,25 @@ def refine_system_layout(plan, sources, width, height, kerf, *, deadline,
                 kept.append(candidate)
             if len(kept) == 16:
                 break
+        trace_event('gallery',before=portfolio,after=kept,reason='system_portfolio_priority_limit_16')
         portfolio[:] = kept
 
+    @traced('refine_system_layout.offer', kind='attempt')
     def offer(candidate, *, already_validated=False):
         nonlocal best
         if candidate is None or len(candidate.get('sheets') or []) > len(best['sheets']):
+            trace_event('candidate',plan=candidate,status='rejected',reason='no_result_or_extra_boards')
             return
         checked = candidate if already_validated else _valid(candidate, sources, width, height, kerf, machine_type,
                          metric_kwargs, deadline, mirroring_allowed)
         if checked is None or material_signature(checked) in seen:
+            trace_event('candidate',plan=candidate,status='not_selected',reason='validation_failed' if checked is None else 'duplicate_geometry')
             return
         before, after = final_system_sort_keys([best, checked])
         if after < before:
             seen.add(material_signature(checked))
             portfolio.append(checked)
+            trace_event('candidate',plan=checked,status='improved',reason='accepted_final_improvement')
             best = checked
             trace['compound_improvements'] += 1
             trim_portfolio()
@@ -405,7 +414,12 @@ def refine_system_layout(plan, sources, width, height, kerf, *, deadline,
                        and any(a < b for a,b in zip(v,key)) for v in existing):
                 seen.add(material_signature(checked))
                 portfolio.append(checked)
+                trace_event('candidate',plan=checked,status='reserved',reason='measured_pareto_tradeoff')
                 trim_portfolio()
+            else:
+                trace_event('candidate',plan=checked,status='not_selected',reason='pareto_dominated')
+        else:
+            trace_event('candidate',plan=checked,status='not_selected',reason='no_final_improvement')
         return False
 
     if has_shapes and time.monotonic() < deadline:

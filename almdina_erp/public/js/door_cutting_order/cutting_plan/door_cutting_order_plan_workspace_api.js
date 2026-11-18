@@ -119,10 +119,10 @@
         );
     }
 
-    function preview(orderName, settings) {
+    function preview(orderName, settings, diagnostics = {}) {
         return call(
             PREVIEW_METHOD,
-            settingsArgs(orderName, settings),
+            { ...settingsArgs(orderName, settings), record_search_details: diagnostics.recordSearchDetails ? 1 : 0 },
             {
                 freeze: true,
                 freezeMessage: translateCopy(FREEZE_PREVIEW),
@@ -221,6 +221,8 @@
         recalculate,
         bootstrapPlan,
         preview,
+        searchReportUrl: (orderName, reportId, format) => "/api/method/almdina_erp.almdina_erp.services.cutting_search_report_service.download_cutting_search_report?"
+            + new URLSearchParams({ order_name: orderName, report_id: reportId, format }).toString(),
         commitPreview,
         selectCandidate: (orderName, previewId, candidateId) => call(SELECT_CANDIDATE_METHOD, { order_name: orderName, preview_id: previewId, candidate_id: candidateId }),
         continueSearch: (orderName, previewId) => call(CONTINUE_SEARCH_METHOD, { order_name: orderName, preview_id: previewId }),

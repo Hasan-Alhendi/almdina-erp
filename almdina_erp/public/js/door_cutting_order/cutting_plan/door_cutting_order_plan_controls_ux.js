@@ -371,7 +371,10 @@
                 frappe.msgprint(translate("Could not prepare the cutting plan service. Reload the page and try again."));
                 return false;
             }
-            const ok = await previews.preview(frm, settings);
+            const traceOptions = frm.__almdinaSearchTraceOptions;
+            const ok = await previews.preview(frm, settings, {
+                recordSearchDetails: traceOptions?.orderName === frm.doc.name && traceOptions.enabled === true,
+            });
             if (ok && !firstPlan) {
                 frappe.show_alert({
                     message: translate("A new preview was created. Review it, then press “Save” to apply this change to the plan."),
@@ -612,6 +615,51 @@
         const duplicated = wrapper.find(DUPLICATED_ACTIONS);
         duplicated.remove();
         syncRecalculateButton(frm);
+        syncSearchReportControls(frm, wrapper);
+    }
+
+    function syncSearchReportControls(frm, wrapper) {
+        const root = wrapper.get(0);
+        if (!root?.querySelector) return;
+        let host = root.querySelector(".dco-search-report-controls");
+        const permitted = can(frm, "download_cutting_search_report") && can(frm, "view_system_cutting_plan");
+        if (!permitted) { host?.remove(); return; }
+        const name = String(frm.doc.name);
+        if (host && host.dataset.orderName !== name) { host.remove(); host = null; }
+        if (!host) {
+            host = document.createElement("div");
+            host.className = "dco-search-report-controls";
+            host.dataset.orderName = name;
+            host.style.cssText = "display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-block:10px";
+            const label = document.createElement("label"), check = document.createElement("input");
+            check.type = "checkbox";
+            check.style.marginInlineEnd = "6px";
+            const options = frm.__almdinaSearchTraceOptions;
+            check.checked = options?.orderName === name && options.enabled === true;
+            check.onchange = () => {
+                if (window.cur_frm !== frm || frm.doc.name !== name) return;
+                frm.__almdinaSearchTraceOptions = { orderName: name, enabled: check.checked };
+            };
+            label.append(check, document.createTextNode(translate("Record search details")));
+            host.append(label, document.createElement("span"));
+            root.append(host);
+        }
+        const check = host.querySelector("input");
+        check.disabled = !canCalculate(frm);
+        const downloads = host.querySelector("span");
+        const report = frm.__almdinaSearchReport;
+        const id = report?.orderName === name ? report.report_id : "";
+        if (downloads.dataset.reportId === id) return;
+        downloads.dataset.reportId = id;
+        downloads.replaceChildren();
+        if (!id) return;
+        for (const format of ["html", "json"]) {
+            const link = document.createElement("a");
+            link.textContent = translate(format === "html" ? "Download HTML" : "Download JSON");
+            link.href = api().searchReportUrl(name, id, format);
+            link.style.marginInlineEnd = "12px";
+            downloads.append(link);
+        }
     }
 
     function apply(frm) {

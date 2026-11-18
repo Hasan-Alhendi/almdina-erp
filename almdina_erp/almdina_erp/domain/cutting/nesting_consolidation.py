@@ -8,6 +8,7 @@ outlines.
 """
 
 from __future__ import annotations
+from .search_trace import traced, trace_event, trace_enabled
 
 import time
 from collections import defaultdict
@@ -57,6 +58,7 @@ class NestingPlacementGroup:
         return sum(num(piece.get("w")) * num(piece.get("h")) for piece in self.pieces)
 
 
+@traced('consolidate_nested_boards')
 def consolidate_nested_boards(
     plan: dict[str, Any],
     pieces: list[dict[str, Any]],

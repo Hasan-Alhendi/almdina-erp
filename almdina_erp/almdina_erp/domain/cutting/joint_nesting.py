@@ -5,6 +5,7 @@ placements; consolidation still moves proven nests rigidly. No coordinates from
 independent plans are combined and no manufacturing validator is relaxed.
 """
 from __future__ import annotations
+from .search_trace import traced, trace_event, trace_enabled
 
 from collections import Counter
 from copy import deepcopy
@@ -44,6 +45,7 @@ def _glass_ids(plan):
             if p.get('glass_host_piece_id') not in (None, '') for i in (p['id'], p['glass_host_piece_id'])}
 
 
+@traced('complete_shape_candidate')
 def complete_shape_candidate(candidate, pieces, width, height, kerf, *, machine_type,
                              mirroring_allowed, deadline, metric_kwargs, excluded=frozenset()):
     """Complete a proven shape seed without repeating formation enumeration."""
@@ -95,6 +97,7 @@ def _release_guest(plan, piece_id, width, height, kerf, deadline):
     return copied
 
 
+@traced('joint_nesting_candidates')
 def joint_nesting_candidates(baseline, incumbent, pieces, width, height, kerf, *,
                              machine_type, mirroring_allowed, deadline, metric_kwargs):
     """Return up to four proven finals and small diagnostics within one deadline."""

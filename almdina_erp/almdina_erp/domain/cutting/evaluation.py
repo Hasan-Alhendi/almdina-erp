@@ -1,4 +1,5 @@
 from __future__ import annotations
+from .search_trace import traced
 
 import math
 import time
@@ -169,6 +170,7 @@ def _void_rotation_matches_piece(
 
 
 
+@traced('placement_permission_errors')
 def placement_permission_errors(
     plan: dict[str, Any],
     requested_pieces: list[dict[str, Any]],
@@ -250,6 +252,7 @@ def evaluate_plan(
     }
 
 
+@traced('validate_plan')
 def validate_plan(
     plan: dict[str, Any],
     requested_pieces: list[dict[str, Any]],

@@ -8,6 +8,7 @@ No NC time, clamp/tool setup or machine-ready certification is inferred.
 Unsupported contours return None rather than pretending to be rectangles.
 """
 from __future__ import annotations
+from .search_trace import trace_event, trace_enabled
 
 import math
 from collections.abc import Callable, Mapping
@@ -147,22 +148,27 @@ def final_system_sort_keys(plans: list[Mapping[str, Any]]) -> list[tuple]:
     entire collection; an estimate is never mixed with a measured network.
     """
     legacy = [(tuple(plan.get("industrial_rank") or ()),) for plan in plans]
+    def observed(keys, available, reason):
+        if trace_enabled():
+            trace_event('comparison',plans=plans,keys=keys,comparator='final_system_sort_keys',
+                cutter_center_available=available,reason=reason,profiles=profiles)
+        return keys
     profiles = []
     for plan in plans:
         if (plan.get("machine_type") not in {"Auto", "CNC Router"}
                 or len(plan.get("industrial_rank") or ()) != 8
                 or plan.get("kerf_cm") is None):
-            return legacy
+            return observed(legacy,False,'unproven_machine_or_rank_or_kerf')
         try:
             kerf = float(plan["kerf_cm"])
         except (TypeError, ValueError, OverflowError):
-            return legacy
+            return observed(legacy,False,'invalid_kerf')
         if not math.isfinite(kerf) or kerf < 0:
-            return legacy
+            return observed(legacy,False,'nonfinite_or_negative_kerf')
         profile = plan_cut_line_quality(plan, kerf)
         if profile is None:
-            return legacy
+            return observed(legacy,False,'unproven_cutter_geometry')
         profiles.append(profile)
-    return [(tuple(plan["industrial_rank"][:4]), final_cut_quality_key(profile),
+    return observed([(tuple(plan["industrial_rank"][:4]), final_cut_quality_key(profile),
              tuple(plan["industrial_rank"][4:]))
-            for plan, profile in zip(plans, profiles)]
+            for plan, profile in zip(plans, profiles)],True,'measured_cutter_center')
