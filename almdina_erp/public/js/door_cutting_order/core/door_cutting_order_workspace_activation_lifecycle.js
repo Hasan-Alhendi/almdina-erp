@@ -97,6 +97,11 @@
     }
 
     function initializeLoadedFeature(frm, fieldname) {
+        if (fieldname === "operational_files_tab") {
+            const panel = window.AlmdinaOperationalFilesUX;
+            if (panel && typeof panel.render === "function") panel.render(frm);
+            return;
+        }
         if (fieldname !== "cost_tab") return;
 
         // Cost-only modules are evaluated after the form's original refresh hooks.

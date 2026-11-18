@@ -4,7 +4,7 @@
     if (window.AlmdinaDcoTabEditLifecycleGuard) return;
 
     const DOCTYPE = "Door Cutting Order";
-    const GUARDED_TABS = new Set(["order_tab", "results_tab", "cost_tab"]);
+    const GUARDED_TABS = new Set(["order_tab", "results_tab", "operational_files_tab", "cost_tab"]);
     const KIND_TAB = Object.freeze({
         order: "order_tab",
         plan: "results_tab",

@@ -337,10 +337,7 @@
             state.status = "error";
             state.previewId = null;
             state.payload = null;
-            state.error = String(
-                (error && (error.message || error))
-                || "Could not create the preview."
-            );
+            state.error = publicCalculationError(error);
             dispatch(frm);
             throw error;
         }
@@ -456,7 +453,43 @@
         }
     }
 
+    function serverCalculationMessage(error) {
+        const response = (error && (error.responseJSON || error)) || {};
+        const type = typeof response.exc_type === "string" ? response.exc_type : "";
+        if (type && ["ValidationError", "PermissionError", "MandatoryError"].indexOf(type) === -1) {
+            return "";
+        }
+        let value = response._server_messages;
+        if (typeof value === "string") {
+            try { value = JSON.parse(value); } catch (parseError) { return ""; }
+        }
+        if (!Array.isArray(value)) return "";
+        return value.map((item) => {
+            if (typeof item !== "string") return item && item.message ? String(item.message) : "";
+            try { item = JSON.parse(item); } catch (parseError) { return item; }
+            return item && item.message ? String(item.message) : "";
+        }).map((text) => String(text || "").replace(/<br\s*\/?\s*>/gi, "\n").replace(/<\/?[a-z!][^>]*>/gi, "").trim()).filter(Boolean).join("\n");
+    }
+
+    function publicCalculationError(error) {
+        const server = serverCalculationMessage(error);
+        if (server && !/reload the page/i.test(server)) return server;
+        const frontend = window.AlmdinaFrontend;
+        if (frontend && typeof frontend.errorMessage === "function") {
+            const extracted = String(frontend.errorMessage(error, "") || "").trim();
+            if (extracted
+                && extracted.indexOf("The operation could not be completed") !== 0
+                && !/reload the page/i.test(extracted)) {
+                return extracted;
+            }
+        }
+        const direct = error && typeof error.message === "string" ? error.message.trim() : "";
+        if (direct && !/reload the page/i.test(direct)) return direct;
+        return "No manufacturing-valid cutting plan was found.";
+    }
+
     window.AlmdinaPlanPreviewSession = Object.freeze({
+        publicCalculationError,
         snapshot,
         selectCandidate: (frm, id) => candidateRequest(frm, id),
         continueSearch: frm => candidateRequest(frm, null, true),

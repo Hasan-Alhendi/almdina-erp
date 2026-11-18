@@ -16,6 +16,7 @@ from almdina_erp.almdina_erp.domain.cutting.liner_geometry import (
     canonical_path,
     canonicalize_obstacles,
     liner_parameters_active,
+    obstacles_in_toolpath_frame,
     sawn_liner_ends,
 )
 from almdina_erp.almdina_erp.domain.cutting.machining_overlay import (
@@ -209,3 +210,182 @@ def match_regular_machining_orientation(
         return RegularOrientationMatch(None, "ambiguous")
 
     return RegularOrientationMatch(min(passed), "unique")
+
+
+@dataclass(frozen=True, slots=True)
+class CornerMachiningOrientationMatch:
+    quarter_turns: int | None
+    mirrored: bool = False
+    reason: str = ""
+
+
+def match_corner_machining_orientation(
+    *,
+    piece: LinerPiece,
+    host: Mapping[str, Any],
+    outer: Sequence[Point],
+    sheet_pieces: Sequence[Mapping[str, Any]],
+    overlay_paths: Mapping[str, Any],
+    settings: Mapping[str, Mapping[str, Any]],
+    candidates: Sequence[tuple[bool, int, frozenset[tuple[int, str]]]],
+    cutter_diameter_mm: float | None,
+    origin_mm: Point = (0.0, 0.0),
+    board_mm: tuple[float, float, float, float] | None = None,
+    cutter_diameters_mm: Mapping[str, float | None] | None = None,
+) -> CornerMachiningOrientationMatch:
+    """Bind one corner orientation only when the toolpaths select it.
+
+    ``candidates`` are the transforms that already reproduce the contour.
+    A symmetric outline can have more than one. The machining paths must
+    agree on exactly one edge-role signature. Equivalent transforms of that
+    signature are the same physical sides. A file with no matching path, or
+    with paths that fit more than one signature, stays unresolved.
+    """
+
+    active = [
+        (addon.kind, spec)
+        for addon in MACHINING_ADDONS
+        if (spec := settings.get(addon.kind) or {})
+        and liner_parameters_active(
+            enabled=bool(spec.get("enabled")),
+            side=str(spec.get("side") or ""),
+            offset_cm=float(spec.get("offset_cm") or 0),
+            width_cm=float(spec.get("width_cm") or 0),
+        )
+    ]
+    if not active or not candidates:
+        return CornerMachiningOrientationMatch(None, reason="no_machining_evidence")
+
+    width_mm = float(piece.width_cm) * 10.0
+    height_mm = float(piece.length_cm) * 10.0
+    passed: list[tuple[frozenset[tuple[int, str]], bool, int]] = []
+    for mirrored, turns, signature in candidates:
+        if _corner_paths_match(
+            piece,
+            host,
+            outer,
+            sheet_pieces,
+            overlay_paths,
+            active,
+            mirrored=mirrored,
+            quarter_turns=turns,
+            width_mm=width_mm,
+            height_mm=height_mm,
+            cutter_diameter_mm=cutter_diameter_mm,
+            cutter_diameters_mm=cutter_diameters_mm,
+            origin_mm=origin_mm,
+            board_mm=board_mm,
+        ):
+            passed.append((signature, mirrored, turns))
+    if not passed:
+        return CornerMachiningOrientationMatch(None, reason="unresolved")
+
+    groups: dict[frozenset[tuple[int, str]], list[tuple[bool, int]]] = {}
+    for signature, mirrored, turns in passed:
+        groups.setdefault(signature, []).append((mirrored, turns))
+    if len(groups) != 1:
+        return CornerMachiningOrientationMatch(None, reason="ambiguous")
+    mirrored, turns = min(next(iter(groups.values())), key=lambda item: (item[0], item[1]))
+    return CornerMachiningOrientationMatch(turns, mirrored, "unique")
+
+
+def _corner_paths_match(
+    piece: LinerPiece,
+    host: Mapping[str, Any],
+    outer: Sequence[Point],
+    sheet_pieces: Sequence[Mapping[str, Any]],
+    overlay_paths: Mapping[str, Any],
+    active: Sequence[tuple[str, Mapping[str, Any]]],
+    *,
+    mirrored: bool,
+    quarter_turns: int,
+    width_mm: float,
+    height_mm: float,
+    cutter_diameter_mm: float | None,
+    cutter_diameters_mm: Mapping[str, float | None] | None,
+    origin_mm: Point,
+    board_mm: tuple[float, float, float, float] | None,
+) -> bool:
+    obstacles = obstacles_in_toolpath_frame(
+        sheet_pieces,
+        host,
+        outer,
+        mirrored=mirrored,
+        quarter_turns=quarter_turns,
+        width_mm=width_mm,
+        height_mm=height_mm,
+    ) or None
+    for kind, spec in active:
+        paths = _overlay_path_list(overlay_paths.get(kind))
+        if not paths:
+            return False
+        kind_diameter = cutter_diameter_mm
+        if cutter_diameters_mm is not None:
+            raw_diameter = cutter_diameters_mm.get(kind)
+            try:
+                candidate_diameter = float(raw_diameter) if raw_diameter not in (None, "") else 0.0
+            except (TypeError, ValueError):
+                candidate_diameter = 0.0
+            kind_diameter = candidate_diameter if candidate_diameter > 0 else None
+        canonical_paths = [
+            canonical_path(
+                path,
+                mirrored=mirrored,
+                quarter_turns=quarter_turns,
+                width_mm=width_mm,
+                height_mm=height_mm,
+            )
+            for path in paths
+        ]
+        side = str(spec["side"])
+        start = float(spec.get("start_cm") or 0)
+        length = float(spec.get("length_cm") or 0)
+        liner_specs = tuple(spec.get("liners") or ())
+        if kind == "liner" and (len(liner_specs) > 1 or len(canonical_paths) != 1):
+            measurement = compare_liner_set_paths(
+                canonical_paths,
+                piece,
+                liner_specs
+                or (
+                    {
+                        "side": side,
+                        "offset_cm": float(spec.get("offset_cm") or 0),
+                        "start_cm": start,
+                        "length_cm": length,
+                    },
+                ),
+                float(spec.get("width_cm") or 0),
+                kind_diameter,
+                obstacles=obstacles,
+            )
+        else:
+            try:
+                start_sawn, end_sawn = sawn_liner_ends(
+                    piece,
+                    side,
+                    origin_mm=origin_mm,
+                    mirrored=mirrored,
+                    quarter_turns=quarter_turns,
+                    board=board_mm,
+                    start_cm=start,
+                    length_cm=length,
+                )
+            except LinerGeometryError:
+                start_sawn, end_sawn = None, None
+            measurement = compare_overlay_path(
+                canonical_paths[0],
+                piece,
+                kind,
+                side,
+                float(spec.get("offset_cm") or 0),
+                float(spec.get("width_cm") or 0),
+                kind_diameter,
+                start,
+                length,
+                start_sawn=start_sawn,
+                end_sawn=end_sawn,
+                obstacles=obstacles,
+            )
+        if not measurement.ok:
+            return False
+    return True

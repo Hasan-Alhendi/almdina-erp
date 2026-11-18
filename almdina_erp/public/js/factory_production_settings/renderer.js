@@ -98,6 +98,124 @@
             `;
         }
 
+        function tabButton(id, label, activeTab) {
+            const selected = activeTab === id;
+            return `
+                <button
+                    type="button"
+                    class="aps-tab${selected ? " is-active" : ""}"
+                    role="tab"
+                    data-aps-tab="${esc(id)}"
+                    aria-selected="${selected ? "true" : "false"}"
+                    tabindex="${selected ? "0" : "-1"}"
+                >${esc(label)}</button>
+            `;
+        }
+
+        function operationalFilesPanel(model) {
+            const panel = model.operationalFiles || {};
+            const count = Number(panel.presetCount || 0);
+            const machineCount = Number(panel.machineCount || 0);
+            const actions = [
+                uiButton({
+                    label: t("Manage tool presets"),
+                    variant: "primary",
+                    className: "aps-cnc-preset-manage",
+                }),
+                panel.editable
+                    ? uiButton({
+                        label: t("Add a tool preset"),
+                        variant: "secondary",
+                        className: "aps-cnc-preset-add",
+                    })
+                    : "",
+            ].filter(Boolean).join("");
+            const machineActions = [
+                uiButton({
+                    label: t("Manage CNC machines"),
+                    variant: "primary",
+                    className: "aps-cnc-machine-manage",
+                }),
+                panel.editable
+                    ? uiButton({
+                        label: t("Add a CNC machine"),
+                        variant: "secondary",
+                        className: "aps-cnc-machine-add",
+                    })
+                    : "",
+            ].filter(Boolean).join("");
+            return `
+                <article class="aps-section is-editable" data-section="operational_files">
+                    <div class="aps-section-head">
+                        <div class="aps-section-copy">
+                            <span class="aps-section-accent" aria-hidden="true"></span>
+                            <div class="aps-section-titles">
+                                <span class="aps-section-kicker">${t("Operational files")}</span>
+                                <h3>${t("CNC tool presets")}</h3>
+                                <div class="aps-section-desc">${t("Open the standard CNC Tool Preset list to add, edit, or delete tools. Final depth belongs to a machining profile, not to the tool.")}</div>
+                            </div>
+                        </div>
+                        <div class="aps-section-tools aps-cnc-presets__actions">${actions}</div>
+                    </div>
+                    <div class="aps-cnc-presets">
+                        <p class="aps-cnc-presets__empty">${count
+                            ? t("{0} saved tool presets are available in Desk.", [count])
+                            : t("No CNC tool presets have been created yet.")}</p>
+                        ${panel.editable ? "" : `<p class="aps-readonly-note">${t("A factory settings manager must create the tool presets.")}</p>`}
+                    </div>
+                </article>
+                <article class="aps-section is-editable" data-section="cnc_machines">
+                    <div class="aps-section-head">
+                        <div class="aps-section-copy">
+                            <span class="aps-section-accent" aria-hidden="true"></span>
+                            <div class="aps-section-titles">
+                                <span class="aps-section-kicker">${t("Operational files")}</span>
+                                <h3>${t("CNC Machines")}</h3>
+                                <div class="aps-section-desc">${t("Register each CNC machine by name, bed width (X), and bed length (Y). Choose a corner work zero, then set the two stops for that corner. Sheet geometry stays bottom-left, with X to the right and Y upward.")}</div>
+                            </div>
+                        </div>
+                        <div class="aps-section-tools aps-cnc-presets__actions">${machineActions}</div>
+                    </div>
+                    <div class="aps-cnc-presets">
+                        <p class="aps-cnc-presets__empty">${machineCount
+                            ? t("{0} CNC machines are available in Desk.", [machineCount])
+                            : t("No CNC machines have been created yet.")}</p>
+                        ${panel.editable ? "" : `<p class="aps-readonly-note">${t("A factory settings manager must create the CNC machines.")}</p>`}
+                    </div>
+                </article>
+                <article class="aps-section is-editable" data-section="cnc_profiles">
+                    <div class="aps-section-head">
+                        <div class="aps-section-copy">
+                            <span class="aps-section-accent" aria-hidden="true"></span>
+                            <div class="aps-section-titles">
+                                <span class="aps-section-kicker">${t("Operational files")}</span>
+                                <h3>${t("Machining profiles")}</h3>
+                                <div class="aps-section-desc">${t("Open the standard Machining Profile list. A profile copies one tool and keeps the final depth used for toolpaths.")}</div>
+                            </div>
+                        </div>
+                        <div class="aps-section-tools aps-cnc-presets__actions">${[
+                            uiButton({
+                                label: t("Manage machining profiles"),
+                                variant: "primary",
+                                className: "aps-cnc-profile-manage",
+                            }),
+                            panel.editable ? uiButton({
+                                label: t("Add a profile"),
+                                variant: "secondary",
+                                className: "aps-cnc-profile-add",
+                            }) : "",
+                        ].filter(Boolean).join("")}</div>
+                    </div>
+                    <div class="aps-cnc-presets">
+                        <p class="aps-cnc-presets__empty">${Number(panel.profileCount || 0)
+                            ? t("{0} machining profiles are available.", [Number(panel.profileCount || 0)])
+                            : t("No machining profiles have been created yet.")}</p>
+                        ${panel.editable ? "" : `<p class="aps-readonly-note">${t("A factory settings manager must create the machining profiles.")}</p>`}
+                    </div>
+                </article>
+            `;
+        }
+
         function sectionCard(section) {
             const stateClass = section.editable ? "is-editable" : "is-readonly";
             return `
@@ -152,6 +270,10 @@
         }
 
         function render(model) {
+            if (model.activeTab === "operational_files") {
+                renderOperationalFiles(model);
+                return;
+            }
             $body.html(`
                 <div class="almdina-ui aps-shell alm-page alm-page--admin" dir="${uiDirection()}">
                     <header class="aps-hero alm-page-intro alm-page-intro--accented">
@@ -165,31 +287,53 @@
                         </div>
                     </header>
 
-                    <div class="aps-section-intro alm-section-header">
-                        <div>
-                            <span class="alm-section-header__kicker">${t("Active settings")}</span>
-                            <strong class="alm-section-header__title">${t("Configure each group from its dedicated place")}</strong>
+                    <div class="aps-tab-panel" data-aps-tab-panel="settings" role="tabpanel">
+                        <div class="aps-section-intro alm-section-header">
+                            <div>
+                                <span class="alm-section-header__kicker">${t("Active settings")}</span>
+                                <strong class="alm-section-header__title">${t("Configure each group from its dedicated place")}</strong>
+                            </div>
+                            <span class="aps-section-intro-note alm-section-header__note">${t("Editing is shown only for sections you are allowed to edit")}</span>
                         </div>
-                        <span class="aps-section-intro-note alm-section-header__note">${t("Editing is shown only for sections you are allowed to edit")}</span>
+                        <section class="aps-sections">
+                            ${model.sections.map(sectionCard).join("")}
+                            ${model.canManageWhatsAppSession ? `
+                            <article class="aps-section aps-whatsapp" data-whatsapp-root>
+                                <div class="aps-whatsapp-loading">${t("Loading WhatsApp status...")}</div>
+                            </article>
+                            ` : ""}
+                            ${model.showBackupPanel ? `
+                            <article class="aps-section aps-backup" data-backup-root>
+                                <div class="aps-backup-loading">${t("Loading backup history...")}</div>
+                            </article>
+                            ` : ""}
+                        </section>
+                        ${legacySettingsDetails(model)}
+                        <div class="aps-note">
+                            <span class="aps-note-icon" aria-hidden="true">i</span>
+                            <div>${t("The legacy Almdina ERP Settings form link is now a historical route only and will be redirected to this page automatically. No value is deleted from the log on redirect, and contact numbers accept multiple lines such as: landline, mobile, WhatsApp.")}</div>
+                        </div>
                     </div>
+                </div>
+            `);
+        }
+
+        function renderOperationalFiles(model) {
+            $body.html(`
+                <div class="almdina-ui aps-shell alm-page alm-page--admin" dir="${uiDirection()}">
+                    <header class="aps-hero alm-page-intro alm-page-intro--accented">
+                        <div class="aps-hero-layout">
+                            <div class="aps-hero-copy alm-page-intro__copy">
+                                <div class="aps-hero-titles">
+                                    <h2 class="alm-page-intro__title">${t("Operational file management")}</h2>
+                                    <p class="alm-page-intro__description">${t("Operational file settings")}</p>
+                                </div>
+                            </div>
+                        </div>
+                    </header>
                     <section class="aps-sections">
-                        ${model.sections.map(sectionCard).join("")}
-                        ${model.canManageWhatsAppSession ? `
-                        <article class="aps-section aps-whatsapp" data-whatsapp-root>
-                            <div class="aps-whatsapp-loading">${t("Loading WhatsApp status...")}</div>
-                        </article>
-                        ` : ""}
-                        ${model.showBackupPanel ? `
-                        <article class="aps-section aps-backup" data-backup-root>
-                            <div class="aps-backup-loading">${t("Loading backup history...")}</div>
-                        </article>
-                        ` : ""}
+                        ${operationalFilesPanel(model)}
                     </section>
-                    ${legacySettingsDetails(model)}
-                    <div class="aps-note">
-                        <span class="aps-note-icon" aria-hidden="true">i</span>
-                        <div>${t("The legacy Almdina ERP Settings form link is now a historical route only and will be redirected to this page automatically. No value is deleted from the log on redirect, and contact numbers accept multiple lines such as: landline, mobile, WhatsApp.")}</div>
-                    </div>
                 </div>
             `);
         }
@@ -483,6 +627,7 @@
             renderLoading,
             renderError,
             render,
+            renderOperationalFiles,
             renderWhatsApp,
             whatsappHtml,
             auditHtml,

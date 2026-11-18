@@ -267,6 +267,21 @@ def _merge_collinear(segments: Sequence[Segment], tolerance: float) -> list[Segm
     return merged
 
 
+def merge_collinear_segments(
+    segments: Sequence[Segment],
+    *,
+    tolerance: float = COLLINEAR_TOLERANCE_MM,
+) -> list[Segment]:
+    """Join only touching/overlapping segments on the same infinite line.
+
+    This is intentionally narrower than CNC path chaining: callers can repair
+    analysis-only splits at intersections without joining across a physical
+    gap or combining unrelated source entities.
+    """
+
+    return _merge_collinear(segments, tolerance)
+
+
 def _line_distance(point: Point, origin: Point, normal: Point) -> float:
     return abs((point[0] - origin[0]) * normal[0] + (point[1] - origin[1]) * normal[1])
 
@@ -397,5 +412,6 @@ __all__ = [
     "classify_saw_center_segments",
     "cutter_center_paths",
     "cutter_center_segments",
+    "merge_collinear_segments",
     "saw_center_segments_match",
 ]

@@ -78,14 +78,15 @@ class WhatsAppFrontendContractTests(unittest.TestCase):
         self.assert_localized(renderer, "Create and link WhatsApp", "إنشاء وربط WhatsApp")
         self.assert_localized(renderer, "Reconnect", "إعادة اتصال")
         self.assertIn("whatsapp.refresh", controller)
-        self.assertIn("viewModel.canManageWhatsAppSession(state.current)", controller)
+        self.assertIn("model.canManageWhatsAppSession", controller)
         self.assertIn("model.canManageWhatsAppSession", renderer)
         self.assertNotIn("production_settings_service", controller)
 
     def test_section_save_refreshes_the_whatsapp_card(self) -> None:
         controller = CONTROLLER.read_text(encoding="utf-8")
         render_fn = controller.split("function render()", 1)[1].split("function load()", 1)[0]
-        self.assertIn("renderer.render(viewModel.page(state.current))", render_fn)
+        self.assertIn("renderer.render(model)", render_fn)
+        self.assertIn("viewModel.page(state)", render_fn)
         self.assertIn("whatsapp.refresh", render_fn)
         save_fn = controller.split("function openSectionDialog", 1)[1].split(
             "function openAudit", 1

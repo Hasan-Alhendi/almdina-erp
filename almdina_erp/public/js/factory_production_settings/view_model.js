@@ -79,7 +79,7 @@
 
         function sections(current = {}) {
             const source = values(current);
-            return [
+            const built = [
                 section("cutting", t("Cutting and optimizer"), t("Default geometry, cutting machine, and search limits. Default cutting tool diameters: a blank layer copies the cutting tool onto each new order."), [
                     [t("Default kerf (mm)"), source.default_kerf_mm],
                     [t("Deduct edge banding thickness by default"), source.default_deduct_edge_thickness == null || source.default_deduct_edge_thickness === "" || Number(source.default_deduct_edge_thickness) !== 0 ? t("Enabled") : t("Disabled")],
@@ -128,6 +128,19 @@
                         true,
                     ]),
                 ], current),
+                section("cnc", t("Sample machine profile"), t("Stored sample used by the NC post processor. It is not a per-sheet profile, and it is not approved for production."), [
+                    [t("Sample tool number"), source.cnc_machine_tool_number || t("Not specified")],
+                    [t("Sample spindle speed (RPM)"), source.cnc_machine_spindle_speed_rpm],
+                    [t("Sample cutting feed (mm/min)"), source.cnc_machine_cutting_feed_mm_min],
+                    [t("Sample plunge feed (mm/min)"), source.cnc_machine_plunge_feed_mm_min],
+                    [t("Sample retract Z (mm)"), source.cnc_machine_retract_z_mm],
+                    [t("Sample distance mode"), source.cnc_machine_distance_mode || t("Not specified")],
+                    [t("Sample work offset"), source.cnc_machine_work_offset || t("Not specified")],
+                    [t("Sample example depth A (mm)"), source.cnc_machine_example_depth_a_mm],
+                    [t("Sample example depth B (mm)"), source.cnc_machine_example_depth_b_mm],
+                    [t("Machine profile"), source.cnc_machine_profile_production_approved ? t("Approved for production") : t("Sample only — not approved for production")],
+                    [t("Profile note"), source.cnc_machine_profile_source, true],
+                ], current),
                 ...(canManageBackups(current) ? [section("backup_restore", t("Backup & Restore"), t("Independent local and external backups built on the official Frappe mechanism, with separate retention and a secure SFTP connection."), [
                     [t("Local backup"), source.local_backup_enabled ? t("Enabled") : t("Disabled")],
                     [t("Local schedule"), `${t(source.local_backup_frequency || "Daily")} · ${display(source.local_backup_time, "02:00")}`],
@@ -142,6 +155,39 @@
                     [t("Credentials"), (source.ssh_password_configured || source.ssh_private_key_configured) ? t("Saved securely") : t("Not set up")],
                 ], current)] : []),
             ];
+            return built;
+        }
+
+        function resolvePageInput(input = {}) {
+            if (
+                input
+                && typeof input === "object"
+                && Object.prototype.hasOwnProperty.call(input, "current")
+            ) {
+                return {
+                    current: input.current || {},
+                    activeTab: input.activeTab === "operational_files" ? "operational_files" : "settings",
+                };
+            }
+            return {
+                current: input || {},
+                activeTab: "settings",
+            };
+        }
+
+        function operationalFiles(current = {}) {
+            const presets = Array.isArray(current.cnc_tool_presets) ? current.cnc_tool_presets : [];
+            const machines = Array.isArray(current.cnc_machines) ? current.cnc_machines : [];
+            const profiles = Array.isArray(current.cnc_machining_profiles) ? current.cnc_machining_profiles : [];
+            return {
+                editable: sectionEditable(current, "cnc"),
+                presetCount: presets.length,
+                machineCount: machines.length,
+                profileCount: profiles.length,
+                presets,
+                machines,
+                profiles,
+            };
         }
 
         function legacy(current = {}) {
@@ -161,9 +207,13 @@
             ].map(([label, value]) => ({ label, value }));
         }
 
-        function page(current = {}) {
+        function page(input = {}) {
+            const resolved = resolvePageInput(input);
+            const current = resolved.current;
             return {
+                activeTab: resolved.activeTab,
                 sections: sections(current),
+                operationalFiles: operationalFiles(current),
                 legacy: legacy(current),
                 hasLegacy: Boolean(current.legacy_values && typeof current.legacy_values === "object"),
                 canManageWhatsAppSession: canManageWhatsAppSession(current),
@@ -181,6 +231,7 @@
             display,
             catalogLabel,
             sections,
+            operationalFiles,
             legacy,
             page,
         });

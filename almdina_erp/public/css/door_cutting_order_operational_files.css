@@ -1,0 +1,1017 @@
+.dco-operational-files {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    min-inline-size: 0;
+}
+.dco-operational-files__banner,
+.dco-operational-files__note,
+.dco-operational-files__meta {
+    margin: 0;
+    line-height: 1.5;
+}
+.dco-operational-files__banner,
+.dco-operational-sheet__warning {
+    padding-block: 0.75rem;
+    padding-inline: 1rem;
+    border: 1px solid var(--alm-warning-border, #e0b15a);
+    border-radius: 12px;
+    background: var(--alm-warning-bg, #fff7e8);
+    color: var(--alm-text-strong, #101828);
+}
+.dco-operational-files__gallery {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 1rem;
+}
+.dco-operational-files__sheet,
+.dco-operational-files__history,
+.dco-operational-layer {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    min-inline-size: 0;
+    padding-block: 1rem;
+    padding-inline: 1rem;
+    border: 1px solid var(--alm-card-border, #e4e8ee);
+    border-radius: 12px;
+    background: var(--alm-card, #fff);
+}
+.dco-operational-files__sheet-head,
+.dco-operational-files h3,
+.dco-operational-layer__head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    margin: 0;
+}
+.dco-operational-files__status,
+.dco-operational-path__badge {
+    display: inline-flex;
+    align-items: center;
+    padding-block: 0.25rem;
+    padding-inline: 0.7rem;
+    border-radius: 999px;
+    background: var(--alm-surface-muted, #f4f6f8);
+    font-size: 12px;
+    font-weight: 800;
+}
+.dco-operational-files__board,
+.dco-operational-sheet__preview {
+    min-inline-size: 0;
+}
+.dco-operational-files__board .dco-sheet-board,
+.dco-operational-sheet__preview .dco-sheet-board {
+    margin: 0;
+    max-inline-size: 100%;
+    height: auto;
+}
+.dco-operational-files__open,
+.dco-operational-files__actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+}
+.dco-operational-files__open {
+    align-self: flex-start;
+}
+.dco-operational-files__table {
+    inline-size: 100%;
+    border-collapse: collapse;
+}
+.dco-operational-files__table th,
+.dco-operational-files__table td {
+    padding-block: 0.45rem;
+    padding-inline: 0.5rem;
+    border-block-end: 1px solid var(--alm-card-border, #e4e8ee);
+    text-align: start;
+    vertical-align: middle;
+}
+.dco-operational-sheet {
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+    min-inline-size: 0;
+}
+.dco-operational-sheet__body {
+    /* Physical left = board preview in Arabic and English. */
+    direction: ltr;
+    display: grid;
+    grid-template-columns: minmax(0, 390px) minmax(16rem, 1fr);
+    gap: 1rem;
+    align-items: start;
+    min-inline-size: 0;
+}
+.dco-operational-sheet__preview,
+.dco-operational-sheet__settings {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    min-inline-size: 0;
+    overflow: visible;
+}
+.dco-operational-sheet__preview {
+    position: sticky;
+    inset-block-start: 0;
+    inline-size: 100%;
+    max-inline-size: 390px;
+}
+.dco-operational-sheet-dialog[dir="rtl"] .dco-operational-sheet__preview,
+.dco-operational-sheet-dialog[dir="rtl"] .dco-operational-sheet__settings,
+.dco-operational-sheet-dialog .dco-operational-sheet__settings,
+html[dir="rtl"] .dco-operational-sheet-dialog .dco-operational-sheet__settings,
+html[dir="rtl"] .dco-operational-sheet-dialog .dco-operational-sheet__preview {
+    direction: rtl;
+}
+.dco-operational-layers,
+.dco-operational-order,
+.dco-operational-sheet__placement {
+    display: grid;
+    gap: 0.75rem;
+    margin-block-end: 1rem;
+    padding: 0.85rem 1rem;
+    border: 1px solid var(--border-color, #d1d5db);
+    border-radius: 0.5rem;
+    background: var(--fg-color, #fff);
+}
+
+.dco-operational-sheet__placement h4 {
+    margin: 0;
+}
+
+.dco-operational-sheet__offsets {
+    display: grid;
+    gap: 0.75rem;
+    grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+}
+
+.dco-operational-sheet__offsets label,
+.dco-operational-sheet__placement .dco-operational-sheet__choice {
+    display: grid;
+    gap: 0.35rem;
+}
+
+.dco-cnc-cut-preview__machine {
+    vector-effect: non-scaling-stroke;
+}
+
+.dco-cnc-cut-preview__void {
+    opacity: 0.95;
+}
+
+.dco-cnc-cut-preview__sheet {
+    vector-effect: non-scaling-stroke;
+}
+
+.dco-operational-sheet__order {
+    display: flex;
+    flex-direction: column;
+    gap: 0.55rem;
+    min-inline-size: 0;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+.dco-operational-layers__list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    overflow: visible;
+}
+.dco-operational-order__item,
+.dco-operational-path {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 0.4rem;
+    padding-block: 0.3rem;
+    padding-inline: 0.5rem;
+    border: 1px solid var(--alm-card-border, #e4e8ee);
+    border-radius: 8px;
+    background: var(--alm-card, #fff);
+}
+.dco-operational-order__item.is-dragging {
+    opacity: 0.55;
+}
+.dco-operational-order__label {
+    flex: 1 1 auto;
+    min-inline-size: 0;
+    font-weight: 700;
+    font-size: 0.92rem;
+}
+.dco-operational-order__moves {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.15rem;
+    flex: 0 0 auto;
+}
+.dco-operational-order__move {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-inline-size: 1.75rem;
+    min-block-size: 1.75rem;
+    padding: 0.15rem;
+    line-height: 1;
+}
+.dco-operational-order__move .icon,
+.dco-operational-order__move svg {
+    inline-size: 0.95rem;
+    block-size: 0.95rem;
+}
+.dco-operational-order__arrow {
+    color: currentColor;
+    font-size: 1rem;
+    font-weight: 700;
+    line-height: 1;
+}
+.dco-operational-path {
+    flex-wrap: wrap;
+}
+.dco-operational-path__number {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-inline-size: 1.5rem;
+    min-block-size: 1.5rem;
+    margin-inline-end: 0.35rem;
+    padding-inline: 0.3rem;
+    border-radius: 999px;
+    background: #e8eef6;
+    color: #0b3a67;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+.dco-operational-path.is-selected .dco-operational-path__number {
+    background: #0b6bcb;
+    color: #fff;
+}
+.dco-operational-path__passes {
+    font-size: 0.82rem;
+    color: var(--text-muted, #6c7684);
+}
+.dco-operational-path.is-custom {
+    border-inline-start: 3px solid #9a6207;
+}
+.dco-operational-perimeter {
+    margin: 0.55rem 0 0.35rem;
+    padding: 0.45rem 0.55rem;
+    border: 1px solid var(--border-color, #d5dbe3);
+    border-radius: 6px;
+}
+.dco-operational-perimeter legend {
+    font-size: 0.82rem;
+    font-weight: 600;
+    padding-inline: 0.2rem;
+}
+.dco-operational-perimeter__option {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    margin: 0.2rem 0;
+    font-size: 0.84rem;
+    font-weight: 500;
+}
+.dco-operational-perimeter__option input {
+    margin: 0;
+}
+.dco-operational-path__sequence {
+    display: inline-flex;
+    gap: 0.2rem;
+    margin-inline: 0.25rem;
+}
+.dco-operational-path.is-sheet-perimeter .dco-operational-path__number {
+    background: #0b7285;
+    color: #fff;
+}
+.dco-operational-path.is-selected,
+.dco-operational-sheet__preview .dco-piece.is-cnc-path-selected {
+    outline: 3px solid #0b6bcb;
+    outline-offset: -3px;
+}
+.dco-operational-sheet__preview .dco-piece.is-cnc-path-selected {
+    z-index: 30;
+}
+.dco-operational-sheet__preview .dco-extra-overlay-path {
+    pointer-events: auto;
+}
+.dco-operational-sheet__preview .dco-extra-overlay-path.is-cnc-path-selected {
+    stroke: #0b6bcb !important;
+    stroke-width: 2.2px;
+}
+.dco-operational-sheet select,
+.dco-operational-layer select,
+.dco-operational-preset-link,
+.dco-operational-preset-link .frappe-control,
+.dco-operational-preset-link .control-input {
+    min-inline-size: 10rem;
+    min-block-size: 2.25rem;
+}
+.dco-operational-path__preset {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem;
+}
+.dco-operational-layers__tools {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+}
+.dco-operational-layers__tools h4,
+.dco-operational-sheet__order h4,
+.dco-operational-layer__source,
+.dco-operational-layer__facts,
+.dco-operational-sheet__note {
+    margin: 0;
+}
+.dco-operational-layer__choice {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    flex: 1 1 16rem;
+    font-weight: 700;
+}
+.dco-operational-layer__choice select,
+.dco-operational-layer__choice .dco-operational-preset-link {
+    min-inline-size: 16rem;
+    min-block-size: 2.75rem;
+    font-weight: 700;
+}
+.dco-operational-layer__source {
+    font-size: 12px;
+    font-weight: 800;
+}
+.dco-operational-layer__issue,
+.dco-operational-sheet__note {
+    color: var(--text-muted, #687481);
+}
+.dco-operational-path__effective {
+    color: var(--text-muted, #687481);
+}
+.dco-operational-files__note,
+.dco-operational-sheet__selection,
+.dco-cnc-program__note {
+    margin: 0;
+    color: var(--text-muted, #687481);
+}
+.dco-operational-sheet__preview .dco-sheet-board {
+    position: relative;
+    inline-size: 100%;
+    max-inline-size: 390px;
+    block-size: auto;
+    height: auto !important;
+}
+.dco-cnc-cut-preview {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    inline-size: 100%;
+    max-inline-size: 390px;
+    min-inline-size: 0;
+}
+.dco-cnc-sheet-page .dco-cnc-cut-preview {
+    max-inline-size: 390px;
+}
+.dco-cnc-cut-preview__zoom {
+    display: inline-flex;
+    gap: 0.25rem;
+    align-items: center;
+    flex: 0 0 auto;
+    position: relative;
+    z-index: 2;
+}
+.dco-cnc-cut-preview__viewport {
+    position: relative;
+    z-index: 1;
+    overflow: hidden;
+    contain: paint;
+    clip-path: inset(0 round 8px);
+    inline-size: 100%;
+    min-inline-size: 0;
+    background: #f7f9fc;
+    border: 1px solid var(--alm-card-border, #e4e8ee);
+    border-radius: 8px;
+    touch-action: none;
+    overscroll-behavior: contain;
+    user-select: none;
+}
+.dco-cnc-cut-preview__viewport.is-panning-enabled {
+    cursor: grab;
+}
+.dco-cnc-cut-preview__viewport.is-panning {
+    cursor: grabbing;
+}
+.dco-cnc-cut-preview__stage {
+    position: relative;
+    inline-size: 100%;
+    block-size: 100%;
+    transform-origin: center center;
+    will-change: transform;
+}
+.dco-cnc-cut-preview__svg {
+    display: block;
+    inline-size: 100%;
+    block-size: auto;
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+}
+.dco-cnc-cut-preview__frame {
+    stroke: #17202a;
+    stroke-width: 1.25;
+    vector-effect: non-scaling-stroke;
+}
+.dco-cnc-cut-preview__path,
+.dco-cnc-cut-preview__arrow {
+    fill: none;
+}
+.dco-cnc-cut-preview__execution.is-dxf-display-geometry .dco-cnc-cut-preview__path {
+    stroke-width: 2.5px;
+    stroke-linecap: round;
+}
+.dco-cnc-cut-preview__execution.is-cnc-path-selected .dco-cnc-cut-preview__path,
+.dco-cnc-cut-preview__execution.is-cnc-path-selected .dco-cnc-cut-preview__arrow {
+    stroke-width: 2.6;
+}
+.dco-cnc-cut-preview__execution.is-cnc-path-selected .dco-cnc-cut-preview__start {
+    fill: #0b6bcb;
+}
+.dco-cnc-cut-preview__labels {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+}
+.dco-cnc-cut-preview__dims {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 1;
+}
+.dco-cnc-cut-preview__dim {
+    position: absolute;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0;
+    color: #4b5563;
+    font-size: 0.75rem;
+    font-weight: 600;
+    line-height: 1.2;
+    text-align: center;
+    pointer-events: none;
+    transform: scale(calc(1 / var(--cut-zoom, 1)));
+    transform-origin: center center;
+}
+.dco-cnc-cut-preview__dim--left {
+    writing-mode: horizontal-tb;
+}
+.dco-cnc-cut-preview__dim--bottom {
+    align-items: flex-end;
+    padding-block-end: 0.15rem;
+}
+.dco-cnc-cut-preview__legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.55rem 0.9rem;
+    align-items: center;
+    position: relative;
+    z-index: 2;
+    flex: 0 0 auto;
+}
+.dco-cnc-cut-preview__legend-item {
+    display: inline-flex;
+    gap: 0.35rem;
+    align-items: center;
+    margin: 0;
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+.dco-cnc-cut-preview__swatch {
+    inline-size: 0.85rem;
+    block-size: 0.85rem;
+    border-radius: 2px;
+    border: 1px solid rgba(23, 32, 42, 0.2);
+}
+.dco-cnc-cut-preview__badge {
+    position: absolute;
+    transform: translate(-50%, -120%) scale(calc(1 / var(--cut-zoom, 1)));
+    transform-origin: center bottom;
+    pointer-events: auto;
+    min-inline-size: 1.5rem;
+    min-block-size: 1.5rem;
+    padding: 0.1rem 0.35rem;
+    border: 1px solid #d7dee8;
+    border-radius: 999px;
+    background: #fff;
+    color: #17202a;
+    font-size: 14px;
+    font-weight: 800;
+    line-height: 1.2;
+    box-shadow: 0 1px 2px rgba(23, 32, 42, 0.12);
+}
+.dco-cnc-cut-preview__badge.is-cnc-path-selected {
+    border-color: #0b6bcb;
+    color: #0b6bcb;
+}
+.dco-cnc-sheet-page {
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+    min-block-size: calc(100vh - 7rem);
+    padding-block: clamp(0.75rem, 1.6vw, 1.5rem) clamp(1rem, 2.2vw, 2rem);
+    padding-inline: clamp(0.9rem, 2.8vw, 2.25rem);
+    box-sizing: border-box;
+    overflow-x: hidden;
+}
+.dco-cnc-sheet-page__toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 0.75rem;
+    align-items: flex-start;
+}
+.dco-cnc-sheet-page__identity h1,
+.dco-cnc-sheet-page__identity p {
+    margin: 0;
+}
+.dco-cnc-sheet-page__actions,
+.dco-operational-sheet__export-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    align-items: center;
+}
+.dco-cnc-sheet-page[dir="rtl"] .dco-operational-sheet__settings,
+html[dir="rtl"] .dco-cnc-sheet-page .dco-operational-sheet__settings {
+    direction: rtl;
+}
+.dco-operational-sheet__export {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.75rem;
+    margin: 0;
+    padding: 0;
+}
+.dco-operational-sheet__post-processor {
+    display: grid;
+    gap: 0.35rem;
+    margin: 0;
+    font-size: 13px;
+    font-weight: 700;
+}
+.dco-operational-sheet__post-processor select.form-control {
+    width: 100%;
+    max-width: 100%;
+    height: var(--input-height, 32px);
+    min-height: var(--input-height, 32px);
+    padding-inline: 12px;
+    border: 1px solid var(--border-color, #d1d8dd);
+    border-radius: var(--border-radius, 8px);
+    background-color: var(--fg-color, #fff);
+    color: var(--text-color, #1f272e);
+    font-weight: 600;
+    box-shadow: none;
+}
+.dco-operational-sheet__post-processor select.form-control:focus {
+    border-color: var(--primary, #171717);
+    outline: none;
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary, #171717) 16%, transparent);
+}
+.dco-cnc-sheet-page__workspace {
+    flex: 1 1 auto;
+    min-block-size: 0;
+}
+.dco-cnc-sheet-page .dco-operational-sheet__body {
+    grid-template-columns: minmax(0, 390px) minmax(16rem, 1fr);
+    align-items: start;
+}
+.dco-cnc-sheet-page .dco-operational-sheet__preview {
+    position: sticky;
+    inset-block-start: 0;
+    max-inline-size: 390px;
+    min-inline-size: 0;
+    overflow: visible;
+}
+.dco-cnc-sheet-page .dco-operational-sheet__settings {
+    position: relative;
+    z-index: 3;
+    max-block-size: none;
+    overflow: visible;
+}
+@media (max-width: 900px) {
+    .dco-cnc-sheet-page .dco-operational-sheet__body {
+        grid-template-columns: minmax(0, 1fr);
+    }
+    .dco-cnc-sheet-page .dco-operational-sheet__preview {
+        position: static;
+    }
+}
+body.dco-cnc-sheet-settings-active .layout-main-section {
+    max-width: none;
+}
+.dco-cnc-program__drawing {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 40;
+    pointer-events: none;
+    overflow: visible;
+}
+.dco-cnc-program__steps {
+    margin: 0.4rem 0 0;
+    padding-inline-start: 1.25rem;
+}
+.dco-cnc-program__error {
+    margin: 0.15rem 0 0;
+    color: #8a1c1c;
+}
+.dco-cnc-program__label {
+    font-size: 12px;
+    fill: #17202a;
+}
+/* Single vertical scroller for this sheet dialog only: modal-body scrolls; content/footer do not. */
+.dco-operational-sheet-dialog .modal-dialog {
+    max-block-size: min(92vh, 56rem);
+}
+.dco-operational-sheet-dialog .modal-content {
+    display: flex;
+    flex-direction: column;
+    max-block-size: min(92vh, 56rem);
+    overflow: hidden;
+}
+.dco-operational-sheet-dialog .modal-header,
+.dco-operational-sheet-dialog .modal-footer {
+    flex: 0 0 auto;
+}
+.dco-operational-sheet-dialog .modal-body {
+    flex: 1 1 auto;
+    min-block-size: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    max-block-size: none;
+}
+.dco-operational-sheet-dialog .modal-body .form-group,
+.dco-operational-sheet-dialog .modal-body .frappe-control,
+.dco-operational-sheet-dialog .modal-body .control-input-wrapper,
+.dco-operational-sheet-dialog .dco-operational-sheet,
+.dco-operational-sheet-dialog .dco-operational-sheet__body,
+.dco-operational-sheet-dialog .dco-operational-sheet__settings,
+.dco-operational-sheet-dialog .dco-operational-layers__list {
+    overflow: visible;
+    max-block-size: none;
+}
+.dco-operational-sheet-dialog .modal-footer {
+    position: static;
+}
+@media (max-width: 720px) {
+    .dco-operational-sheet__body {
+        grid-template-columns: minmax(0, 1fr);
+    }
+    .dco-operational-sheet__preview {
+        position: static;
+        max-inline-size: min(390px, 100%);
+    }
+}
+.dco-operational-sheet .dco-artcam {
+    display: grid;
+    gap: 12px;
+}
+.dco-operational-sheet .dco-artcam-editor {
+    display: grid;
+    gap: 8px;
+}
+.dco-operational-sheet .dco-artcam-row {
+    display: grid;
+    gap: 8px 12px;
+    min-width: 0;
+}
+.dco-operational-sheet .dco-artcam-row--main,
+.dco-operational-sheet .dco-artcam-row--home {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.dco-operational-sheet .dco-artcam-row--pair {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.dco-operational-sheet .dco-artcam-row--tool {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.dco-operational-sheet .dco-artcam-home {
+    display: grid;
+    gap: 4px;
+}
+.dco-operational-sheet .dco-artcam-field {
+    display: grid;
+    gap: 4px;
+    min-width: 0;
+    margin: 0;
+    font-size: var(--text-sm, 12px);
+}
+.dco-operational-sheet .dco-artcam-field .form-control {
+    width: 100%;
+    min-width: 0;
+    min-height: var(--input-height, 28px);
+}
+.dco-operational-sheet .dco-artcam-tool {
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+}
+.dco-operational-sheet .dco-artcam-tool.is-collapsed .dco-artcam-tool__body {
+    display: none;
+}
+.dco-operational-sheet .dco-artcam-tool__body {
+    display: grid;
+    gap: 8px;
+    padding: 0 10px 10px;
+}
+.dco-operational-sheet .dco-artcam-saved {
+    display: grid;
+    gap: 8px;
+}
+.dco-operational-sheet .dco-artcam-saved__item {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+    align-items: center;
+    padding: 8px 10px;
+    border: 1px solid var(--border-color, #dfe4e8);
+    border-radius: 10px;
+}
+.dco-operational-sheet .dco-artcam-saved__open {
+    display: grid;
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    text-align: start;
+}
+.dco-operational-sheet .dco-sheet-acc {
+    margin: 0 0 12px;
+    border: 1px solid var(--border-color, #dfe4e8);
+    border-radius: var(--alm-radius-card, 16px);
+    background: var(--card-bg, #fff);
+    box-shadow: var(--alm-shadow-card, 0 1px 2px rgba(15, 23, 42, 0.04));
+    overflow: hidden;
+}
+.dco-operational-sheet .dco-sheet-acc__title {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 13px 16px;
+    border-bottom: 1px solid var(--border-color, #dfe4e8);
+    background: var(--subtle-fg, #f8fafb);
+}
+.dco-operational-sheet .dco-sheet-acc.is-collapsed .dco-sheet-acc__title {
+    border-bottom: 0;
+}
+.dco-operational-sheet .dco-sheet-acc__title h4 {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 900;
+}
+.dco-operational-sheet .dco-sheet-acc__toggle {
+    appearance: none;
+    display: inline-grid;
+    place-items: center;
+    width: 26px;
+    height: 26px;
+    min-width: 26px;
+    padding: 0;
+    border: 1px solid var(--border-color, #dfe4e8);
+    border-radius: 7px;
+    background: var(--card-bg, #fff);
+    color: var(--text-muted, #66727d);
+    font-size: 0;
+    cursor: pointer;
+}
+.dco-operational-sheet .dco-sheet-acc__toggle::before {
+    content: "⌄";
+    font-size: 17px;
+    line-height: 1;
+    transition: transform .16s ease;
+}
+.dco-operational-sheet .dco-sheet-acc__toggle[aria-expanded="true"]::before {
+    transform: rotate(180deg);
+}
+.dco-operational-sheet .dco-sheet-acc.is-collapsed > .dco-sheet-acc__body {
+    display: none;
+}
+.dco-operational-sheet .dco-sheet-acc__body {
+    padding: 12px 16px 16px;
+}
+.dco-tool-disclosure {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    min-width: 32px;
+    min-height: 32px;
+    margin: 0;
+    padding: 4px 6px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    line-height: 1.3;
+    text-align: start;
+    cursor: pointer;
+}
+.dco-tool-disclosure:hover {
+    background: rgba(15, 23, 42, 0.06);
+}
+.dco-tool-disclosure__chevron {
+    width: 18px;
+    height: 18px;
+    flex: 0 0 18px;
+    background: currentColor;
+    clip-path: polygon(18% 34%, 50% 66%, 82% 34%, 72% 24%, 50% 46%, 28% 24%);
+}
+.dco-tool-disclosure[aria-expanded="false"] .dco-tool-disclosure__chevron {
+    transform: rotate(-90deg);
+}
+[dir="rtl"] .dco-tool-disclosure[aria-expanded="false"] .dco-tool-disclosure__chevron {
+    transform: rotate(90deg);
+}
+.dco-tool-picker {
+    position: relative;
+    min-width: 0;
+}
+.dco-tool-picker__caption {
+    display: block;
+    margin-bottom: 4px;
+}
+.dco-tool-picker__face {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    min-height: 32px;
+    padding: 6px 10px;
+    border: 1px solid var(--border-color, #d1d8dd);
+    border-radius: var(--border-radius, 8px);
+    background: var(--control-bg, #fff);
+    color: inherit;
+    font: inherit;
+    line-height: 1.3;
+    text-align: start;
+    cursor: pointer;
+}
+.dco-tool-picker__face:hover {
+    background: rgba(15, 23, 42, 0.04);
+}
+.dco-tool-picker__value {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.dco-tool-picker__chevron {
+    width: 0;
+    height: 0;
+    flex: 0 0 auto;
+    margin-inline-start: 8px;
+    border-inline-start: 5px solid transparent;
+    border-inline-end: 5px solid transparent;
+    border-top: 6px solid currentColor;
+}
+.dco-tool-picker__panel {
+    position: static;
+    margin-top: 8px;
+    padding: 10px;
+    border: 1px solid var(--border-color, #d1d8dd);
+    border-radius: var(--border-radius, 8px);
+    background: var(--card-bg, #fff);
+}
+.dco-tool-picker__change,
+.dco-tool-picker__setting {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin: 0;
+}
+.dco-tool-picker__settings {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    margin-top: 8px;
+}
+.dco-tool-picker__note {
+    grid-column: 1 / -1;
+    margin: 0;
+}
+.dco-tool-picker-native {
+    display: none !important;
+}
+[dir="rtl"] .dco-tool-picker__face,
+[dir="ltr"] .dco-tool-picker__face {
+    text-align: start;
+}
+.dco-operational-sheet .dco-cnc-cut-preview__arrow {
+    display: none;
+}
+.dco-operational-sheet .dco-cnc-cut-preview__execution.is-cnc-path-selected .dco-cnc-cut-preview__arrow {
+    display: inline;
+}
+.dco-operational-sheet .dco-cnc-cut-preview__execution.is-layer-active .dco-cnc-cut-preview__path {
+    stroke: #F59E0B;
+    stroke-width: 2.4px;
+}
+.dco-operational-sheet .dco-cnc-cut-preview__execution.is-assigned .dco-cnc-cut-preview__path {
+    stroke: #6D597A;
+}
+.dco-operational-sheet .dco-cnc-cut-preview__execution.is-assigned,
+.dco-operational-sheet .dco-cnc-cut-preview__execution.is-assigned .dco-cnc-cut-preview__hit {
+    pointer-events: none;
+}
+.dco-operational-sheet .dco-operational-path.is-assigned {
+    opacity: 0.72;
+}
+.dco-operational-sheet .dco-cnc-cut-preview__execution.is-vector-picked .dco-cnc-cut-preview__path {
+    stroke: #EC4899;
+    stroke-width: 2.4px;
+}
+.dco-operational-sheet .dco-cnc-cut-preview__execution.is-association-hidden {
+    display: none;
+}
+.dco-operational-sheet .dco-path-menu {
+    position: fixed;
+    z-index: 40;
+    min-inline-size: 168px;
+    padding: 4px;
+    border: 1px solid var(--border-color, #dfe4e8);
+    border-radius: 8px;
+    background: var(--card-bg, #fff);
+    box-shadow: var(--alm-shadow-card, 0 8px 20px rgba(15, 23, 42, 0.12));
+}
+.dco-operational-sheet .dco-path-menu[hidden] {
+    display: none;
+}
+.dco-operational-sheet .dco-path-menu button {
+    display: block;
+    inline-size: 100%;
+    padding: 6px 8px;
+    border: 0;
+    background: transparent;
+    text-align: start;
+}
+.dco-operational-sheet .dco-operational-order__item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+.dco-operational-sheet .dco-operational-order__label {
+    min-inline-size: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    text-align: start;
+}
+.dco-operational-sheet .dco-operational-order__moves {
+    display: inline-flex;
+    flex: 0 0 auto;
+    gap: 4px;
+}
+.dco-operational-sheet .dco-cnc-cut-preview__hit {
+    pointer-events: stroke;
+}
+.dco-operational-sheet .dco-cnc-cut-preview__machine,
+.dco-operational-sheet .dco-cnc-cut-preview__void,
+.dco-operational-sheet .dco-cnc-cut-preview__sheet,
+.dco-operational-sheet .dco-cnc-cut-preview__frame,
+.dco-operational-sheet .dco-cnc-cut-preview__origin,
+.dco-operational-sheet .dco-cnc-cut-preview__path,
+.dco-operational-sheet .dco-cnc-cut-preview__arrow,
+.dco-operational-sheet .dco-cnc-cut-preview__start-mark,
+.dco-operational-sheet .dco-cnc-cut-preview__finish {
+    pointer-events: none;
+}
+.dco-operational-sheet .dco-artcam-note {
+    margin: 0;
+    color: var(--text-muted, #687481);
+}
+.dco-operational-sheet .dco-artcam-status.is-error {
+    color: var(--red-500, #b42318);
+}
+@media (max-width: 900px) {
+    .dco-operational-sheet .dco-artcam-row--main,
+    .dco-operational-sheet .dco-artcam-row--tool {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+@media (max-width: 640px) {
+    .dco-operational-sheet .dco-artcam-row--pair,
+    .dco-operational-sheet .dco-artcam-row--home {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}

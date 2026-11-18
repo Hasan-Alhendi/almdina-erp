@@ -422,6 +422,7 @@
                 if (child.classList.contains("dco-plan-meta-strip")) return;
                 if (child.classList.contains("dco-special-raw-coverage")) return;
                 if (child.classList.contains("dco-margin-policy-alert")) return;
+                if (child.classList.contains("dco-unplaced-pieces-warning")) return;
                 const text = (child.textContent || "").replace(/\s+/g, " ").trim();
                 const isDuplicatedHeader =
                     (text.includes(LEGACY_HEADER_ORDER) && (text.includes(LEGACY_HEADER_CUSTOMER) || text.includes(LEGACY_HEADER_BOARD) || text.includes(LEGACY_HEADER_ITEM))) ||

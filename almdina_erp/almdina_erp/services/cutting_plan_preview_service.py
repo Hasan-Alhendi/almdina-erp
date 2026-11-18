@@ -302,7 +302,17 @@ def _build_session(order,source,settings,*,previous=None):
     if previous:
         candidates = merge_preview_candidates(candidates,previous.candidates)
     if not candidates:
-        frappe.throw(_("No manufacturing-valid cutting plan was found."),frappe.ValidationError)
+        from almdina_erp.almdina_erp.domain.cutting.plan_portfolio import (
+            manufacturing_failure_sentences,
+        )
+        rejections = (
+            ((outcome.snapshot.get("smart_search") or {}).get("portfolio") or {}).get("rejections")
+            or {}
+        )
+        frappe.throw(
+            "\n".join(_(sentence) for sentence in manufacturing_failure_sentences(rejections)),
+            frappe.ValidationError,
+        )
     first = next(iter(candidates.values()))
     session = CuttingPlanPreviewSession(preview_id=frappe.generate_hash(length=32),order_name=order.name,
         user=frappe.session.user,source_plan_name=source.name,source_plan_modified=str(source.modified or ''),

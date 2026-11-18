@@ -109,7 +109,7 @@ assert.equal(model.display(null), "—");
 assert.equal(model.values(current).default_kerf_mm, 5);
 
 const sections = model.sections(current);
-assert.equal(sections.length, 6);
+assert.equal(sections.length, 7);
 assert.deepEqual(
     JSON.parse(JSON.stringify(sections.map(section => [section.key, section.editable]))),
     [
@@ -119,6 +119,7 @@ assert.deepEqual(
         ["production", true],
         ["print_identity", false],
         ["whatsapp_messages", true],
+        ["cnc", false],
     ]
 );
 assert.equal(sections[0].rows[0].value, 5);
@@ -152,8 +153,26 @@ assert.equal(legacy[9].value, "5 USD");
 const page = model.page(current);
 assert.equal(page.hasLegacy, true);
 assert.equal(page.canManageWhatsAppSession, true);
-assert.equal(page.sections.length, 6);
+assert.equal(page.sections.length, 7);
 assert.equal(page.legacy.length, 10);
+assert.equal(page.activeTab, "settings");
+assert.equal(page.operationalFiles.editable, false);
+assert.equal(page.operationalFiles.presetCount, 0);
+
+const tabbed = model.page({
+    current: Object.assign({}, current, {
+        cnc_tool_presets: [{ name: "Finish" }, { name: "Shallow" }],
+        permissions: Object.assign({}, current.permissions, {
+            sections: Object.assign({}, current.permissions.sections, {
+                cnc: { editable: true },
+            }),
+        }),
+    }),
+    activeTab: "operational_files",
+});
+assert.equal(tabbed.activeTab, "operational_files");
+assert.equal(tabbed.operationalFiles.editable, true);
+assert.equal(tabbed.operationalFiles.presetCount, 2);
 
 const backupCurrent = JSON.parse(JSON.stringify(current));
 backupCurrent.permissions.can_manage_backups = true;
@@ -166,11 +185,11 @@ backupCurrent.values.external_backup_enabled = 0;
 backupCurrent.values.external_backup_frequency = "Weekly";
 backupCurrent.values.external_backup_retention = 4;
 const backupPage = model.page(backupCurrent);
-assert.equal(backupPage.sections.length, 7);
-assert.equal(backupPage.sections[6].key, "backup_restore");
+assert.equal(backupPage.sections.length, 8);
+assert.equal(backupPage.sections[7].key, "backup_restore");
 assert.equal(backupPage.showBackupPanel, true);
-assert.equal(backupPage.sections[6].rows[2].value, "Last 7 backups");
-assert.equal(backupPage.sections[6].rows[5].value, "Last 4 backups");
+assert.equal(backupPage.sections[7].rows[2].value, "Last 7 backups");
+assert.equal(backupPage.sections[7].rows[5].value, "Last 4 backups");
 
 const arModel = moduleApi.create({
     translate(message, replacements) {
@@ -191,8 +210,8 @@ const arModel = moduleApi.create({
     },
 });
 const arBackup = arModel.page(backupCurrent);
-assert.equal(arBackup.sections[6].rows[2].value, "آخر 7 نسخ احتياطية");
-assert.equal(arModel.sections(current)[0].rows[5].value, 5);
+assert.equal(arBackup.sections[7].rows[2].value, "آخر 7 نسخ احتياطية");
+assert.equal(arModel.sections(current)[0].rows[5].value, "تلقائي");
 
 const restoreOnly = model.page({
     values: {},
