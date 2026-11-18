@@ -412,11 +412,10 @@ const corners = {
 };
 Object.keys(corners).forEach(position => {
     const entry = openMachine(position);
-    assert.deepStrictEqual(visibleStops(entry), corners[position]);
+    assert.deepStrictEqual(visibleStops(entry), []);
     ["left_stop_cm", "right_stop_cm", "bottom_stop_cm", "top_stop_cm"].forEach(name => {
-        const shown = corners[position].includes(name);
-        assert.strictEqual(Number(entry.fields_dict[name].df.reqd), shown ? 1 : 0);
-        assert.strictEqual(Number(entry.fields_dict[name].df.hidden || 0), shown ? 0 : 1);
+        assert.strictEqual(Number(entry.fields_dict[name].df.reqd), 0);
+        assert.strictEqual(Number(entry.fields_dict[name].df.hidden || 0), 1);
     });
     assert.strictEqual(entry.fields_dict.post_processor.option.textContent, "IMA-WH (*.nc)");
     assert.strictEqual(entry.fields_dict.post_processor._value, "ima_wh_ncstudio");
@@ -426,13 +425,13 @@ const switching = openMachine("Bottom Left");
 ["Bottom Right", "Top Left", "Top Right", "Bottom Left"].forEach(position => {
     switching.fields_dict.work_zero_position._value = position;
     switching.fields_dict.work_zero_position.df.change.call(switching.fields_dict.work_zero_position);
-    assert.deepStrictEqual(visibleStops(switching), corners[position]);
+    assert.deepStrictEqual(visibleStops(switching), []);
     assert.strictEqual(switching.doc.work_zero_position, position);
 });
 const reopened = openMachine("Top Right");
 reopened.fields_dict.right_stop_cm._value = 0;
 reopened.fields_dict.top_stop_cm._value = 0;
-assert.deepStrictEqual(visibleStops(reopened), ["right_stop_cm", "top_stop_cm"]);
+assert.deepStrictEqual(visibleStops(reopened), []);
 assert.strictEqual(reopened.fields_dict.right_stop_cm._value, 0);
 const refreshed = openMachine("Bottom Left");
 refreshed.fields_dict.right_stop_cm.df.hidden = 0;
@@ -440,7 +439,7 @@ refreshed.fields_dict.right_stop_cm.df.reqd = 1;
 refreshed.fields_dict.top_stop_cm.df.hidden = 0;
 refreshed.fields_dict.right_stop_cm.refresh();
 refreshed.fields_dict.top_stop_cm.refresh();
-assert.deepStrictEqual(visibleStops(refreshed), ["left_stop_cm", "bottom_stop_cm"]);
+assert.deepStrictEqual(visibleStops(refreshed), []);
 assert.strictEqual(Number(refreshed.fields_dict.right_stop_cm.df.reqd), 0);
 assert.strictEqual(Number(refreshed.fields_dict.top_stop_cm.df.reqd), 0);
 const translatedZero = openMachine("Bottom Left");
@@ -448,7 +447,7 @@ translatedZero.doc.work_zero_position = "Top Right";
 translatedZero.fields_dict.work_zero_position.get_value = () => "أعلى اليمين";
 translatedZero.fields_dict.work_zero_position.df.change.call(translatedZero.fields_dict.work_zero_position);
 assert.strictEqual(translatedZero.doc.work_zero_position, "Top Right");
-assert.deepStrictEqual(visibleStops(translatedZero), ["right_stop_cm", "top_stop_cm"]);
+assert.deepStrictEqual(visibleStops(translatedZero), []);
 english.frappe.ui.form.make_quick_entry = function makeBaseQuickEntry(doctype) {
     const entry = new english.frappe.ui.form.QuickEntryForm(doctype, null, null, {
         doctype,
@@ -463,7 +462,7 @@ english.frappe.ui.form.make_quick_entry = function makeBaseQuickEntry(doctype) {
 assert.strictEqual(english.AlmdinaCncLabels.installQuickEntryForms(), true);
 const baseDialog = english.frappe.ui.form.make_quick_entry("CNC Machine");
 assert.strictEqual(baseDialog.constructor, english.frappe.ui.form.QuickEntryForm);
-assert.deepStrictEqual(visibleStops(baseDialog), ["left_stop_cm", "top_stop_cm"]);
+assert.deepStrictEqual(visibleStops(baseDialog), []);
 const css = fs.readFileSync(path.join(root, "public/css/door_cutting_order_operational_files.css"), "utf8");
 const panelRule = css.slice(css.indexOf(".dco-tool-picker__panel {"), css.indexOf(".dco-tool-picker__change"));
 assert.ok(panelRule.includes("position: static"));

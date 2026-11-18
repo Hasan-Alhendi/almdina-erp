@@ -138,6 +138,67 @@ class TestNativeDocumentPermissions(unittest.TestCase):
                         permission(doc, user="worker@example.com", ptype=ptype)
                     )
 
+    def test_board_editor_command_allows_create_and_write_without_other_mutations(self) -> None:
+        from almdina_erp.almdina_erp.domain.security.authorization import Capability
+        from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_command_context import (
+            PLAN_COMMAND_FLAG,
+        )
+
+        class Flags(dict):
+            pass
+
+        authorized = SimpleNamespace(
+            flags=Flags({PLAN_COMMAND_FLAG: Capability.USE_BOARD_EDITOR})
+        )
+        self.assertTrue(
+            native_permissions.cutting_plan_has_permission(
+                authorized,
+                user="editor@example.com",
+                ptype="create",
+            )
+        )
+        self.assertTrue(
+            native_permissions.cutting_plan_has_permission(
+                authorized,
+                user="editor@example.com",
+                ptype="write",
+            )
+        )
+        for ptype in ("delete", "submit", "cancel", "amend"):
+            with self.subTest(ptype=ptype):
+                self.assertFalse(
+                    native_permissions.cutting_plan_has_permission(
+                        authorized,
+                        user="editor@example.com",
+                        ptype=ptype,
+                    )
+                )
+
+        bare = SimpleNamespace(flags=Flags())
+        self.assertFalse(
+            native_permissions.cutting_plan_has_permission(
+                bare,
+                user="editor@example.com",
+                ptype="create",
+            )
+        )
+        self.assertFalse(
+            native_permissions.cutting_plan_has_permission(
+                bare,
+                user="editor@example.com",
+                ptype="write",
+            )
+        )
+
+        unrelated = SimpleNamespace(flags=Flags({PLAN_COMMAND_FLAG: "edit_order"}))
+        self.assertFalse(
+            native_permissions.cutting_plan_has_permission(
+                unrelated,
+                user="editor@example.com",
+                ptype="write",
+            )
+        )
+
     def test_read_still_delegates_to_existing_scoped_policy(self) -> None:
         doc = SimpleNamespace(name="ROW-1")
         base = native_permissions._test_base

@@ -24,7 +24,14 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def _machine(**overrides):
-    values = {"name": "IMA Router", "width_cm": 160.0, "length_cm": 360.0, "enabled": True}
+    values = {
+        "name": "IMA Router",
+        "width_cm": 160.0,
+        "length_cm": 360.0,
+        "enabled": True,
+        "width_stop_side": "Left Side",
+        "length_stop_side": "Bottom Side",
+    }
     values.update(overrides)
     return values
 
@@ -150,10 +157,10 @@ def test_ima_wh_golden_file_matches_artcam_format_rules():
     assert "\n" not in text.replace("\r\n", "")
     assert text.startswith("G90\r\nG40 G80\r\nG54\r\nG53 Z0\r\nT9\r\nM3 S15000\r\n")
     assert text.endswith("G80\r\nM5\r\nG53 X1500.0 Y3500.0 Z0\r\nM30\r\n;\r\n")
-    assert "N60 G0 X400.0000 Y550.0000 Z20.0000" in text
+    assert "N60 G0 X680.0000 Y1660.0000 Z20.0000" in text
     assert "N70 G1 Z-10.0000 F1800.0" in text
-    assert "N80 G1 Y850.0000 F10200.0" in text
-    assert "N90 X420.0000" in text
+    assert "N80 G1 Y1960.0000 F10200.0" in text
+    assert "N90 X700.0000" in text
     assert "G21" not in text
     assert "M6" not in text
     assert "(" not in text
@@ -198,10 +205,10 @@ def test_sheet_offset_is_applied_once_and_not_to_home_or_g53():
     home = placed["operations"][0]["toolpaths"][0]["home"]
     assert home["x_mm"] == 0
     assert home["y_mm"] == 2440
-    assert placed["operations"][0]["toolpaths"][0]["motions"][0]["x_mm"] == 400
-    assert placed["operations"][0]["toolpaths"][0]["motions"][0]["y_mm"] == 550
+    assert placed["operations"][0]["toolpaths"][0]["motions"][0]["x_mm"] == 680
+    assert placed["operations"][0]["toolpaths"][0]["motions"][0]["y_mm"] == 1660
     text = _export(program, placement)["text"]
-    assert "X400.0000 Y550.0000" in text
+    assert "X680.0000 Y1660.0000" in text
     assert "X500.0000" not in text
     assert "G0 X0.0000 Y2440.0000 Z120.0000" in text
     assert "G53 X1500.0 Y3500.0 Z0" in text
@@ -367,8 +374,8 @@ def test_modal_program_matches_the_intermediate_cuts_and_ignores_g53():
     assert state.unsafe_rapids == ()
     cuts = [motion for motion in state.motions if motion.kind == "cut"]
     assert [(round(motion.x_mm, 4), round(motion.y_mm, 4)) for motion in cuts] == [
-        (400.0, 850.0),
-        (420.0, 850.0),
+        (680.0, 1960.0),
+        (700.0, 1960.0),
     ]
     assert all(abs(motion.z_mm + 10) < 0.001 for motion in cuts)
     assert state.machine_moves[-1].x_mm == 1500.0
@@ -399,8 +406,8 @@ def test_reversed_and_separate_motion_order_is_preserved():
         state = interpret_nc(text, safe_z_mm=20, allowed_safe_z_mm=(20, 120))
         return [(round(motion.x_mm, 4), round(motion.y_mm, 4)) for motion in state.motions if motion.kind == "cut"]
 
-    assert cut_xy(forward_text) == [(400.0, 850.0), (420.0, 850.0)]
-    assert cut_xy(reversed_text) == [(400.0, 550.0), (400.0, 850.0)]
+    assert cut_xy(forward_text) == [(680.0, 1960.0), (700.0, 1960.0)]
+    assert cut_xy(reversed_text) == [(680.0, 1660.0), (680.0, 1960.0)]
     separate = _program(
         _path(
             [(100, 100), (140, 100)],

@@ -324,6 +324,14 @@ assert.ok(translations.includes("غير مهيأ"));
 assert.ok(translations.includes("تم حفظ الإعدادات"));
 assert.ok(translations.includes("جارٍ تحميل مسارات القص"));
 assert.ok(translations.includes("لا توجد مسارات قص متاحة لمعاينة هذا اللوح"));
+const readyCard = ux.sheetCardActions({ sheet_no: 1, status: "Settings Saved", nc_file_current: true });
+assert.ok(readyCard.includes("dco-operational-files__nc-ready"));
+assert.ok(readyCard.includes("The operational file has been generated."));
+assert.ok(readyCard.includes("dco-board-focus-trigger"));
+const pendingCard = ux.sheetCardActions({ sheet_no: 1, status: "Settings Saved", nc_file_current: false });
+assert.ok(!pendingCard.includes("dco-operational-files__nc-ready"));
+assert.ok(pendingCard.includes("dco-board-focus-trigger"));
+assert.ok(translations.includes("تم توليد الملف التشغيلي"));
 assert.ok(panel.includes("requestSheetProgramPreview("));
 assert.ok(panel.includes("collectCutExecutions("));
 

@@ -177,6 +177,8 @@ def test_scoped_plan_command_flag_is_ephemeral_authorization_boundary() -> None:
     assert not is_authorized_plan_command(doc)
     doc.flags[PLAN_COMMAND_FLAG] = "recalculate_plan"
     assert is_authorized_plan_command(doc)
+    doc.flags[PLAN_COMMAND_FLAG] = "use_board_editor"
+    assert is_authorized_plan_command(doc)
     doc.flags[PLAN_COMMAND_FLAG] = "edit_order"
     assert not is_authorized_plan_command(doc)
 

@@ -29,6 +29,11 @@ _MESSAGES = {
         "Set the two stops for this work zero on the CNC machine. "
         "A stop from another edge is not copied across."
     ),
+    "cnc_machine_stop_sides_required": (
+        "Choose the width stop side and the length stop side on the CNC machine before generating a new file."
+    ),
+    "sheet_exceeds_machine_width": "The board is larger than the machine width. NC cannot be generated.",
+    "sheet_exceeds_machine_length": "The board is larger than the machine length. NC cannot be generated.",
     "work_zero_invalid": "The selected work zero is not supported.",
     "work_zero_center_retired": (
         "This CNC machine still uses Center as its work zero. "
@@ -53,6 +58,8 @@ class CNCMachine(Document):
                 right_stop_cm=self.right_stop_cm,
                 bottom_stop_cm=self.bottom_stop_cm,
                 top_stop_cm=self.top_stop_cm,
+                width_stop_side=self.width_stop_side,
+                length_stop_side=self.length_stop_side,
             )
         except PlacementError as exc:
             frappe.throw(_(_MESSAGES.get(exc.code, exc.code)), frappe.ValidationError)
@@ -64,6 +71,8 @@ class CNCMachine(Document):
         self.right_stop_cm = normalized.right_stop_cm
         self.bottom_stop_cm = normalized.bottom_stop_cm
         self.top_stop_cm = normalized.top_stop_cm
+        self.width_stop_side = normalized.width_stop_side or ""
+        self.length_stop_side = normalized.length_stop_side or ""
         try:
             self.post_processor = resolve_post_processor(self.post_processor, required=True)
         except PostProcessorError as exc:

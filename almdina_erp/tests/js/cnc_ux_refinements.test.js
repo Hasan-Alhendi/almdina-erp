@@ -180,16 +180,18 @@ const reference = ux.physicalSheetOffsetCm({
     width_cm: 200,
     length_cm: 400,
     work_zero_position: "Top Right",
+    width_stop_side: "Left Side",
+    length_stop_side: "Bottom Side",
     left_stop_cm: 99,
     right_stop_cm: 5,
     bottom_stop_cm: 99,
     top_stop_cm: 10,
 }, 120, 240);
-assert.strictEqual(reference.offset_left_cm * 10, 750);
-assert.strictEqual(reference.offset_bottom_cm * 10, 1500);
+assert.strictEqual(reference.offset_left_cm * 10, 800);
+assert.strictEqual(reference.offset_bottom_cm * 10, 1600);
 const physicalX = 200 + reference.offset_left_cm * 10;
 const physicalY = 300 + reference.offset_bottom_cm * 10;
-assert.strictEqual(physicalX - 2000, -1050);
-assert.strictEqual(physicalY - 4000, -2200);
+assert.strictEqual(physicalX - 2000, -1000);
+assert.strictEqual(physicalY - 4000, -2100);
 
 console.log("cnc_ux_refinements.test.js passed");

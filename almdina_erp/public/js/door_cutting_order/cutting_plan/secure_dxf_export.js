@@ -1332,12 +1332,8 @@
     }
 
     function fetchValidatedPlan(args) {
-        return frappe.call({
-            method: VALIDATED_PLAN_METHOD,
-            args,
-            freeze: true,
-            freeze_message: __("Validating DXF geometry on server..."),
-        });
+
+
     }
 
     function fetchOriginalUploadedDxf(args) {

@@ -426,6 +426,13 @@ def build_operational_workspace(
             status = SETTINGS_SAVED
             operational_file = str(saved.get("name") or "")
             fingerprint = current_fingerprint
+        generated_fingerprint = str((saved or {}).get("nc_generation_fingerprint") or "")
+        nc_file_current = bool(
+            saved is not None
+            and generated_fingerprint
+            and fingerprint
+            and generated_fingerprint == fingerprint
+        )
         sheet_width_cm = None
         sheet_length_cm = None
         try:
@@ -442,6 +449,7 @@ def build_operational_workspace(
                 "operational_file": operational_file,
                 "persisted": bool(operational_file),
                 "status": status,
+                "nc_file_current": nc_file_current,
                 "settings_fingerprint": fingerprint,
                 "settings_revision": (
                     max(1, int((saved or {}).get("settings_revision") or 0))

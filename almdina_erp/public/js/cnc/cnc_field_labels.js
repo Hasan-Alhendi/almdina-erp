@@ -123,6 +123,8 @@
         width_cm: "Machine Width (cm)",
         length_cm: "Machine Length (cm)",
         work_zero_position: "Work Zero Position",
+        width_stop_side: "Width Stop Side",
+        length_stop_side: "Length Stop Side",
         post_processor: "Post Processor",
         left_stop_cm: "Left Stop (cm)",
         right_stop_cm: "Right Stop (cm)",
@@ -141,6 +143,8 @@
         width_cm: "Usable machine bed width on the X axis. Entered in centimetres.",
         length_cm: "Usable machine bed length on the Y axis. Entered in centimetres.",
         work_zero_position: "G54 origin used when NC coordinates are written. It does not move the sheet, reverse the axes, or change path geometry.",
+        width_stop_side: "Side of the width stop. It is independent of the work zero. The gap is calculated from the machine width and the full board width.",
+        length_stop_side: "Side of the length stop. It is independent of the work zero. The gap is calculated from the machine length and the full board length.",
         post_processor: "NC dialect used when a new file is generated for this machine.",
         left_stop_cm: "Used only for Bottom Left and Top Left. Distance from the machine left edge to the sheet left edge, in centimetres. Zero is valid.",
         right_stop_cm: "Used only for Bottom Right and Top Right. Distance from the machine right edge to the sheet right edge, in centimetres. Zero is valid.",
@@ -304,22 +308,84 @@
         paintStopField(field, show);
     }
 
+    const STOP_SIDE_GROUPS = Object.freeze([
+        { field: "width_stop_side", options: ["Left Side", "Right Side"] },
+        { field: "length_stop_side", options: ["Bottom Side", "Top Side"] },
+    ]);
+
+    function currentStopSide(target, fieldname) {
+        const field = fieldOf(target, fieldname);
+        const input = field && field.$input && typeof field.$input.val === "function"
+            ? String(field.$input.val() || "")
+            : "";
+        if (input) return input;
+        const docValue = target && target.doc ? String(target.doc[fieldname] || "") : "";
+        if (docValue) return docValue;
+        return field && typeof field.get_value === "function" ? String(field.get_value() || "") : "";
+    }
+
+    function applyStopSideRadios(target) {
+        if (!target) return;
+        STOP_SIDE_GROUPS.forEach(group => {
+            const field = fieldOf(target, group.field);
+            const wrapper = field && field.$wrapper && typeof field.$wrapper.get === "function"
+                ? field.$wrapper.get(0)
+                : null;
+            if (!wrapper || typeof wrapper.querySelector !== "function") return;
+            const select = wrapper.querySelector("select");
+            if (select) select.hidden = true;
+            let box = wrapper.querySelector(`[data-stop-side-radios="${group.field}"]`);
+            if (!box && typeof document !== "undefined" && document.createElement) {
+                box = document.createElement("div");
+                box.className = "dco-cnc-stop-sides";
+                box.setAttribute("data-stop-side-radios", group.field);
+                box.setAttribute("role", "radiogroup");
+                group.options.forEach(option => {
+                    const label = document.createElement("label");
+                    label.className = "dco-cnc-stop-sides__choice";
+                    const input = document.createElement("input");
+                    input.type = "radio";
+                    input.name = `cnc-${group.field}`;
+                    input.value = option;
+                    const text = document.createElement("span");
+                    text.textContent = profileLabel(option);
+                    label.appendChild(input);
+                    label.appendChild(text);
+                    box.appendChild(label);
+                });
+                wrapper.appendChild(box);
+                box.addEventListener("change", () => {
+                    const chosen = box.querySelector("input:checked");
+                    const value = chosen ? chosen.value : "";
+                    if (select) select.value = value;
+                    if (field.$input && typeof field.$input.val === "function") field.$input.val(value);
+                    if (target.doc) target.doc[group.field] = value;
+                    if (typeof field.set_value === "function") field.set_value(value);
+                });
+            }
+            if (!box) return;
+            const current = currentStopSide(target, group.field);
+            box.querySelectorAll("input").forEach(input => {
+                input.checked = input.value === current;
+            });
+        });
+    }
+
     function applyCornerStops(target) {
         if (!target) return;
         const position = workZeroPosition(target);
-        const active = activeStopFields(position);
         STOP_FIELD_NAMES.forEach(fieldname => {
-            const show = active.indexOf(fieldname) >= 0;
             const field = fieldOf(target, fieldname);
-            if (field) pinStopField(field, show);
-            if (typeof target.toggle_display === "function") target.toggle_display(fieldname, show);
-            if (typeof target.toggle_reqd === "function") target.toggle_reqd(fieldname, show);
+            if (field) pinStopField(field, false);
+            if (typeof target.toggle_display === "function") target.toggle_display(fieldname, false);
+            if (typeof target.toggle_reqd === "function") target.toggle_reqd(fieldname, false);
             if (typeof target.set_df_property === "function") {
-                target.set_df_property(fieldname, "hidden", show ? 0 : 1);
-                target.set_df_property(fieldname, "reqd", show ? 1 : 0);
+                target.set_df_property(fieldname, "hidden", 1);
+                target.set_df_property(fieldname, "reqd", 0);
             }
-            if (field) paintStopField(field, show);
+            if (field) paintStopField(field, false);
         });
+        applyStopSideRadios(target);
         const retired = position === "Center";
         if (typeof target.set_intro === "function") {
             target.set_intro(retired
