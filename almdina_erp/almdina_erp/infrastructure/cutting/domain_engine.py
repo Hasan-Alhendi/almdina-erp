@@ -74,6 +74,10 @@ class DomainCuttingEngineAdapter:
         from .pattern_solver import solve_pattern_master
         return solve_pattern_master(columns,demand,max_boards,deadline=deadline,hint=hint)
 
+    def measure_fragmentation(self, plan, kerf_cm):
+        from .fragmentation_geometry import measure_fragmentation
+        return measure_fragmentation(plan, kerf_cm)
+
     def solve_shelf_master(self,*args,**kwargs):
         from .pattern_solver import solve_shelf_master
         return solve_shelf_master(*args,**kwargs)

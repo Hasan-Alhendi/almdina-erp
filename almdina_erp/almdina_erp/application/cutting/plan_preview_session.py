@@ -97,7 +97,7 @@ class CuttingPlanPreviewSession:
 def merge_preview_candidates(current, previous, *, limit=5):
     """Keep the same final cutter contract when continuing a trusted preview."""
     from almdina_erp.almdina_erp.domain.cutting.optimizer import _candidate_is_better
-    from almdina_erp.almdina_erp.domain.cutting.cut_line_quality import final_system_sort_keys
+    from almdina_erp.almdina_erp.domain.cutting.plan_portfolio import retain_system_gallery
     by_geometry = {}
     for candidate in [*previous.values(),*current.values()]:
         signature = candidate['geometry_fingerprint']
@@ -105,9 +105,9 @@ def merge_preview_candidates(current, previous, *, limit=5):
         if existing is None or _candidate_is_better(candidate['snapshot'],existing['snapshot']):
             by_geometry[signature] = candidate
     candidates = list(by_geometry.values())
-    keys = final_system_sort_keys([c['snapshot'] for c in candidates])
-    ranked = [candidate for _, candidate in
-              sorted(zip(keys, candidates), key=lambda item: item[0])][:limit]
+    selected = retain_system_gallery([c['snapshot'] for c in candidates],limit)
+    by_snapshot = {id(c["snapshot"]):c for c in candidates}
+    ranked = [by_snapshot[id(snapshot)] for snapshot in selected]
     return {c['candidate_id']:c for c in ranked}
 
 
