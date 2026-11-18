@@ -578,79 +578,6 @@
         return String(number);
     }
 
-    function placementDiagramMarkup(placement) {
-        if (!placement) return "";
-        const width = Number(placement.machine_width_cm);
-        const length = Number(placement.machine_length_cm);
-        const sheetW = Number(placement.sheet_width_cm);
-        const sheetL = Number(placement.sheet_length_cm);
-        const left = Math.max(0, Number(placement.offset_left_cm || 0));
-        const bottom = Math.max(0, Number(placement.offset_bottom_cm || 0));
-        const right = Math.max(0, Number(placement.right_clearance_cm || 0));
-        const top = Math.max(0, Number(placement.top_clearance_cm || 0));
-        if (!(width > 0) || !(length > 0) || !(sheetW > 0) || !(sheetL > 0)) return "";
-        const mm = (cm) => cm * 10;
-        const bedW = mm(width);
-        const bedL = mm(length);
-        const marker = `bed-arrow-${Math.round(bedW)}-${Math.round(bedL)}`;
-        const stop = (side, x, y, w, h) => (
-            w > 0 && h > 0
-                ? `<rect class="dco-cnc-bed__stop" data-stop-side="${side}" x="${x}" y="${y}" width="${w}" height="${h}" fill="#dbeafe" stroke="none"/>`
-                : ""
-        );
-        const arrow = (side, x1, y1, x2, y2) => (
-            `<line data-stop-arrow="${side}" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#1d4f91" stroke-width="${Math.max(bedW, bedL) * 0.004}" marker-start="url(#${marker})" marker-end="url(#${marker})"/>`
-        );
-        const midX = mm(left + sheetW / 2);
-        const midY = mm(bottom + sheetL / 2);
-        const zeros = {
-            "Bottom Left": ["left", "bottom"],
-            "Bottom Right": ["right", "bottom"],
-            "Top Left": ["left", "top"],
-            "Top Right": ["right", "top"],
-        };
-        const zeroPlace = zeros[placement.work_zero_position] || ["left", "bottom"];
-        const zeroStyle = `${zeroPlace[0] === "left" ? "inset-inline-start:8px" : "inset-inline-end:8px"};${zeroPlace[1] === "bottom" ? "bottom:8px" : "top:8px"}`;
-        const zeroPoint = {
-            "Bottom Left": [0, 0],
-            "Bottom Right": [bedW, 0],
-            "Top Left": [0, bedL],
-            "Top Right": [bedW, bedL],
-        }[placement.work_zero_position] || [0, 0];
-        const badge = (side, cm, style) => (
-            cm > 0
-                ? `<span class="dco-cnc-bed__badge" data-stop-badge="${side}" style="${style}">${escapeHtml(formatPlacementCm(cm))} ${escapeHtml(translate("cm"))}</span>`
-                : ""
-        );
-        return `<figure class="dco-cnc-bed" data-placement-diagram style="aspect-ratio:${width} / ${length}">
-            <svg viewBox="0 0 ${bedW} ${bedL}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="${escapeHtml(translate("Sheet placement on CNC machine"))}">
-                <defs><marker id="${marker}" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0 1.5 L10 5 L0 8.5 Z" fill="#1d4f91"/></marker></defs>
-                <g transform="translate(0,${bedL}) scale(1,-1)">
-                    <rect class="dco-cnc-bed__machine" data-machine-bed="1" x="0" y="0" width="${bedW}" height="${bedL}" fill="#f8fafc" stroke="#111827" stroke-width="${Math.max(bedW, bedL) * 0.004}"/>
-                    ${stop("left", 0, 0, mm(left), bedL)}
-                    ${stop("right", mm(width - right), 0, mm(right), bedL)}
-                    ${stop("bottom", 0, 0, bedW, mm(bottom))}
-                    ${stop("top", 0, mm(length - top), bedW, mm(top))}
-                    <rect class="dco-cnc-bed__board" data-board-bed="1" x="${mm(left)}" y="${mm(bottom)}" width="${mm(sheetW)}" height="${mm(sheetL)}" fill="#fff7ed" stroke="#8a5700" stroke-width="${Math.max(bedW, bedL) * 0.004}"/>
-                    ${left > 0 ? arrow("left", 0, midY, mm(left), midY) : ""}
-                    ${right > 0 ? arrow("right", mm(left + sheetW), midY, bedW, midY) : ""}
-                    ${bottom > 0 ? arrow("bottom", midX, 0, midX, mm(bottom)) : ""}
-                    ${top > 0 ? arrow("top", midX, mm(bottom + sheetL), midX, bedL) : ""}
-                    <circle data-work-zero="1" cx="${zeroPoint[0]}" cy="${zeroPoint[1]}" r="${Math.max(bedW, bedL) * 0.012}" fill="#b42318"/>
-                </g>
-            </svg>
-            <span class="dco-cnc-bed__zero" data-work-zero-label="1" style="${zeroStyle}">(0,0)</span>
-            ${badge("left", left, "inset-inline-start:8px;top:50%;transform:translateY(-50%)")}
-            ${badge("right", right, "inset-inline-end:8px;top:50%;transform:translateY(-50%)")}
-            ${badge("bottom", bottom, "left:50%;bottom:28px;transform:translateX(-50%)")}
-            ${badge("top", top, "left:50%;top:8px;transform:translateX(-50%)")}
-            <figcaption class="dco-cnc-bed__caption">
-                <span>${escapeHtml(translate("CNC machine bed"))} ${escapeHtml(formatPlacementCm(width))} × ${escapeHtml(formatPlacementCm(length))} ${escapeHtml(translate("cm"))}</span>
-                <span>${escapeHtml(translate("Full board"))} ${escapeHtml(formatPlacementCm(sheetW))} × ${escapeHtml(formatPlacementCm(sheetL))} ${escapeHtml(translate("cm"))}</span>
-            </figcaption>
-        </figure>`;
-    }
-
     function placementControlsMarkup(workspace, state, canPrepare) {
         const machines = Array.isArray(workspace.cnc_machines) ? workspace.cnc_machines : [];
         const disabled = canPrepare ? "" : " disabled";
@@ -670,9 +597,7 @@
             ]))}</p>`
             : `<p class="dco-operational-sheet__note" data-machine-dims>${escapeHtml(translate("Select a machine to place the sheet with that machine's stops."))}</p>`;
         const fit = validateSheetPlacementFits(workspace, state, { requireMachine: Boolean(selected) });
-        const warning = fit.ok
-            ? ""
-            : `<p class="dco-operational-sheet__warning" role="alert" data-placement-warning>${escapeHtml(fit.message)}</p>`;
+        const warning = `<p class="dco-operational-sheet__warning" role="alert" data-placement-warning${fit.ok ? " hidden" : ""}>${fit.ok ? "" : escapeHtml(fit.message)}</p>`;
         return `<section class="dco-operational-sheet__placement" data-sheet-placement>
             <h4>${escapeHtml(translate("Sheet placement on CNC machine"))}</h4>
             <label class="dco-operational-sheet__choice">${escapeHtml(translate("CNC machine"))}
@@ -680,7 +605,6 @@
             </label>
             ${dims}
             ${warning}
-            ${placementDiagramMarkup(placementPreviewPayload(workspace, state))}
         </section>`;
     }
 
@@ -1275,7 +1199,31 @@
                             ])
                             : translate("Select a machine to place the sheet with that machine's stops.");
                     }
-                    if (machine) reportPlacementValidation(validateSheetPlacementFits(live.workspace, live.state));
+                    const fit = validateSheetPlacementFits(live.workspace, live.state, {
+                        requireMachine: Boolean(live.state.cncMachine),
+                    });
+                    const warning = body.querySelector("[data-placement-warning]");
+                    if (warning) {
+                        warning.hidden = Boolean(fit.ok);
+                        warning.textContent = fit.ok ? "" : fit.message;
+                    }
+                    const preview = body.querySelector("[data-sheet-preview]");
+                    if (preview && preview.__cutPreviewProgram) {
+                        paintCutPathPreview(preview, {
+                            status: "ready",
+                            program: preview.__cutPreviewProgram,
+                            sheet: live.sheet,
+                            state: live.state,
+                            selectedExecutionPathId: live.state.selectedExecutionPathId || "",
+                            selectedVectorIds: live.state.vectorSelection || [],
+                            layout: preview.getAttribute("data-preview-layout") || preview.__cutPreviewLayout || "",
+                            zoom: preview.__cutPreviewZoom,
+                            pan: preview.__cutPreviewPan,
+                            hiddenOperations: preview.__cutPreviewHidden,
+                            placement: placementPreviewPayload(live.workspace, live.state),
+                        });
+                    }
+                    if (machine) reportPlacementValidation(fit);
                     requestSheetProgramPreview(live.frm, dialog, live.workspace, live.sheet, live.state);
                 }
             });
@@ -3215,6 +3163,83 @@
         return `max-inline-size:${SHEET_PREVIEW_MAX_WIDTH_PX}px;${aspect}`;
     }
 
+    function placementOverlayMarkup(placement, metrics) {
+        if (!placement) return "";
+        const width = Number(metrics.width);
+        const length = Number(metrics.length);
+        const offsetX = Number(metrics.offsetX);
+        const offsetY = Number(metrics.offsetY);
+        const sheetW = Number(metrics.sheetW);
+        const sheetL = Number(metrics.sheetL);
+        if (!(width > 0) || !(length > 0) || !(sheetW > 0) || !(sheetL > 0)) return "";
+        const leftCm = Math.max(0, Number(placement.offset_left_cm || 0));
+        const bottomCm = Math.max(0, Number(placement.offset_bottom_cm || 0));
+        const rightCm = Math.max(0, Number(placement.right_clearance_cm || 0));
+        const topCm = Math.max(0, Number(placement.top_clearance_cm || 0));
+        const frameText = String(metrics.frameText || `0 0 ${width} ${length}`);
+        const view = frameText.trim().split(/\s+/).map(Number);
+        const box = view.length === 4 && view[2] > 0 && view[3] > 0
+            ? { x: view[0], y: view[1], width: view[2], height: view[3] }
+            : { x: 0, y: 0, width, height };
+        const percent = (svgX, svgY) => {
+            const left = ((svgX - box.x) / box.width) * 100;
+            const top = ((svgY - box.y) / box.height) * 100;
+            return `left:${formatPreviewNumber(left)}%;top:${formatPreviewNumber(top)}%`;
+        };
+        const midX = offsetX + sheetW / 2;
+        const midY = length - (offsetY + sheetL / 2);
+        const markerId = `${metrics.markerScope}-stop-arrow`;
+        const arrow = (side, x1, y1, x2, y2) => (
+            `<line data-stop-arrow="${side}" x1="${formatPreviewNumber(x1)}" y1="${formatPreviewNumber(y1)}" x2="${formatPreviewNumber(x2)}" y2="${formatPreviewNumber(y2)}" stroke="#1d4f91" stroke-width="2" vector-effect="non-scaling-stroke" marker-start="url(#${markerId})" marker-end="url(#${markerId})"/>`
+        );
+        const badge = (side, cm, svgX, svgY) => (
+            cm > 0
+                ? `<span class="dco-cnc-cut-preview__stop-badge" data-stop-badge="${side}" data-svg-x="${formatPreviewNumber(svgX)}" data-svg-y="${formatPreviewNumber(svgY)}" style="${percent(svgX, svgY)}">${escapeHtml(formatPlacementCm(cm))} ${escapeHtml(translate("cm"))}</span>`
+                : ""
+        );
+        const zeros = {
+            "Bottom Left": [0, length, "bottom-left"],
+            "Bottom Right": [width, length, "bottom-right"],
+            "Top Left": [0, 0, "top-left"],
+            "Top Right": [width, 0, "top-right"],
+        };
+        const zero = zeros[placement.work_zero_position] || zeros["Bottom Left"];
+        const rightGap = Math.max(0, width - offsetX - sheetW);
+        const topEdge = length - offsetY - sheetL;
+        return `<div class="dco-cnc-cut-preview__placement-overlay" data-placement-overlay data-work-zero="${escapeHtml(String(placement.work_zero_position || ""))}">
+            <svg class="dco-cnc-cut-preview__measure" data-measure-layer viewBox="${escapeHtml(frameText)}" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+                <defs><marker id="${escapeHtml(markerId)}" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse" markerUnits="strokeWidth"><path d="M0 1.5 L10 5 L0 8.5 Z" fill="#1d4f91"/></marker></defs>
+                ${leftCm > 0 ? arrow("left", 0, midY, offsetX, midY) : ""}
+                ${rightCm > 0 ? arrow("right", offsetX + sheetW, midY, width, midY) : ""}
+                ${bottomCm > 0 ? arrow("bottom", midX, length, midX, length - offsetY) : ""}
+                ${topCm > 0 ? arrow("top", midX, topEdge, midX, 0) : ""}
+            </svg>
+            ${badge("left", leftCm, offsetX / 2, midY)}
+            ${badge("right", rightCm, offsetX + sheetW + rightGap / 2, midY)}
+            ${badge("bottom", bottomCm, midX, length - offsetY / 2)}
+            ${badge("top", topCm, midX, topEdge / 2)}
+            <span class="dco-cnc-cut-preview__zero-label" data-work-zero-label="1" data-zero-anchor="${zero[2]}" data-svg-x="${formatPreviewNumber(zero[0])}" data-svg-y="${formatPreviewNumber(zero[1])}" style="${percent(zero[0], zero[1])}">(0,0)</span>
+        </div>`;
+    }
+
+    function syncPlacementOverlay(host, svg) {
+        if (!host || !svg || typeof host.querySelector !== "function" || typeof svg.getAttribute !== "function") return;
+        const overlay = host.querySelector("[data-placement-overlay]");
+        const measure = host.querySelector("[data-measure-layer]");
+        if (!overlay || !measure) return;
+        const boxText = String(svg.getAttribute("viewBox") || "");
+        const parts = boxText.trim().split(/\s+/).map(Number);
+        if (parts.length !== 4 || !(parts[2] > 0) || !(parts[3] > 0)) return;
+        if (typeof measure.setAttribute === "function") measure.setAttribute("viewBox", boxText);
+        overlay.querySelectorAll("[data-svg-x]").forEach(node => {
+            const svgX = Number(node.getAttribute("data-svg-x"));
+            const svgY = Number(node.getAttribute("data-svg-y"));
+            if (!Number.isFinite(svgX) || !Number.isFinite(svgY) || !node.style) return;
+            node.style.left = `${((svgX - parts[0]) / parts[2]) * 100}%`;
+            node.style.top = `${((svgY - parts[1]) / parts[3]) * 100}%`;
+        });
+    }
+
     function cutPathPreviewMarkup(program, options = {}) {
         const drawing = program || {};
         const placement = options.placement || null;
@@ -3253,14 +3278,15 @@
                 </svg>
                 ${svgInner.extra || ""}
             </div>`;
-            if (!pageLayout) return stage;
+            const framed = `${stage}${svgInner.overlay || ""}`;
+            if (!pageLayout) return `<div class="dco-cnc-cut-preview__canvas">${framed}</div>`;
             return `<div class="dco-cnc-cut-preview__zoom" role="group" aria-label="${escapeHtml(translate("Board preview viewport"))}">
                 <button type="button" class="btn btn-default btn-xs" data-cut-zoom="out" aria-label="${escapeHtml(translate("Zoom out"))}" title="${escapeHtml(translate("Zoom out"))}">−</button>
                 <button type="button" class="btn btn-default btn-xs" data-cut-zoom="reset" aria-label="${escapeHtml(translate("Fit to view"))}" title="${escapeHtml(translate("Fit to view"))}">100%</button>
                 <button type="button" class="btn btn-default btn-xs" data-cut-zoom="in" aria-label="${escapeHtml(translate("Zoom in"))}" title="${escapeHtml(translate("Zoom in"))}">+</button>
             </div>
             <div class="dco-cnc-cut-preview__viewport" data-cut-viewport style="${cutPreviewLayoutStyle(width, length, frameOptions)};overflow:hidden;contain:paint;clip-path:inset(0 round 8px)" role="region" aria-label="${escapeHtml(translate("Board preview viewport"))}">
-                ${stage}
+                ${framed}
             </div>`;
         };
         const previewShellStyle = pageLayout
@@ -3328,9 +3354,18 @@
                 <rect class="dco-cnc-cut-preview__void" x="0" y="0" width="${width}" height="${Math.max(0, offsetY)}" fill="#dbeafe"/>
                 <rect class="dco-cnc-cut-preview__void" x="${offsetX + sheetW}" y="0" width="${Math.max(0, width - offsetX - sheetW)}" height="${length}" fill="#dbeafe"/>
                 <rect class="dco-cnc-cut-preview__void" x="0" y="${offsetY + sheetL}" width="${width}" height="${Math.max(0, length - offsetY - sheetL)}" fill="#dbeafe"/>
-                <rect class="dco-cnc-cut-preview__sheet" x="${offsetX}" y="${offsetY}" width="${sheetW}" height="${sheetL}" fill="#fff7ed"/>
-                <circle class="dco-cnc-cut-preview__origin" cx="0" cy="0" r="3" fill="#111827"/>`
+                <rect class="dco-cnc-cut-preview__sheet" x="${offsetX}" y="${offsetY}" width="${sheetW}" height="${sheetL}" fill="#fff7ed"/>`
             : "";
+        const overlay = placementOverlayMarkup(placement, {
+            width,
+            length,
+            offsetX,
+            offsetY,
+            sheetW,
+            sheetL,
+            frameText: frame.text,
+            markerScope,
+        });
         const sheetGroup = `<g data-sheet-geometry transform="translate(${offsetX},${offsetY})">${strokes}<g data-path-markers></g></g>`;
         const placementNote = placement
             ? `<p class="dco-operational-files__note" data-placement-caption>${escapeHtml(translate("The sheet is placed with this machine's stops. Work zero is applied only in the NC file."))}</p>`
@@ -3340,6 +3375,7 @@
             ${boardSurface({
                 aria: translate("Machining preview"),
                 extra: "",
+                overlay,
                 body: `<defs>${markers}</defs>
                     <g transform="translate(0,${length}) scale(1,-1)">
                         ${machineFrame}
@@ -3392,6 +3428,7 @@
                     viewHeight,
                 ].map(formatPreviewNumber).join(" "));
                 stage.style.transform = "none";
+                syncPlacementOverlay(host, svg);
             } else {
                 stage.style.transform = `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`;
             }
@@ -4268,7 +4305,7 @@
         mountSheetSettingsPage,
         findCncMachine,
         placementPreviewPayload,
-        placementDiagramMarkup,
+        syncPlacementOverlay,
         validateSheetPlacementFits,
         beginSheetMutation,
         sheetMutationIsCurrent,
