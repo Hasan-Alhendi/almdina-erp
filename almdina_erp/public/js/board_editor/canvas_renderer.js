@@ -1408,6 +1408,27 @@
         });
     }
 
+    function finiteScrollPair(x, y) {
+        const sx = Number(x);
+        const sy = Number(y);
+        if (!Number.isFinite(sx) || !Number.isFinite(sy)) return null;
+        return { x: sx, y: sy };
+    }
+
+    function liveCameraScroll(stage, handlers) {
+        // The stage's scroll is the visual camera. Read it even when the scroll
+        // listener has not yet copied the latest pointerup value into liveScroll.
+        if (stage) {
+            const fromStage = finiteScrollPair(stage.scrollLeft, stage.scrollTop);
+            if (fromStage) return fromStage;
+        }
+        if (handlers && typeof handlers.readScroll === "function") {
+            const value = handlers.readScroll() || {};
+            return finiteScrollPair(value.x, value.y);
+        }
+        return null;
+    }
+
     function render(host, storeView, handlers) {
         const projection = storeView.projection || {};
         const session = storeView.session || null;
@@ -1445,12 +1466,51 @@
         let padY = openingFrame
             ? openingFrame.padY
             : (storeView.viewport.padY != null ? viewportPads.padY : SCENE_PAD_PX);
-        let scrollX = openingFrame
-            ? openingFrame.scrollX
-            : (Number(storeView.viewport.scrollX) || 0);
-        let scrollY = openingFrame
-            ? openingFrame.scrollY
-            : (Number(storeView.viewport.scrollY) || 0);
+        const cameraToken = Number(storeView.viewport.cameraToken) || 0;
+        // Peek only. takeCamera() commits the token after the new stage accepts
+        // the scroll, so a failed paint can still apply the same command.
+        const takeOwned = Boolean(
+            handlers && (
+                typeof handlers.cameraUnapplied === "function"
+                    ? handlers.cameraUnapplied(cameraToken)
+                    : (typeof handlers.takeCamera === "function" && handlers.takeCamera(cameraToken))
+            )
+        );
+        const cameraConsumedEarly = Boolean(
+            takeOwned
+            && handlers
+            && typeof handlers.cameraUnapplied !== "function"
+            && typeof handlers.takeCamera === "function"
+        );
+        const cameraProtocol = Boolean(
+            handlers && (
+                typeof handlers.takeCamera === "function"
+                || typeof handlers.cameraUnapplied === "function"
+                || typeof handlers.readScroll === "function"
+            )
+        );
+        // Repaints (drop, undo, message) keep the stage image. A new cameraToken
+        // — zoom, fit, reveal, opening — supplies the scroll instead.
+        const followLive = Boolean(
+            cameraProtocol
+            && !openingFrame
+            && !takeOwned
+            && (storeView.viewport.opened || storeView.viewport.userAdjusted)
+        );
+        const storedScrollX = Number(storeView.viewport.scrollX) || 0;
+        const storedScrollY = Number(storeView.viewport.scrollY) || 0;
+        let scrollX = storedScrollX;
+        let scrollY = storedScrollY;
+        if (openingFrame) {
+            scrollX = openingFrame.scrollX;
+            scrollY = openingFrame.scrollY;
+        } else if (followLive) {
+            const live = liveCameraScroll(previousStage, handlers);
+            if (live) {
+                scrollX = live.x;
+                scrollY = live.y;
+            }
+        }
         let trailX = Number(storeView.viewport.trailX);
         let trailY = Number(storeView.viewport.trailY);
         if (!(trailX >= 0)) trailX = SCENE_PAD_PX;
@@ -1531,6 +1591,27 @@
             )
         ) {
             handlers.persistCamera({
+                trailX,
+                trailY,
+                minX: metrics.minX,
+                minY: metrics.minY,
+            });
+        }
+        if (
+            followLive
+            && handlers
+            && handlers.persistCamera
+            && (
+                Math.abs(scrollX - storedScrollX) > 0.5
+                || Math.abs(scrollY - storedScrollY) > 0.5
+            )
+        ) {
+            // Catch the viewport up to the stage without emitting another paint.
+            handlers.persistCamera({
+                scrollX,
+                scrollY,
+                padX,
+                padY,
                 trailX,
                 trailY,
                 minX: metrics.minX,
@@ -2099,25 +2180,24 @@
         const svg = host.querySelector(".abe-svg");
         host.__abeWorldMetrics = metrics;
         host.__abeLayout = layout;
-        const cameraToken = Number(storeView.viewport.cameraToken) || 0;
-        const takeOwned = handlers && handlers.takeCamera && handlers.takeCamera(cameraToken);
-        let targetScrollX = takeOwned
-            ? scrollX
-            : (handlers && handlers.readScroll
-                ? Number((handlers.readScroll() || {}).x) || 0
-                : scrollX);
-        let targetScrollY = takeOwned
-            ? scrollY
-            : (handlers && handlers.readScroll
-                ? Number((handlers.readScroll() || {}).y) || 0
-                : scrollY);
+        let targetScrollX = scrollX;
+        let targetScrollY = scrollY;
+        if (!takeOwned && !followLive && handlers && typeof handlers.readScroll === "function") {
+            const parkedValue = handlers.readScroll() || {};
+            const parked = finiteScrollPair(parkedValue.x, parkedValue.y);
+            if (parked) {
+                targetScrollX = parked.x;
+                targetScrollY = parked.y;
+            }
+        }
         // Content was sized for the camera scroll; still verify browser acceptance once.
+        const holdCamera = takeOwned || followLive;
         stage.scrollLeft = targetScrollX;
         stage.scrollTop = targetScrollY;
-        const appliedX = Number(stage.scrollLeft) || 0;
-        const appliedY = Number(stage.scrollTop) || 0;
+        let appliedX = Number(stage.scrollLeft) || 0;
+        let appliedY = Number(stage.scrollTop) || 0;
         if (
-            takeOwned
+            holdCamera
             && handlers
             && handlers.persistCamera
             && (
@@ -2125,7 +2205,8 @@
                 || Math.abs(appliedY - targetScrollY) > 0.5
             )
         ) {
-            // Expand trail so the intended scroll becomes attainable on next paint.
+            // The browser clamped the visual scroll. Grow the scrollport so the
+            // same world point can stay on the same pixel.
             const rescue = fitCameraScroll({
                 scale,
                 scrollX: targetScrollX,
@@ -2153,13 +2234,37 @@
             svg.setAttribute("width", String(rescue.contentW));
             svg.setAttribute("height", String(rescue.contentH));
             svg.setAttribute("viewBox", `0 0 ${rescue.contentW} ${rescue.contentH}`);
+            if (Math.abs(rescue.padX - padX) > 1e-6 || Math.abs(rescue.padY - padY) > 1e-6) {
+                const world = svg.querySelector && svg.querySelector(".abe-world");
+                if (world && world.setAttribute) {
+                    world.setAttribute(
+                        "transform",
+                        `translate(${rescue.padX - metrics.minX * scale},${rescue.padY - metrics.minY * scale}) scale(${scale})`
+                    );
+                }
+                padX = rescue.padX;
+                padY = rescue.padY;
+                metrics.pad = rescue.padX;
+                metrics.padX = rescue.padX;
+                metrics.padY = rescue.padY;
+            }
             stage.scrollLeft = rescue.scrollX;
             stage.scrollTop = rescue.scrollY;
+            appliedX = Number(stage.scrollLeft) || 0;
+            appliedY = Number(stage.scrollTop) || 0;
             metrics.contentWidth = rescue.contentW;
             metrics.contentHeight = rescue.contentH;
             metrics.trailX = rescue.trailX;
             metrics.trailY = rescue.trailY;
-        } else if (takeOwned && handlers && handlers.onScroll) {
+            scrollX = rescue.scrollX;
+            scrollY = rescue.scrollY;
+        }
+        metrics.scrollX = appliedX;
+        metrics.scrollY = appliedY;
+        if (takeOwned && !cameraConsumedEarly && handlers && typeof handlers.takeCamera === "function") {
+            handlers.takeCamera(cameraToken);
+        }
+        if (holdCamera && handlers && handlers.onScroll) {
             handlers.onScroll(appliedX, appliedY);
         }
         stage.addEventListener("scroll", () => {

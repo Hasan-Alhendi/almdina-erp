@@ -1683,6 +1683,7 @@
                     liveScroll = { x: Number(x) || 0, y: Number(y) || 0 };
                     if (liveScroll.x > 1 || liveScroll.y > 1) scrollOwned = true;
                 },
+                cameraUnapplied: (token) => token !== appliedCamera,
                 onCanvasPointerMove: (event) => {
                     if (!event) return;
                     lastCanvasPointerClient = { x: event.clientX, y: event.clientY };
