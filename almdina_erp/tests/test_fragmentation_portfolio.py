@@ -284,6 +284,28 @@ def test_application_rejects_invalid_side_proposals_and_measurement_failure_keep
     assert not result.snapshot.get("gallery_role")
 
 
+def test_continued_legacy_geometry_receives_current_measurement_without_losing_default():
+    from almdina_erp.almdina_erp.application.cutting.plan_preview_session import (
+        merge_preview_candidates,
+    )
+    _, winner, alternate = layouts()
+    winner["industrial_rank"] = [0, 1, 0, -1, 10, 100, 0, 0]
+    previous = dict(old=dict(candidate_id="old", snapshot=deepcopy(winner),
+                             geometry_fingerprint=geometry_signature(winner)))
+    before = deepcopy(previous)
+    winner["fragmentation_metrics"] = profile(40)
+    alternate.update(industrial_rank=[0, 1, 0, -.2, 20, 200, 0, 0],
+                     gallery_role="fragmentation_alternative", fragmentation_metrics=profile(5))
+    current = dict(new=dict(candidate_id="new", snapshot=winner,
+                            geometry_fingerprint=geometry_signature(winner)),
+                   alternate=dict(candidate_id="alternate", snapshot=alternate,
+                                  geometry_fingerprint=geometry_signature(alternate)))
+    merged = merge_preview_candidates(current, previous)
+    assert list(merged) == ["old", "alternate"]
+    assert merged["old"]["snapshot"]["fragmentation_metrics"] == profile(40)
+    assert previous == before
+
+
 def test_regroup_uses_regular_sheets_in_a_mixed_order_and_keeps_protected_sheet():
     import time
     from almdina_erp.almdina_erp.domain.cutting.plan_search import (

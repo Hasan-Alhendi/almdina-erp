@@ -104,6 +104,14 @@ def merge_preview_candidates(current, previous, *, limit=5):
         existing = by_geometry.get(signature)
         if existing is None or _candidate_is_better(candidate['snapshot'],existing['snapshot']):
             by_geometry[signature] = candidate
+        elif (tuple(candidate['snapshot'].get('industrial_rank') or ())
+              == tuple(existing['snapshot'].get('industrial_rank') or ())
+              and not existing['snapshot'].get('fragmentation_metrics')
+              and candidate['snapshot'].get('fragmentation_metrics')):
+            # A continued legacy preview can keep its native identity/default
+            # while receiving measurements of this exact trusted geometry.
+            by_geometry[signature] = dict(existing, snapshot=dict(existing['snapshot'],
+                fragmentation_metrics=candidate['snapshot']['fragmentation_metrics']))
     candidates = list(by_geometry.values())
     selected = retain_system_gallery([c['snapshot'] for c in candidates],limit)
     by_snapshot = {id(c["snapshot"]):c for c in candidates}
