@@ -21,6 +21,10 @@
         "almdina_erp.almdina_erp.services.board_editor_drawing_service.upload_board_editor_reference_image";
     const GET_REFERENCE_METHOD =
         "almdina_erp.almdina_erp.services.board_editor_drawing_service.get_board_editor_reference_image";
+    const SHAPE_TEXT_METHOD =
+        "almdina_erp.almdina_erp.services.board_editor_drawing_service.shape_board_editor_text";
+    const VALIDATE_TEXT_METHOD =
+        "almdina_erp.almdina_erp.services.board_editor_drawing_service.validate_board_editor_text";
 
     function call(method, args) {
         return new Promise((resolve, reject) => {
@@ -121,6 +125,33 @@
         });
     }
 
+    function shapeText(args) {
+        const payload = args || {};
+        return call(SHAPE_TEXT_METHOD, {
+            order_name: String(payload.orderName || "").trim(),
+            plan_name: String(payload.planName || "").trim(),
+            content: String(payload.content || ""),
+            font_size_mm: Number(payload.fontSizeMm) || 0,
+            font_weight: String(payload.fontWeight || "regular"),
+            direction: String(payload.direction || "auto"),
+            align: String(payload.align || "right"),
+            x_mm: Number(payload.xMm) || 0,
+            y_mm: Number(payload.yMm) || 0,
+            rotation_deg: Number(payload.rotationDeg) || 0,
+        });
+    }
+
+    function validateText(args) {
+        const payload = args || {};
+        return call(VALIDATE_TEXT_METHOD, {
+            order_name: String(payload.orderName || "").trim(),
+            plan_name: String(payload.planName || "").trim(),
+            piece_instance_id: String(payload.pieceInstanceId || "").trim(),
+            text_id: String(payload.textId || "").trim(),
+            drawing: payload.drawing || null,
+        });
+    }
+
     function beginDraftFromCurrentSource(args) {
         const payload = args || {};
         return call(BEGIN_FROM_SOURCE_METHOD, {
@@ -143,6 +174,8 @@
         saveDrawing,
         uploadReferenceImage,
         getReferenceImage,
+        shapeText,
+        validateText,
         METHOD,
         STATUS_METHOD,
         SAVE_METHOD,

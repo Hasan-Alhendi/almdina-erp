@@ -3693,3 +3693,26 @@ Segment,الضلع
 Path,المسار
 Node,العقدة
 Snap,الالتقاط
+Text,نص
+Font Family,عائلة الخط
+Font Weight,سُمك الخط
+Font Size (mm),حجم الخط (مم)
+Text direction,اتجاه النص
+Bold,عريض
+RTL,من اليمين إلى اليسار
+LTR,من اليسار إلى اليمين
+Convert Text to Path,تحويل النص إلى مسار
+Approve text for export,اعتماد النص للتصدير
+Clear text export approval,إلغاء اعتماد النص للتصدير
+Vector text outlines,حدود النص المتجهية
+Editable text,نص قابل للتحرير
+The text is outside the manufacturing contour.,النص خارج محيط التصنيع.
+The text crosses the manufacturing contour.,النص يتقاطع مع محيط التصنيع.
+The manufacturing font is not available.,خط التصنيع غير متوفر.
+The text is too complex to manufacture.,النص أعقد من الحد المسموح للتصنيع.
+Enter text without markup.,أدخل نصًا بلا وسوم.
+Convert the text to a path before approving it.,حوّل النص إلى مسار قبل اعتماده.
+The text outline is not valid.,حدود النص غير صالحة.
+Rotation (°),الدوران (°)
+Duplicate,تكرار
+Center,وسط

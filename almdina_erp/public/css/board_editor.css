@@ -906,6 +906,35 @@
   gap: 6px;
 }
 
+.abe-metric-wide {
+  grid-column: 1 / -1;
+}
+
+.abe-text-form textarea,
+.abe-draw-props textarea {
+  width: 100%;
+  min-height: 72px;
+  resize: vertical;
+  border: 1px solid var(--alm-border, #e5e9f1);
+  border-radius: 8px;
+  padding: 6px;
+  background: var(--alm-surface, #fff);
+  color: inherit;
+  font: inherit;
+}
+
+.abe-prop-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.abe-prop-actions button {
+  min-height: 26px;
+  border-radius: 8px;
+}
+
 .abe-prop-door,
 .abe-prop-message,
 .abe-prop-label,

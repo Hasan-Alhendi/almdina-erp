@@ -2,14 +2,14 @@
     "use strict";
 
     const PAGE_ROUTE = "board-editor";
-    const STYLE = "/assets/almdina_erp/css/board_editor.css?v=49";
+    const STYLE = "/assets/almdina_erp/css/board_editor.css?v=50";
     const ASSET_ROOT = "/assets/almdina_erp/js/board_editor";
     const PREREQUISITES = Object.freeze([
         "/assets/almdina_erp/js/almdina_ui.js",
         "/assets/almdina_erp/js/frontend_foundation.js",
     ]);
     const MODULES = Object.freeze([
-        `${ASSET_ROOT}/api.js?v=22`,
+        `${ASSET_ROOT}/api.js?v=23`,
         `${ASSET_ROOT}/history.js?v=18`,
         `${ASSET_ROOT}/session_document.js?v=25`,
         `${ASSET_ROOT}/distribution.js?v=18`,
@@ -27,18 +27,18 @@
         "/assets/almdina_erp/js/door_cutting_order/drawing/door_cutting_order_clipped_corner_ux.js?v=18",
         `${ASSET_ROOT}/plan_display_style.js?v=18`,
         `${ASSET_ROOT}/plan_edge_marks.js?v=18`,
-        `${ASSET_ROOT}/editor_mode.js?v=1`,
+        `${ASSET_ROOT}/editor_mode.js?v=2`,
         `${ASSET_ROOT}/drawing_space.js?v=5`,
-        `${ASSET_ROOT}/drawing_model.js?v=9`,
+        `${ASSET_ROOT}/drawing_model.js?v=10`,
         `${ASSET_ROOT}/drawing_compile.js?v=4`,
         `${ASSET_ROOT}/drawing_snap.js?v=1`,
         `${ASSET_ROOT}/drawing_reference.js?v=1`,
         `${ASSET_ROOT}/store.js?v=23`,
-        `${ASSET_ROOT}/canvas_renderer.js?v=54`,
-        `${ASSET_ROOT}/drawing_properties_panel.js?v=1`,
+        `${ASSET_ROOT}/canvas_renderer.js?v=55`,
+        `${ASSET_ROOT}/drawing_properties_panel.js?v=2`,
         `${ASSET_ROOT}/sidebar_renderer.js?v=21`,
         `${ASSET_ROOT}/right_sidebar_renderer.js?v=5`,
-        `${ASSET_ROOT}/controller.js?v=52`,
+        `${ASSET_ROOT}/controller.js?v=53`,
     ]);
 
     function pageModule() {

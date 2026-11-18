@@ -14,6 +14,7 @@
     // writes the base layers, GEOMETRY, three manufacturing overlay layers, and TEXT.
     const DXF_LAYER_COUNT = 9;
     const TEXT_LABEL_LAYER = "TEXT";
+    const TEXT_OUTLINE_LAYER = "TEXT_OUTLINE";
     const FINISHED_GEOMETRY_LAYER = "GEOMETRY";
     const SAW_CENTER_LAYER = "CUT_PATH";
     const COLLINEAR_TOLERANCE_MM = 0.05;
@@ -867,6 +868,26 @@
         let entities = "";
         let extmaxX = 0;
         let extmaxY = 0;
+        let textOutlineLayer = false;
+
+        function textOutlineEntities(piece, placement) {
+            const rings = piece && piece.approved_text_outlines;
+            if (!Array.isArray(rings) || !rings.length) return "";
+            let body = "";
+            rings.forEach((ring) => {
+                const local = (ring || []).map((point) => (
+                    Array.isArray(point)
+                        ? [num(point[0]), num(point[1])]
+                        : [num(point.x_mm != null ? point.x_mm : point.x), num(point.y_mm != null ? point.y_mm : point.y)]
+                )).filter((point) => Number.isFinite(point[0]) && Number.isFinite(point[1]));
+                const placed = topologyDxfPoints(local, placement);
+                if (placed.length >= 3) {
+                    textOutlineLayer = true;
+                    body += lwpolyline(TEXT_OUTLINE_LAYER, placed, true);
+                }
+            });
+            return body;
+        }
 
         function overlayObstacles(sheet, piece) {
             const liner = window.AlmdinaLinerGeometry;
@@ -1056,6 +1077,7 @@
                     bounds.maxY,
                     piece
                 );
+                entities += textOutlineEntities(piece, placement);
             });
             // Separation/trim CUT_PATH is manufacturing-only after plan approval.
             if (includeSawCenters) {
@@ -1084,7 +1106,7 @@
         dxf += pair(0, "TABLE") + pair(2, "LTYPE") + pair(70, 1);
         dxf += pair(0, "LTYPE") + pair(2, "CONTINUOUS") + pair(70, 0) + pair(3, "Solid line") + pair(72, 65) + pair(73, 0) + pair(40, 0);
         dxf += pair(0, "ENDTAB");
-        dxf += pair(0, "TABLE") + pair(2, "LAYER") + pair(70, DXF_LAYER_COUNT);
+        dxf += pair(0, "TABLE") + pair(2, "LAYER") + pair(70, DXF_LAYER_COUNT + (textOutlineLayer ? 1 : 0));
         dxf += layer("0", 7) + layer("SHEET_OUTLINE", 8) + layer("CUT_PATH", 1)
             + layer("OFFCUT", EXTRA_OVERLAY_LAYER_COLORS.OFFCUT)
             + layer(FINISHED_GEOMETRY_LAYER, 4);
@@ -1092,6 +1114,7 @@
             + layer("Rear Groove", EXTRA_OVERLAY_LAYER_COLORS["Rear Groove"])
             + layer("Handle Recess", EXTRA_OVERLAY_LAYER_COLORS["Handle Recess"]);
         dxf += layer(TEXT_LABEL_LAYER, 7);
+        if (textOutlineLayer) dxf += layer(TEXT_OUTLINE_LAYER, 30);
         dxf += pair(0, "ENDTAB") + pair(0, "ENDSEC");
 
         dxf += pair(0, "SECTION") + pair(2, "BLOCKS") + pair(0, "ENDSEC");

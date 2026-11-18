@@ -1378,6 +1378,7 @@
         polyline: "spline",
         shapes: "shapes",
         pen: "pen-tool",
+        text: "type",
         node_edit: "waypoints",
         snap: "magnet",
         reference_image: "image",
@@ -1435,7 +1436,7 @@
             if (tool.id === "select" || tool.id === "polyline") {
                 return drawingToolControl(tool.id, tool.labelKey, activeTool === tool.id, enabled);
             }
-            if ((tool.id === "shapes" || tool.id === "node_edit" || tool.id === "pen") && enabled) {
+            if ((tool.id === "shapes" || tool.id === "node_edit" || tool.id === "pen" || tool.id === "text") && enabled) {
                 return drawingToolControl(tool.id, tool.labelKey, activeTool === tool.id, true);
             }
             if (tool.id === "snap" && enabled) {
@@ -1758,6 +1759,19 @@
             });
             (path.controls || []).forEach((control) => {
                 parts.push(`<circle data-abe-drawing-control="${esc(control.segmentId)}" data-abe-control-index="${esc(control.index)}" cx="${control.x}" cy="${control.y}" r="${3.2 / safeScale}" fill="#f79009" stroke="#7a2e0e" stroke-width="${1.2 / safeScale}"/>`);
+            });
+        });
+        (drawing.texts || []).forEach((text) => {
+            (text.rings || []).forEach((ring, index) => {
+                if (!ring.length) return;
+                const commands = ring.map((point, pointIndex) => `${pointIndex === 0 ? "M" : "L"}${point.x} ${point.y}`).join(" ");
+                parts.push(`<path data-abe-drawing-text="${esc(text.id)}" data-abe-text-ring="${index}" d="${commands} Z" fill="none" stroke="${text.approved ? "#b54708" : "#175cd3"}" stroke-width="${text.selected ? 2.2 : 1.4}" vector-effect="non-scaling-stroke" stroke-linejoin="round" stroke-linecap="round"${selectCursor}/>`);
+            });
+            if (!text.selected || !text.frame) return;
+            const frame = text.frame;
+            parts.push(`<rect data-abe-text-frame="${esc(text.id)}" x="${frame.x}" y="${frame.y}" width="${frame.width}" height="${frame.height}" fill="none" stroke="#0b5fff" stroke-width="${1.2 / safeScale}" stroke-dasharray="${4 / safeScale} ${3 / safeScale}"/>`);
+            (text.handles || []).forEach((handle) => {
+                parts.push(`<circle data-abe-text-handle="${esc(text.id)}" data-abe-text-handle-kind="${esc(handle.kind)}" cx="${handle.x}" cy="${handle.y}" r="${nodeRadius}" fill="#fff" stroke="#0b5fff" stroke-width="${1.4 / safeScale}"/>`);
             });
         });
         (drawing.shapes || []).forEach((shape) => {
@@ -2951,6 +2965,11 @@
                 if (handlers.beginMeasureGesture(event)) {
                     stage.setPointerCapture(event.pointerId);
                 }
+            }
+        });
+        stage.addEventListener("dblclick", (event) => {
+            if (handlers && handlers.drawingDoubleClick && handlers.drawingDoubleClick(event)) {
+                event.preventDefault();
             }
         });
         stage.addEventListener("pointermove", (event) => {

@@ -324,6 +324,89 @@ def get_board_editor_reference_image(
     return read_reference_png(str(order.name), str(plan.name), str(piece_instance_id or ""), str(file_id or ""))
 
 
+@frappe.whitelist(methods=["POST"])
+def shape_board_editor_text(
+    order_name: str,
+    plan_name: str,
+    content: str,
+    font_size_mm: float,
+    font_weight: str = "regular",
+    direction: str = "auto",
+    align: str = "left",
+    x_mm: float = 0,
+    y_mm: float = 0,
+    rotation_deg: float = 0,
+) -> dict[str, Any]:
+    """Return pinned-font outlines. This does not save the drawing."""
+
+    _order, _plan, _status, early = _authorize_drawing(order_name, plan_name, write=True)
+    if early is not None:
+        return early
+    from almdina_erp.almdina_erp.domain.cutting.board_editor_text import (
+        TextGeometryError,
+        layout_text,
+        place_outlines,
+    )
+
+    try:
+        laid = layout_text(
+            str(content or ""),
+            font_size_mm=float(font_size_mm),
+            font_weight=str(font_weight or "regular"),
+            direction=str(direction or "auto"),
+            align=str(align or "left"),
+        )
+        placed = place_outlines(
+            laid["outlines"],
+            x_mm=float(x_mm or 0),
+            y_mm=float(y_mm or 0),
+            rotation_deg=float(rotation_deg or 0),
+        )
+    except (TextGeometryError, TypeError, ValueError) as exc:
+        code = getattr(exc, "code", "") or "invalid_text"
+        return {"ok": False, "code": code}
+    return {
+        "ok": True,
+        "font_id": laid["font_id"],
+        "font_version": laid["font_version"],
+        "width_mm": laid["width_mm"],
+        "height_mm": laid["height_mm"],
+        "outlines": [
+            [{"x_mm": point[0], "y_mm": point[1]} for point in ring]
+            for ring in placed
+        ],
+    }
+
+
+@frappe.whitelist(methods=["POST"])
+def validate_board_editor_text(
+    order_name: str,
+    plan_name: str,
+    piece_instance_id: str,
+    text_id: str,
+    drawing: Any,
+) -> dict[str, Any]:
+    """Check one text element against the door contour. This does not save or approve it."""
+
+    _order, _plan, _status, early = _authorize_drawing(order_name, plan_name, write=True)
+    if early is not None:
+        return early
+    from almdina_erp.almdina_erp.domain.cutting.board_editor_text import validate_text_export
+
+    document = _parse_drawing(drawing)
+    if not isinstance(document, dict):
+        return {"ok": False, "code": "invalid_text"}
+    if str(document.get("piece_instance_id") or "") != str(piece_instance_id or ""):
+        return {"ok": False, "code": "piece_not_drawable"}
+    blank = document.get("blank") if isinstance(document.get("blank"), dict) else {}
+    return validate_text_export(
+        document,
+        str(text_id or ""),
+        blank_width_mm=float(blank.get("width_mm") or 0),
+        blank_length_mm=float(blank.get("length_mm") or 0),
+    )
+
+
 def _parse_drawing(drawing: Any) -> Any:
     if isinstance(drawing, str):
         try:
@@ -340,4 +423,6 @@ __all__ = [
     "save_board_editor_drawing",
     "upload_board_editor_reference_image",
     "get_board_editor_reference_image",
+    "shape_board_editor_text",
+    "validate_board_editor_text",
 ]

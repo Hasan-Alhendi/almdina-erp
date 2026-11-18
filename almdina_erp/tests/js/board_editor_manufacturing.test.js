@@ -91,7 +91,7 @@ assert.equal(drawing.current().document.paths[0].segments.every((segment) => seg
 
 const page = fs.readFileSync(path.join(root, "almdina_erp/page/board_editor/board_editor.js"), "utf8");
 assert.match(page, /drawing_compile\.js\?v=4/);
-assert.match(page, /controller\.js\?v=52/);
+assert.match(page, /controller\.js\?v=53/);
 const renderer = fs.readFileSync(path.join(root, "public/js/board_editor/canvas_renderer.js"), "utf8");
 assert.match(renderer, /Cut outline/);
 assert.match(renderer, /Clear cut outline/);

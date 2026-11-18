@@ -63,7 +63,7 @@
             ? `<span class="abe-drawing-dirty">${esc(__("Unsaved drawing"))}</span>`
             : (drawing.persisted ? `<span class="abe-drawing-saved">${esc(__("Saved drawing"))}</span>` : "");
         const message = __(drawing.messageKey || target.messageKey || "Select a special piece to start drawing.");
-        const idle = !drawing.pathForm && !drawing.shapeForm && !drawing.referenceForm && drawing.tool !== "shapes" && drawing.tool !== "pen" && drawing.tool !== "node_edit";
+        const idle = !drawing.pathForm && !drawing.shapeForm && !drawing.referenceForm && !drawing.textForm && drawing.tool !== "shapes" && drawing.tool !== "pen" && drawing.tool !== "node_edit" && drawing.tool !== "text";
         const help = idle
             ? `<p class="abe-drawing-note">${esc(__("Draw on the door. Length and angle stay beside the segment."))}</p>`
             : "";
@@ -312,6 +312,9 @@
             snap: drawing.snapMenuOpen === true ? drawing.snapSettings || {} : false,
             referenceMenu: drawing.referenceMenuOpen === true,
             referenceForm: drawing.referenceForm || null,
+            textForm: drawing.textLive && drawing.textForm
+                ? Object.assign({}, drawing.textForm, { text: "", widthMm: null, heightMm: null })
+                : (drawing.textForm || null),
             references: (drawing.references || []).map((row) => [row.id, row.selected, row.hidden, row.locked]),
             measure: drawing.tool === "polyline" ? null : drawing.measure || null,
             problem: drawing.cutProblem || null,
@@ -323,7 +326,7 @@
     function focusedField(root) {
         const active = root && root.ownerDocument ? root.ownerDocument.activeElement : null;
         if (!active || !root.contains || !root.contains(active)) return null;
-        const attr = ["data-abe-shape-field", "data-abe-reference-field", "data-abe-path-dx", "data-abe-path-dy", "data-abe-reference-known", "data-abe-drawing-length", "data-abe-drawing-angle"].find((name) => active.hasAttribute && active.hasAttribute(name));
+        const attr = ["data-abe-text-field", "data-abe-shape-field", "data-abe-reference-field", "data-abe-path-dx", "data-abe-path-dy", "data-abe-reference-known", "data-abe-drawing-length", "data-abe-drawing-angle"].find((name) => active.hasAttribute && active.hasAttribute(name));
         if (!attr) return null;
         return {
             attr,
@@ -376,7 +379,7 @@
                 if (handlers && handlers.setShapeKind) handlers.setShapeKind(button.getAttribute("data-abe-shape-kind"));
             });
         });
-        root.querySelectorAll("[data-abe-shape-form], [data-abe-path-form], [data-abe-pen-settings], [data-abe-snap-menu], [data-abe-reference-menu], [data-abe-reference-form]").forEach((panel) => {
+        root.querySelectorAll("[data-abe-shape-form], [data-abe-path-form], [data-abe-pen-settings], [data-abe-snap-menu], [data-abe-reference-menu], [data-abe-reference-form], [data-abe-text-form]").forEach((panel) => {
             panel.addEventListener("pointerdown", stop);
             panel.addEventListener("click", stop);
         });
@@ -449,8 +452,84 @@
                 if (handlers && handlers.setReferenceAspect) handlers.setReferenceAspect(input.checked === true);
             });
         });
+        root.querySelectorAll("[data-abe-text-form] [data-abe-text-field]").forEach((input) => {
+            let composing = false;
+            const commit = () => {
+                if (handlers && handlers.commitTextField) {
+                    handlers.commitTextField(input.getAttribute("data-abe-text-field"), input.type === "checkbox" ? input.checked : input.value);
+                }
+            };
+            input.addEventListener("compositionstart", () => { composing = true; });
+            input.addEventListener("compositionend", () => {
+                composing = false;
+                if (input.getAttribute("data-abe-text-field") === "text" && handlers && handlers.onTextInput) {
+                    handlers.onTextInput(input.value);
+                }
+            });
+            input.addEventListener("input", (event) => {
+                event.stopPropagation();
+                if (input.getAttribute("data-abe-text-field") !== "text" || composing) return;
+                if (handlers && handlers.onTextInput) handlers.onTextInput(input.value);
+            });
+            input.addEventListener("change", (event) => {
+                event.stopPropagation();
+                if (input.getAttribute("data-abe-text-field") === "text") return;
+                commit();
+            });
+            input.addEventListener("blur", () => {
+                if (input.getAttribute("data-abe-text-field") === "text" && handlers && handlers.onTextBlur) handlers.onTextBlur();
+            });
+            input.addEventListener("keydown", (event) => {
+                if (input.getAttribute("data-abe-text-field") === "text") return;
+                if (event.key !== "Enter" && event.code !== "Enter" && event.code !== "NumpadEnter") return;
+                event.preventDefault();
+                event.stopPropagation();
+                commit();
+            });
+        });
         const renderer = window.AlmdinaBoardEditor && window.AlmdinaBoardEditor.CanvasRenderer;
         if (renderer && typeof renderer.bindDrawingMeasure === "function") renderer.bindDrawingMeasure(root, handlers);
+    }
+
+    function textField(name, label, value, kind) {
+        const wide = kind === "area" ? " abe-metric-wide" : "";
+        const control = kind === "area"
+            ? `<textarea data-abe-text-field="${esc(name)}" rows="3" dir="auto" aria-label="${esc(__(label))}">${esc(value)}</textarea>`
+            : `<input type="text" inputmode="decimal" dir="ltr" autocomplete="off" spellcheck="false" data-abe-text-field="${esc(name)}" value="${esc(value)}" aria-label="${esc(__(label))}" />`;
+        return `<label class="abe-metric${wide}"><span>${esc(__(label))}</span>${control}</label>`;
+    }
+
+    function textChoice(name, label, value, options) {
+        const choices = options.map((option) => `<option value="${esc(option[0])}"${option[0] === value ? " selected" : ""}>${esc(__(option[1]))}</option>`).join("");
+        return `<label class="abe-metric"><span>${esc(__(label))}</span><select data-abe-text-field="${esc(name)}" aria-label="${esc(__(label))}">${choices}</select></label>`;
+    }
+
+    function textSection(drawing) {
+        const form = drawing && drawing.textForm;
+        if (!form) return "";
+        const vector = form.state === "vector";
+        const actions = vector
+            ? `<button type="button" data-abe-drawing-action="approve-text">${esc(__(form.exportApproved ? "Clear text export approval" : "Approve text for export"))}</button>`
+            : `<button type="button" data-abe-drawing-action="convert-text">${esc(__("Convert Text to Path"))}</button>`;
+        return `<div data-abe-text-form="1" class="abe-prop-grid">
+            ${textField("text", "Text", form.text, "area")}
+            <label class="abe-metric abe-metric-wide"><span>${esc(__("Font Family"))}</span><select data-abe-text-field="font_id" aria-label="${esc(__("Font Family"))}"><option value="noto-naskh-arabic" selected>Noto Naskh Arabic</option></select></label>
+            ${textChoice("font_weight", "Font Weight", form.fontWeight, [["regular", "Regular"], ["bold", "Bold"]])}
+            ${textField("font_size_mm", "Font Size (mm)", formatMeasureMm(form.fontSizeMm))}
+            ${textChoice("direction", "Text direction", form.direction, [["auto", "Auto"], ["rtl", "RTL"], ["ltr", "LTR"]])}
+            ${textChoice("align", "Alignment", form.align, [["left", "Left"], ["center", "Center"], ["right", "Right"]])}
+            ${textField("x_mm", "X (mm)", formatMeasureMm(form.xMm))}
+            ${textField("y_mm", "Y (mm)", formatMeasureMm(form.yMm))}
+            ${textField("width_mm", "Width (mm)", formatMeasureMm(form.widthMm))}
+            ${textField("height_mm", "Height (mm)", formatMeasureMm(form.heightMm))}
+            <label class="abe-metric abe-metric-wide"><span>${esc(__("Lock aspect ratio"))}</span><input type="checkbox" data-abe-text-field="aspect_locked"${form.aspectLocked ? " checked" : ""} /></label>
+            ${textField("rotation_deg", "Rotation (°)", formatMeasureAngle(form.rotationDeg))}
+            <p class="abe-drawing-note">${esc(vector ? __("Vector text outlines") : __("Editable text"))}</p>
+            <div class="abe-prop-actions">${actions}
+                <button type="button" data-abe-drawing-action="duplicate">${esc(__("Duplicate"))}</button>
+                <button type="button" data-abe-drawing-action="remove">${esc(__("Delete"))}</button>
+            </div>
+        </div>`;
     }
 
     function html(storeView, collapsed) {
@@ -477,6 +556,7 @@
             section("pen", "Pen", penSettingsHtml(drawing, enabled)),
             section("snap", "Snap", snapMenuHtml(drawing, enabled)),
             section("reference", "Reference image", `${referenceMenuHtml(drawing, enabled)}${referenceFormHtml(drawing)}`),
+            section("text", "Text", textSection(drawing)),
         ].join("");
         return `<aside class="abe-draw-props" data-abe-draw-props="1" dir="${esc(pageDirection())}">
             <header class="abe-prop-head">

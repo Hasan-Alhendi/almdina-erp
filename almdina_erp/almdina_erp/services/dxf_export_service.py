@@ -809,6 +809,23 @@ def _export_deduct_edge_thickness(value: object) -> int:
 
 
 @frappe.whitelist()
+def _attach_plan_text_outlines(order: Any, plan: Any, snapshot: dict[str, Any]) -> dict[str, Any]:
+    """Add approved text in sheet coordinates. The stored plan snapshot stays unchanged."""
+
+    from almdina_erp.almdina_erp.domain.cutting.board_editor_text import (
+        attach_approved_text_outlines,
+    )
+    from almdina_erp.almdina_erp.infrastructure.frappe.board_editor_drawing_store import (
+        FrappeBoardEditorDrawingStore,
+        drawing_storage_ready,
+    )
+
+    if not drawing_storage_ready():
+        return snapshot
+    rows = FrappeBoardEditorDrawingStore().read_for_plan(str(order.name), str(plan.name))
+    return attach_approved_text_outlines(snapshot, rows)
+
+
 def get_validated_dxf_plan(
     order_name: str | None = None,
     doc: str | dict[str, Any] | None = None,
@@ -846,6 +863,7 @@ def get_validated_dxf_plan(
         snapshot = apply_extra_double_text_flags_to_snapshot(snapshot, order.pieces)
         _assert_export_kerf(snapshot, fallback_kerf_mm=flt(plan.kerf_mm))
         snapshot = _with_tool_diameters(snapshot, plan)
+        snapshot = _attach_plan_text_outlines(order, plan, snapshot)
         include_saw_centers = _include_saw_centers_for_export(plan, plan_source, order)
         prefer_original = prefer_original_uploaded_download(order, plan)
         if not prefer_original:

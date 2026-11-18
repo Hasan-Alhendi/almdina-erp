@@ -43,6 +43,7 @@ MAX_DOCUMENT_UTF8_BYTES = 1_000_000
 MAX_PATHS = 256
 MAX_SHAPES = 128
 MAX_REFERENCES = 32
+MAX_TEXTS = 32
 MAX_NODES = 12_000
 MAX_SEGMENTS = 12_000
 MAX_NODES_PER_PATH = 4_000
@@ -113,6 +114,7 @@ TOP_FIELDS = frozenset(
         "paths",
         "shapes",
         "references",
+        "texts",
     }
 )
 BLANK_FIELDS = frozenset({"width_mm", "length_mm"})
@@ -233,8 +235,9 @@ def normalize_document(document: Mapping[str, Any]) -> dict[str, Any]:
     paths = _paths(document.get("paths"))
     shapes = _shapes(document.get("shapes"))
     references = _references(document.get("references"))
-    _assert_counts(paths, shapes, references)
-    _assert_unique_ids(paths, shapes, references)
+    texts = _texts(document["texts"]) if "texts" in document else None
+    _assert_counts(paths, shapes, references, texts or [])
+    _assert_unique_ids(paths, shapes, references, texts or [])
     _assert_shape_links(paths, shapes)
 
     normalized = {
@@ -248,6 +251,8 @@ def normalize_document(document: Mapping[str, Any]) -> dict[str, Any]:
         "shapes": shapes,
         "references": references,
     }
+    if texts is not None:
+        normalized["texts"] = texts
     if len(_dump(normalized).encode("utf-8")) > MAX_DOCUMENT_UTF8_BYTES:
         raise DrawingDocumentError("document_too_large")
     return normalized
@@ -692,6 +697,110 @@ def _custom_template_params(value: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
+TEXT_ROLE = "manufacturing_text"
+TEXT_STATES = frozenset({"editable", "vector"})
+TEXT_WEIGHTS = frozenset({"regular", "bold"})
+TEXT_DIRECTIONS = frozenset({"auto", "rtl", "ltr"})
+TEXT_ALIGNS = frozenset({"left", "center", "right"})
+TEXT_FIELDS = frozenset(
+    {
+        "id",
+        "role",
+        "text",
+        "font_id",
+        "font_version",
+        "font_size_mm",
+        "font_weight",
+        "direction",
+        "align",
+        "x_mm",
+        "y_mm",
+        "rotation_deg",
+        "aspect_locked",
+        "state",
+        "export_approved",
+        "outlines",
+    }
+)
+OUTLINE_FIELDS = frozenset({"id", "points"})
+_TEXT_CONTENT_RE = re.compile(r"^[^<>{}\\&\x00-\x08\x0b\x0c\x0e-\x1f]{1,80}$")
+
+
+def _texts(value: Any) -> list[dict[str, Any]]:
+    rows = _sequence(value, code="invalid_document")
+    if len(rows) > MAX_TEXTS:
+        raise DrawingDocumentError("too_many_elements")
+    return [_text(row) for row in rows]
+
+
+def _text(value: Any) -> dict[str, Any]:
+    if not isinstance(value, Mapping):
+        raise DrawingDocumentError("invalid_text")
+    _reject_unknown(value, TEXT_FIELDS)
+    _reject_embedded_image(value)
+    if set(value) != TEXT_FIELDS:
+        raise DrawingDocumentError("invalid_text")
+    content = value.get("text")
+    if not isinstance(content, str) or not _TEXT_CONTENT_RE.fullmatch(content) or not content.strip():
+        raise DrawingDocumentError("invalid_text")
+    if value.get("role") != TEXT_ROLE:
+        raise DrawingDocumentError("invalid_text")
+    state = value.get("state")
+    if state not in TEXT_STATES:
+        raise DrawingDocumentError("invalid_text")
+    approved = _required_bool(value.get("export_approved"), code="invalid_text")
+    if approved and state != "vector":
+        raise DrawingDocumentError("invalid_text")
+    weight = value.get("font_weight")
+    direction = value.get("direction")
+    align = value.get("align")
+    if weight not in TEXT_WEIGHTS or direction not in TEXT_DIRECTIONS or align not in TEXT_ALIGNS:
+        raise DrawingDocumentError("invalid_text")
+    font_id = value.get("font_id")
+    font_version = value.get("font_version")
+    if font_id != "noto-naskh-arabic" or font_version != "1":
+        raise DrawingDocumentError("font_unavailable")
+    return {
+        "id": _identifier(value.get("id"), code="invalid_id"),
+        "role": TEXT_ROLE,
+        "text": content,
+        "font_id": font_id,
+        "font_version": font_version,
+        "font_size_mm": _positive_mm(value.get("font_size_mm"), code="invalid_text"),
+        "font_weight": weight,
+        "direction": direction,
+        "align": align,
+        "x_mm": _mm(value.get("x_mm"), code="invalid_text"),
+        "y_mm": _mm(value.get("y_mm"), code="invalid_text"),
+        "rotation_deg": _degrees(value.get("rotation_deg"), code="invalid_text"),
+        "aspect_locked": _required_bool(value.get("aspect_locked"), code="invalid_text"),
+        "state": state,
+        "export_approved": approved,
+        "outlines": _outlines(value.get("outlines")),
+    }
+
+
+def _outlines(value: Any) -> list[dict[str, Any]]:
+    rows = _sequence(value, code="invalid_text")
+    outlines = []
+    for row in rows:
+        if not isinstance(row, Mapping) or set(row) != OUTLINE_FIELDS:
+            raise DrawingDocumentError("invalid_text")
+        points = []
+        raw_points = row.get("points")
+        if isinstance(raw_points, (str, bytes)) or not isinstance(raw_points, Sequence) or len(raw_points) < 3:
+            raise DrawingDocumentError("invalid_text")
+        for point in raw_points:
+            if not isinstance(point, Mapping) or set(point) != CONTROL_FIELDS:
+                raise DrawingDocumentError("invalid_text")
+            points.append({
+                "x_mm": _mm(point.get("x_mm"), code="invalid_text"),
+                "y_mm": _mm(point.get("y_mm"), code="invalid_text"),
+            })
+        outlines.append({"id": _identifier(row.get("id"), code="invalid_id"), "points": points})
+    return outlines
+
+
 def _references(value: Any) -> list[dict[str, Any]]:
     rows = _sequence(value, code="invalid_document")
     if len(rows) > MAX_REFERENCES:
@@ -747,12 +856,24 @@ def _point(value: Any) -> dict[str, float]:
     return {"x_mm": _mm(value.get("x_mm"), code="invalid_reference"), "y_mm": _mm(value.get("y_mm"), code="invalid_reference")}
 
 
-def _assert_counts(paths: Sequence[Mapping[str, Any]], shapes: Sequence[Any], references: Sequence[Any]) -> None:
+def _assert_counts(
+    paths: Sequence[Mapping[str, Any]],
+    shapes: Sequence[Any],
+    references: Sequence[Any],
+    texts: Sequence[Any] = (),
+) -> None:
     node_count = sum(len(path["nodes"]) for path in paths)
     segment_count = sum(len(path["segments"]) for path in paths)
     if node_count > MAX_NODES or segment_count > MAX_SEGMENTS:
         raise DrawingDocumentError("too_many_elements")
-    if len(shapes) > MAX_SHAPES or len(references) > MAX_REFERENCES or len(paths) > MAX_PATHS:
+    if (
+        len(shapes) > MAX_SHAPES
+        or len(references) > MAX_REFERENCES
+        or len(paths) > MAX_PATHS
+        or len(texts) > MAX_TEXTS
+    ):
+        raise DrawingDocumentError("too_many_elements")
+    if sum(len(text.get("outlines") or []) for text in texts) > 400:
         raise DrawingDocumentError("too_many_elements")
 
 
@@ -760,6 +881,7 @@ def _assert_unique_ids(
     paths: Sequence[Mapping[str, Any]],
     shapes: Sequence[Mapping[str, Any]],
     references: Sequence[Mapping[str, Any]],
+    texts: Sequence[Mapping[str, Any]] = (),
 ) -> None:
     seen: set[str] = set()
 
@@ -778,6 +900,10 @@ def _assert_unique_ids(
         take(shape["id"])
     for reference in references:
         take(reference["id"])
+    for text in texts:
+        take(text["id"])
+        for outline in text["outlines"]:
+            take(outline["id"])
 
 
 def _assert_shape_links(paths: Sequence[Mapping[str, Any]], shapes: Sequence[Mapping[str, Any]]) -> None:

@@ -9,6 +9,7 @@
         Object.freeze({ id: "polyline", labelKey: "Polyline" }),
         Object.freeze({ id: "shapes", labelKey: "Shapes" }),
         Object.freeze({ id: "pen", labelKey: "Pen" }),
+        Object.freeze({ id: "text", labelKey: "Text" }),
         Object.freeze({ id: "node_edit", labelKey: "Node edit" }),
         Object.freeze({ id: "snap", labelKey: "Snap tool" }),
         Object.freeze({ id: "reference_image", labelKey: "Reference image" }),

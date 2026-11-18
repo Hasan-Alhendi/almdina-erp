@@ -1298,6 +1298,7 @@
                 if (!vectorGesture || !moveEvent || moveEvent.pointerId !== pointerId) return;
                 try {
                     if (vectorGesture.kind === "node") updateNodeGesture(moveEvent);
+                    else if (vectorGesture.kind === "text-scale" || vectorGesture.kind === "text-rotate") updateTextHandle(moveEvent);
                     else updateSelectGesture(moveEvent);
                 } catch (error) {
                     endVectorGesture("cancel");
@@ -1633,6 +1634,9 @@
                 snapSettings: snapState(),
                 snapMenuOpen: snapMenuOpen === true,
                 references: drawingReferenceViews(record, frame, Space),
+                texts: drawingTextViews(record, frame, Space),
+                textForm: textFormState(record),
+                textLive: record.textLive === true,
                 referenceMenuOpen: referenceMenuOpen === true,
                 referenceForm: referenceFormState(record),
                 pathForm: pathFormState(record),
@@ -1670,6 +1674,63 @@
                 });
             });
             return cuts;
+        }
+
+        function drawingTextViews(record, frame, Space) {
+            return (record.document.texts || []).map((text) => {
+                const rings = (text.outlines || []).map((ring) => (ring.points || []).map((point) => {
+                    const world = frame ? Space.doorToWorld(frame, point.x_mm, point.y_mm) : { x: point.x_mm, y: point.y_mm };
+                    return { x: world.x, y: world.y };
+                }));
+                const selected = Boolean(record.selection && record.selection.textId === text.id);
+                const flat = rings.reduce((list, ring) => list.concat(ring), []);
+                let frameBox = null;
+                let handles = [];
+                if (selected && flat.length) {
+                    const minX = Math.min.apply(null, flat.map((point) => point.x));
+                    const minY = Math.min.apply(null, flat.map((point) => point.y));
+                    const maxX = Math.max.apply(null, flat.map((point) => point.x));
+                    const maxY = Math.max.apply(null, flat.map((point) => point.y));
+                    frameBox = { x: minX, y: minY, width: Math.max(0.1, maxX - minX), height: Math.max(0.1, maxY - minY) };
+                    handles = [
+                        { kind: "scale", x: maxX, y: maxY },
+                        { kind: "rotate", x: (minX + maxX) / 2, y: minY },
+                    ];
+                }
+                return {
+                    id: text.id,
+                    selected,
+                    approved: text.export_approved === true,
+                    rings,
+                    frame: frameBox,
+                    handles,
+                };
+            });
+        }
+
+        function textFormState(record) {
+            if (!record || !record.selection || !record.selection.textId) return null;
+            const text = (record.document.texts || []).find((row) => row.id === record.selection.textId);
+            if (!text) return null;
+            const bounds = drawingSession.textBounds(text.id);
+            return {
+                id: text.id,
+                text: text.text || "",
+                fontId: text.font_id || "",
+                fontVersion: text.font_version || "",
+                fontSizeMm: text.font_size_mm,
+                fontWeight: text.font_weight || "regular",
+                direction: text.direction || "auto",
+                align: text.align || "right",
+                xMm: text.x_mm,
+                yMm: text.y_mm,
+                widthMm: bounds ? bounds.width : null,
+                heightMm: bounds ? bounds.height : null,
+                rotationDeg: text.rotation_deg || 0,
+                aspectLocked: text.aspect_locked !== false,
+                state: text.state || "editable",
+                exportApproved: text.export_approved === true,
+            };
         }
 
         function pathFormState(record) {
@@ -2269,6 +2330,235 @@
             syncDrawing();
         }
 
+        function textMessage(code) {
+            if (code === "text_outside_contour") return "The text is outside the manufacturing contour.";
+            if (code === "text_crosses_contour") return "The text crosses the manufacturing contour.";
+            if (code === "text_not_vector") return "Convert the text to a path before approving it.";
+            if (code === "font_unavailable") return "The manufacturing font is not available.";
+            if (code === "text_too_complex" || code === "text_too_long") return "The text is too complex to manufacture.";
+            return "The text outline is not valid.";
+        }
+
+        let textPreviewToken = 0;
+        let textPreviewTimer = null;
+        let textPreviewUndo = false;
+        let textShapeFlight = null;
+
+        function scheduleTextPreview(value) {
+            const record = activeDrawingRecord();
+            const text = record && record.selection && (record.document.texts || []).find((row) => row.id === record.selection.textId);
+            if (!text) return;
+            if (textPreviewTimer) clearTimeout(textPreviewTimer);
+            const token = ++textPreviewToken;
+            if (record.textLive !== true) {
+                record.textLive = true;
+                syncDrawing();
+            }
+            textPreviewTimer = setTimeout(() => {
+                textPreviewTimer = null;
+                reshapeText(text, { text: value }, { preview: true, token: token });
+            }, 150);
+        }
+
+        async function flushTextPreview() {
+            if (textPreviewTimer) {
+                clearTimeout(textPreviewTimer);
+                textPreviewTimer = null;
+                const record = activeDrawingRecord();
+                const field = ensureShell().querySelector("[data-abe-text-field=\"text\"]");
+                const text = record && record.selection && (record.document.texts || []).find((row) => row.id === record.selection.textId);
+                if (text && field) await reshapeText(text, { text: field.value }, { preview: true, token: textPreviewToken });
+            }
+            if (textShapeFlight) await textShapeFlight;
+            const record = activeDrawingRecord();
+            const field = ensureShell().querySelector("[data-abe-text-field=\"text\"]");
+            const text = record && record.selection && (record.document.texts || []).find((row) => row.id === record.selection.textId);
+            if (field && text && field.value !== text.text) return false;
+            if (record) record.textLive = false;
+            textPreviewUndo = false;
+            return true;
+        }
+
+        async function reshapeText(text, patch, options) {
+            const Api = window.AlmdinaBoardEditor && window.AlmdinaBoardEditor.Api;
+            const record = activeDrawingRecord();
+            const preview = Boolean(options && options.preview);
+            const token = options && options.token;
+            if (!Api || !record || !text || !activeOrderName || !loadedPlanName) return false;
+            const next = Object.assign({}, text, patch || {});
+            const flight = (async () => {
+                let response = null;
+                try {
+                    response = await Api.shapeText({
+                        orderName: activeOrderName,
+                        planName: loadedPlanName,
+                        content: next.text,
+                        fontSizeMm: next.font_size_mm,
+                        fontWeight: next.font_weight,
+                        direction: next.direction,
+                        align: next.align,
+                        xMm: next.x_mm,
+                        yMm: next.y_mm,
+                        rotationDeg: next.rotation_deg,
+                    });
+                } catch (error) {
+                    response = { ok: false, code: "invalid_text" };
+                }
+                return response;
+            })();
+            textShapeFlight = flight;
+            const response = await flight;
+            if (textShapeFlight === flight) textShapeFlight = null;
+            if (preview && token !== textPreviewToken) return false;
+            const current = activeDrawingRecord();
+            if (!current || current !== record) return false;
+            if (!response || response.ok === false) {
+                current.messageKey = textMessage(response && response.code);
+                syncDrawing();
+                return false;
+            }
+            const history = preview ? !textPreviewUndo : true;
+            if (preview && history) textPreviewUndo = true;
+            drawingSession.applyText(Object.assign({}, next, {
+                id: text.id,
+                font_id: response.font_id,
+                font_version: response.font_version,
+                outlines: response.outlines,
+                history: history ? undefined : false,
+            }));
+            if (!preview) {
+                textPreviewUndo = false;
+                current.textLive = false;
+            }
+            syncDrawing();
+            return true;
+        }
+
+        function placeText(door) {
+            const record = activeDrawingRecord();
+            if (!record) return;
+            const created = {
+                id: null,
+                text: "نص",
+                font_size_mm: 20,
+                font_weight: "regular",
+                direction: "auto",
+                align: "right",
+                x_mm: door.x,
+                y_mm: door.y,
+                rotation_deg: 0,
+                aspect_locked: true,
+                state: "editable",
+            };
+            reshapeText(created, {}).then((ok) => {
+                if (!ok) return;
+                drawingTool = "select";
+                syncDrawing();
+                const field = ensureShell().querySelector("[data-abe-text-field=\"text\"]");
+                if (field && field.focus) {
+                    field.focus();
+                    if (field.select) field.select();
+                }
+            });
+        }
+
+        function drawingDoubleClick(event) {
+            if (!store || drawingTool !== "select") return false;
+            const target = event && event.target && event.target.closest && event.target.closest("[data-abe-drawing-text]");
+            if (!target) return false;
+            const field = ensureShell().querySelector("[data-abe-text-field=\"text\"]");
+            if (field && field.focus) {
+                field.focus();
+                if (field.select) field.select();
+            }
+            return true;
+        }
+
+        function commitTextField(field, value) {
+            const record = activeDrawingRecord();
+            const text = record && record.selection && (record.document.texts || []).find((row) => row.id === record.selection.textId);
+            if (!text) return;
+            if (field === "aspect_locked") {
+                text.aspect_locked = value === true;
+                syncDrawing();
+                return;
+            }
+            if (field === "x_mm" || field === "y_mm") {
+                const Model = window.AlmdinaBoardEditor && window.AlmdinaBoardEditor.DrawingModel;
+                const parsed = Model.parseMeasure(value);
+                if (!parsed || parsed.invalid || parsed.empty) return;
+                const dx = field === "x_mm" ? parsed.value - Number(text.x_mm) : 0;
+                const dy = field === "y_mm" ? parsed.value - Number(text.y_mm) : 0;
+                drawingSession.moveText(text.id, dx, dy);
+                syncDrawing();
+                return;
+            }
+            if (field === "rotation_deg") {
+                const Model = window.AlmdinaBoardEditor && window.AlmdinaBoardEditor.DrawingModel;
+                const parsed = Model.parseMeasure(value);
+                if (!parsed || parsed.invalid || parsed.empty) return;
+                drawingSession.rotateText(text.id, parsed.value - Number(text.rotation_deg || 0));
+                syncDrawing();
+                return;
+            }
+            if (field === "width_mm" || field === "height_mm") {
+                const bounds = drawingSession.textBounds(text.id);
+                const Model = window.AlmdinaBoardEditor && window.AlmdinaBoardEditor.DrawingModel;
+                const parsed = Model.parseMeasure(value);
+                const current = bounds && (field === "width_mm" ? bounds.width : bounds.height);
+                if (!parsed || parsed.invalid || !(parsed.value > 0) || !(current > 0)) return;
+                drawingSession.scaleText(text.id, parsed.value / current, {
+                    anchor: { x: bounds.minX, y: bounds.minY },
+                    axis: text.aspect_locked === false ? (field === "width_mm" ? "x" : "y") : "",
+                });
+                syncDrawing();
+                return;
+            }
+            const patch = {};
+            if (field === "text") patch.text = value;
+            if (field === "font_size_mm") patch.font_size_mm = Number(value);
+            if (field === "font_weight") patch.font_weight = value;
+            if (field === "direction") patch.direction = value;
+            if (field === "align") patch.align = value;
+            if (field === "font_id" && value !== "noto-naskh-arabic") {
+                record.messageKey = textMessage("font_unavailable");
+                syncDrawing();
+                return;
+            }
+            reshapeText(text, patch);
+        }
+
+        async function approveSelectedText() {
+            const Api = window.AlmdinaBoardEditor && window.AlmdinaBoardEditor.Api;
+            const record = activeDrawingRecord();
+            const text = record && record.selection && (record.document.texts || []).find((row) => row.id === record.selection.textId);
+            if (!record || !text) return;
+            if (text.export_approved) {
+                drawingSession.setTextExport(text.id, false);
+                syncDrawing();
+                return;
+            }
+            let response = null;
+            try {
+                response = await Api.validateText({
+                    orderName: activeOrderName,
+                    planName: loadedPlanName,
+                    pieceInstanceId: record.pieceInstanceId,
+                    textId: text.id,
+                    drawing: record.document,
+                });
+            } catch (error) {
+                response = { ok: false, code: "invalid_text" };
+            }
+            if (!response || response.ok !== true) {
+                record.messageKey = textMessage(response && response.code);
+                syncDrawing();
+                return;
+            }
+            drawingSession.setTextExport(text.id, true);
+            syncDrawing();
+        }
+
         function drawingPointerDown(event) {
             if (!store || !drawingSession || !event || event.button !== 0) return false;
             if (event.target && event.target.closest && event.target.closest("[data-abe-drawing-cursor], [data-abe-drawing-measure], [data-abe-shape-form], [data-abe-path-form], [data-abe-pen-settings], [data-abe-snap-menu], [data-abe-snap-toggle], [data-abe-reference-menu], [data-abe-reference-form], [data-abe-reference-toggle]")) {
@@ -2282,6 +2572,11 @@
             if (!mapped) return false;
             if (referenceCalibration && takeCalibrationPoint(mapped.door)) return true;
             if (drawingTool === "select") {
+                const handle = event.target && event.target.closest && event.target.closest("[data-abe-text-handle]");
+                if (handle && record.selection && record.selection.textId) {
+                    beginTextHandle(handle.getAttribute("data-abe-text-handle-kind"), mapped.door, event, record);
+                    return true;
+                }
                 const Space = drawingSpaceApi();
                 const Reference = drawingReferenceApi();
                 const scale = Number(view.viewport.scale) || 1;
@@ -2305,6 +2600,10 @@
                     }
                 }
                 return false;
+            }
+            if (drawingTool === "text") {
+                placeText(mapped.door);
+                return true;
             }
             if (drawingTool === "shapes") return placeShapePoint(mapped, event);
             if (drawingTool === "node_edit") return beginNodeEdit(mapped, view, event);
@@ -2415,7 +2714,23 @@
             else if (action === "close-pen" && penClosePathId) {
                 if (drawingSession.closePenPath(penClosePathId)) penClosePathId = null;
             }
-            else if (action === "convert") {
+            else if (action === "duplicate") drawingSession.duplicateSelection();
+            else if (action === "convert-text") {
+                flushTextPreview().then((ready) => {
+                    if (ready === false || textShapeFlight) return;
+                    const selected = activeDrawingRecord();
+                    const textId = selected && selected.selection && selected.selection.textId;
+                    if (textId) drawingSession.convertText(textId);
+                    syncDrawing();
+                });
+                return;
+            } else if (action === "approve-text") {
+                flushTextPreview().then((ready) => {
+                    if (ready === false || textShapeFlight) return;
+                    approveSelectedText();
+                });
+                return;
+            } else if (action === "convert") {
                 const selected = activeDrawingRecord();
                 if (selected && selected.selection && selected.selection.shapeId) {
                     drawingSession.convertShape(selected.selection.shapeId);
@@ -2515,6 +2830,55 @@
             return created || true;
         }
 
+        function beginTextHandle(kind, door, event, record) {
+            const textId = record.selection && record.selection.textId;
+            const bounds = drawingSession.textBounds(textId);
+            if (!bounds || !event) return;
+            const center = { x: (bounds.minX + bounds.maxX) / 2, y: (bounds.minY + bounds.maxY) / 2 };
+            vectorGesture = {
+                kind: kind === "rotate" ? "text-rotate" : "text-scale",
+                pointerId: event.pointerId,
+                history: false,
+                id: textId,
+                base: selectionBase(record, record.selection),
+                anchor: { x: bounds.minX, y: bounds.minY },
+                center,
+                startDistance: Math.max(1, Math.hypot(door.x - bounds.minX, door.y - bounds.minY)),
+                lastAngle: Math.atan2(door.y - center.y, door.x - center.x),
+                applied: 1,
+            };
+            ownVectorPointer(event);
+        }
+
+        function updateTextHandle(event) {
+            const gesture = vectorGesture;
+            if (!gesture || !drawingSession) return;
+            const mapped = doorPointFromEvent(store.snapshot(), event);
+            if (!mapped) return;
+            const options = { history: gesture.history ? false : undefined };
+            if (gesture.kind === "text-scale") {
+                const distance = Math.hypot(mapped.door.x - gesture.anchor.x, mapped.door.y - gesture.anchor.y);
+                const next = Math.max(0.05, distance / gesture.startDistance);
+                if (Math.abs(next - 1) < 0.001) return;
+                if (drawingSession.scaleText(gesture.id, next, {
+                    history: options.history,
+                    base: gesture.base,
+                    anchor: gesture.anchor,
+                })) gesture.history = true;
+            } else {
+                const angle = Math.atan2(mapped.door.y - gesture.center.y, mapped.door.x - gesture.center.x);
+                let delta = (gesture.lastAngle - angle) * 180 / Math.PI;
+                if (delta > 180) delta -= 360;
+                if (delta < -180) delta += 360;
+                if (Math.abs(delta) < 0.2) return;
+                if (drawingSession.rotateText(gesture.id, delta, options)) {
+                    gesture.lastAngle = angle;
+                    gesture.history = true;
+                }
+            }
+            syncDrawing();
+        }
+
         function beginSelectGesture(record, door, event) {
             const selection = record && record.selection;
             if (!selection || !event) return;
@@ -2533,6 +2897,18 @@
         }
 
         function selectionBase(record, selection) {
+            if (selection.textId && !selection.pathId && !selection.shapeId) {
+                const text = (record.document.texts || []).find((row) => row.id === selection.textId);
+                if (!text) return null;
+                return {
+                    kind: "text",
+                    id: text.id,
+                    x_mm: text.x_mm,
+                    y_mm: text.y_mm,
+                    font_size_mm: text.font_size_mm,
+                    outlines: JSON.parse(JSON.stringify(text.outlines || [])),
+                };
+            }
             if (selection.shapeId && !selection.pathId) {
                 const shape = (record.document.shapes || []).find((row) => row.id === selection.shapeId);
                 if (!shape || shape.exploded) return null;
@@ -2566,9 +2942,11 @@
                 history: gesture.history ? false : undefined,
                 base: gesture.base.kind === "shape" ? gesture.base.params : gesture.base,
             };
-            const moved = gesture.base.kind === "shape"
-                ? drawingSession.moveShape(gesture.base.id, dx, dy, options)
-                : drawingSession.translatePath(gesture.base.id, dx, dy, options);
+            const moved = gesture.base.kind === "text"
+                ? drawingSession.moveText(gesture.base.id, dx, dy, options)
+                : (gesture.base.kind === "shape"
+                    ? drawingSession.moveShape(gesture.base.id, dx, dy, options)
+                    : drawingSession.translatePath(gesture.base.id, dx, dy, options));
             if (moved && drawingSession.documentCanonical() !== before) gesture.history = true;
             refreshCutValidation();
             syncDrawing();
@@ -2890,7 +3268,7 @@
         }
 
         function setDrawingTool(tool) {
-            if (tool !== "polyline" && tool !== "select" && tool !== "shapes" && tool !== "node_edit" && tool !== "pen") return;
+            if (tool !== "polyline" && tool !== "select" && tool !== "shapes" && tool !== "node_edit" && tool !== "pen" && tool !== "text") return;
             endVectorGesture("cancel");
             cancelPenStroke(false);
             const view = store && store.snapshot();
@@ -3259,6 +3637,14 @@
                     setReferenceAspect: (locked) => {
                         referenceAspectLock = locked !== false;
                     },
+                    commitTextField: (field, value) => commitTextField(field, value),
+                    onTextInput: (value) => scheduleTextPreview(value),
+                    onTextBlur: () => {
+                        flushTextPreview().then((ready) => {
+                            if (ready === false) return;
+                            syncDrawing();
+                        });
+                    },
                     commitDrawingHud: (lengthText, angleText, sourceField) => commitDrawingHud(lengthText, angleText, sourceField),
                     onDrawingMeasureInput: (field, value) => {
                         rememberMeasureInput(field, value);
@@ -3328,6 +3714,8 @@
                 drawingAction: (action) => drawingAction(action),
                 drawingHistory: (direction) => applyDrawingHistory(direction),
                 drawingPointerDown: (event) => drawingPointerDown(event),
+                drawingDoubleClick: (event) => drawingDoubleClick(event),
+                commitTextField: (field, value) => commitTextField(field, value),
                 commitDrawingHud: (lengthText, angleText, sourceField) => commitDrawingHud(lengthText, angleText, sourceField),
                 onDrawingMeasureInput: (field, value) => {
                     rememberMeasureInput(field, value);
@@ -3748,6 +4136,7 @@
         }
 
         async function saveDraft(options) {
+            if (await flushTextPreview() === false) return false;
             const forceDistribution = Boolean(options && options.forceDistribution);
             if (!store || !activeOrderName || !loadedPlanName) return false;
             const view = store.snapshot();
@@ -4085,11 +4474,16 @@
                     event.preventDefault();
                     if (undoKey && drawingSession) {
                         applyDrawingHistory(event.shiftKey || keyName.toLowerCase() === "y" ? "redo" : "undo");
-                    } else if ((keyName === "Delete" || keyName === "Backspace") && drawingSession && (drawingTool === "select" || drawingTool === "node_edit" || drawingTool === "shapes")) {
+                    } else if ((keyName === "Delete" || keyName === "Backspace") && drawingSession && (drawingTool === "select" || drawingTool === "node_edit" || drawingTool === "shapes" || drawingTool === "text")) {
                         drawingSession.deleteSelection();
                         refreshCutValidation();
                         syncDrawing();
                     }
+                    return;
+                }
+                if ((keyName === "t" || keyName === "T") && !modified && drawingTool !== "text") {
+                    event.preventDefault();
+                    setDrawingTool("text");
                     return;
                 }
                 if (keyName === "Enter" && drawingTool === "polyline") {

@@ -528,6 +528,9 @@
 
     function deleteSelection(record) {
         if (!record.selection) return false;
+        if (record.selection.textId && !record.selection.pathId && !record.selection.shapeId && !record.selection.nodeId) {
+            return deleteText(record, record.selection.textId);
+        }
         if (record.selection.referenceId && !record.selection.pathId && !record.selection.nodeId && !record.selection.shapeId) {
             return deleteReference(record, record.selection.referenceId);
         }
@@ -555,6 +558,12 @@
     function hitSegment(record, doorPoint, threshold) {
         let best = null;
         let bestDistance = Math.max(0, Number(threshold) || 0);
+        (record.document.texts || []).slice().reverse().forEach((text) => {
+            const distance = textHit(text, doorPoint, bestDistance);
+            if (distance == null) return;
+            bestDistance = distance;
+            best = { textId: text.id, pathId: null, segmentId: null, shapeId: null };
+        });
         (record.document.shapes || []).forEach((shape) => {
             if (!shape || shape.exploded) return;
             const built = Space().normalizeShape(shape.kind, shape.params);
@@ -696,6 +705,12 @@
             const match = String(shape && shape.id || "").match(/(\d+)$/);
             if (match) max = Math.max(max, Number(match[1]));
         });
+        (document.texts || []).forEach((text) => {
+            [text && text.id].concat((text && text.outlines || []).map((ring) => ring.id)).forEach((id) => {
+                const match = String(id || "").match(/(\d+)$/);
+                if (match) max = Math.max(max, Number(match[1]));
+            });
+        });
         return max + 1;
     }
 
@@ -749,7 +764,244 @@
     }
 
     function selectionOf(extra) {
-        return Object.assign({ pathId: null, segmentId: null, shapeId: null, nodeId: null }, extra || {});
+        return Object.assign({ pathId: null, segmentId: null, shapeId: null, nodeId: null, textId: null }, extra || {});
+    }
+
+    function textById(record, textId) {
+        return (record.document.texts || []).find((row) => row.id === textId) || null;
+    }
+
+    function textPointList(text) {
+        const points = [];
+        (text && text.outlines || []).forEach((ring) => {
+            (ring.points || []).forEach((point) => points.push(point));
+        });
+        return points;
+    }
+
+    function textBounds(text) {
+        const points = textPointList(text);
+        if (!points.length) return null;
+        let minX = points[0].x_mm;
+        let minY = points[0].y_mm;
+        let maxX = minX;
+        let maxY = minY;
+        points.forEach((point) => {
+            minX = Math.min(minX, point.x_mm);
+            minY = Math.min(minY, point.y_mm);
+            maxX = Math.max(maxX, point.x_mm);
+            maxY = Math.max(maxY, point.y_mm);
+        });
+        return { minX, minY, maxX, maxY, width: maxX - minX, height: maxY - minY };
+    }
+
+    function mapTextPoints(text, mapper) {
+        (text.outlines || []).forEach((ring) => {
+            ring.points = (ring.points || []).map((point) => {
+                const next = mapper(point.x_mm, point.y_mm);
+                return { x_mm: quantize(next.x), y_mm: quantize(next.y) };
+            });
+        });
+    }
+
+    function syncTextOrigin(text) {
+        const bounds = textBounds(text);
+        if (!bounds) return;
+        text.x_mm = quantize(bounds.minX);
+        text.y_mm = quantize(bounds.minY);
+    }
+
+    function textHit(text, doorPoint, threshold) {
+        const bounds = textBounds(text);
+        if (!bounds || !doorPoint) return null;
+        const pad = Math.max(0, Number(threshold) || 0);
+        if (doorPoint.x < bounds.minX - pad || doorPoint.x > bounds.maxX + pad || doorPoint.y < bounds.minY - pad || doorPoint.y > bounds.maxY + pad) {
+            return null;
+        }
+        const rings = (text.outlines || []).map((ring) => (ring.points || []).map((point) => ({ x: point.x_mm, y: point.y_mm })));
+        const inside = rings.some((ring) => ring.length >= 3 && Space().pointInPolygon(doorPoint, ring));
+        if (inside) return 0;
+        let best = pad;
+        rings.forEach((ring) => {
+            const distance = Space().outlineDistance(doorPoint, ring, true);
+            if (distance < best) best = distance;
+        });
+        return best <= pad ? best : null;
+    }
+
+    function storeTextOutlines(record, text, rings) {
+        text.outlines = (rings || []).map((ring, index) => ({
+            id: `${text.id}-r${index + 1}`,
+            points: (Array.isArray(ring) ? ring : ring.points || []).map((point) => ({
+                x_mm: quantize(point.x_mm != null ? point.x_mm : point.x),
+                y_mm: quantize(point.y_mm != null ? point.y_mm : point.y),
+            })),
+        })).filter((ring) => ring.points.length >= 3 && ring.points.every((point) => point.x_mm != null && point.y_mm != null));
+        if (!text.outlines.length) return fail(record, "invalid_text", "The text outline is not valid.");
+        return true;
+    }
+
+    function applyText(record, spec) {
+        const input = spec || {};
+        const content = String(input.text == null ? "" : input.text);
+        if (!content.trim() || content.length > 80 || /[<>{}\\&]/.test(content)) {
+            return fail(record, "invalid_text", "Enter text without markup.");
+        }
+        if (!record.ready) return fail(record, "not_ready", "The drawing is still loading.");
+        const existing = input.id ? textById(record, input.id) : null;
+        if (!input || input.history !== false) remember(record);
+        if (!record.document.texts) record.document.texts = [];
+        const text = existing || {
+            id: nextId(record, "t"),
+            role: "manufacturing_text",
+            font_id: "noto-naskh-arabic",
+            font_version: "1",
+            aspect_locked: true,
+            state: "editable",
+            export_approved: false,
+            outlines: [],
+        };
+        const contentChanged = existing && existing.text !== content;
+        const typeChanged = existing && (
+            existing.font_size_mm !== Number(input.font_size_mm)
+            || existing.font_weight !== (input.font_weight || "regular")
+            || existing.direction !== (input.direction || "auto")
+            || existing.align !== (input.align || "right")
+        );
+        text.text = content;
+        text.font_id = input.font_id || "noto-naskh-arabic";
+        text.font_version = String(input.font_version || "1");
+        text.font_size_mm = quantize(input.font_size_mm);
+        text.font_weight = input.font_weight === "bold" ? "bold" : "regular";
+        text.direction = input.direction || "auto";
+        text.align = input.align || "right";
+        text.rotation_deg = quantize(input.rotation_deg || 0);
+        text.aspect_locked = input.aspect_locked !== false;
+        if (input.x_mm != null) text.x_mm = quantize(input.x_mm);
+        if (input.y_mm != null) text.y_mm = quantize(input.y_mm);
+        if (!existing) {
+            text.state = input.state === "vector" ? "vector" : "editable";
+            text.export_approved = false;
+            record.document.texts.push(text);
+        }
+        if (!storeTextOutlines(record, text, input.outlines || [])) {
+            if (!existing) record.document.texts.pop();
+            return false;
+        }
+        if (text.x_mm == null || text.y_mm == null) syncTextOrigin(text);
+        if (contentChanged || typeChanged) {
+            text.state = "editable";
+            text.export_approved = false;
+        }
+        record.selection = selectionOf({ textId: text.id });
+        clearStatus(record);
+        return text.id;
+    }
+
+    function moveText(record, textId, dx, dy, options) {
+        const text = textById(record, textId);
+        const shiftX = quantize(dx);
+        const shiftY = quantize(dy);
+        const base = options && options.base && options.base.outlines ? options.base : null;
+        if (!text || shiftX == null || shiftY == null) return false;
+        if (!options || options.history !== false) remember(record);
+        const source = base ? base.outlines : text.outlines;
+        text.outlines = source.map((ring) => ({
+            id: ring.id,
+            points: (ring.points || []).map((point) => ({
+                x_mm: quantize(point.x_mm + shiftX),
+                y_mm: quantize(point.y_mm + shiftY),
+            })),
+        }));
+        const originX = base ? base.x_mm : text.x_mm;
+        const originY = base ? base.y_mm : text.y_mm;
+        text.x_mm = quantize((originX || 0) + shiftX);
+        text.y_mm = quantize((originY || 0) + shiftY);
+        clearStatus(record);
+        return true;
+    }
+
+    function scaleText(record, textId, factor, options) {
+        const text = textById(record, textId);
+        const scale = Number(factor);
+        const bounds = text && textBounds(text);
+        if (!bounds || !(scale > 0) || !Number.isFinite(scale)) return false;
+        const base = options && options.base && options.base.outlines ? options.base : null;
+        const sourceBounds = base ? textBounds(base) : bounds;
+        if (!sourceBounds) return false;
+        if (!options || options.history !== false) remember(record);
+        const anchor = options && options.anchor
+            ? options.anchor
+            : { x: (sourceBounds.minX + sourceBounds.maxX) / 2, y: (sourceBounds.minY + sourceBounds.maxY) / 2 };
+        const source = base ? base.outlines : text.outlines;
+        const scaleX = options && options.axis === "y" ? 1 : scale;
+        const scaleY = options && options.axis === "x" ? 1 : scale;
+        text.outlines = source.map((ring) => ({
+            id: ring.id,
+            points: (ring.points || []).map((point) => ({
+                x_mm: quantize(anchor.x + (point.x_mm - anchor.x) * scaleX),
+                y_mm: quantize(anchor.y + (point.y_mm - anchor.y) * scaleY),
+            })),
+        }));
+        const originX = base ? base.x_mm : text.x_mm;
+        const originY = base ? base.y_mm : text.y_mm;
+        text.x_mm = quantize(anchor.x + ((originX || 0) - anchor.x) * scaleX);
+        text.y_mm = quantize(anchor.y + ((originY || 0) - anchor.y) * scaleY);
+        const sourceSize = base ? base.font_size_mm : text.font_size_mm;
+        if (sourceSize != null && scaleX === scaleY) text.font_size_mm = quantize(sourceSize * scale);
+        clearStatus(record);
+        return true;
+    }
+
+    function rotateText(record, textId, degrees, options) {
+        const text = textById(record, textId);
+        const angle = Number(degrees);
+        const bounds = text && textBounds(text);
+        if (!bounds || !Number.isFinite(angle)) return false;
+        if (!options || options.history !== false) remember(record);
+        const cx = (bounds.minX + bounds.maxX) / 2;
+        const cy = (bounds.minY + bounds.maxY) / 2;
+        const radians = angle * Math.PI / 180;
+        const cos = Math.cos(radians);
+        const sin = Math.sin(radians);
+        mapTextPoints(text, (x, y) => {
+            const dx = x - cx;
+            const dy = y - cy;
+            return { x: cx + dx * cos + dy * sin, y: cy - dx * sin + dy * cos };
+        });
+        text.rotation_deg = quantize((Number(text.rotation_deg) || 0) + angle);
+        clearStatus(record);
+        return true;
+    }
+
+    function convertText(record, textId) {
+        const text = textById(record, textId);
+        if (!text || !(text.outlines || []).length) return fail(record, "invalid_text", "The text outline is not valid.");
+        remember(record);
+        text.state = "vector";
+        record.selection = selectionOf({ textId: text.id });
+        clearStatus(record);
+        return true;
+    }
+
+    function setTextExport(record, textId, approved) {
+        const text = textById(record, textId);
+        if (!text) return false;
+        if (approved && text.state !== "vector") return fail(record, "text_not_vector", "Convert the text to a path before approving it.");
+        remember(record);
+        text.export_approved = approved === true && text.state === "vector";
+        clearStatus(record);
+        return true;
+    }
+
+    function deleteText(record, textId) {
+        if (!textById(record, textId)) return false;
+        remember(record);
+        record.document.texts = (record.document.texts || []).filter((row) => row.id !== textId);
+        if (!record.document.texts.length) delete record.document.texts;
+        if (record.selection && record.selection.textId === textId) record.selection = null;
+        clearStatus(record);
+        return true;
     }
 
     function installParts(record, parts) {
@@ -967,6 +1219,21 @@
 
     function duplicateSelection(record) {
         if (!record.selection) return false;
+        if (record.selection.textId && !record.selection.pathId && !record.selection.shapeId) {
+            const text = textById(record, record.selection.textId);
+            if (!text) return false;
+            return applyText(record, Object.assign({}, text, {
+                id: null,
+                x_mm: text.x_mm + 10,
+                y_mm: text.y_mm + 10,
+                outlines: (text.outlines || []).map((ring) => ring.points.map((point) => ({
+                    x_mm: point.x_mm + 10,
+                    y_mm: point.y_mm + 10,
+                }))),
+                export_approved: false,
+                state: text.state,
+            }));
+        }
         if (record.selection.shapeId && !record.selection.pathId) {
             const shape = shapeById(record, record.selection.shapeId);
             if (!shape || shape.exploded) return false;
@@ -1005,6 +1272,12 @@
 
     function copySelection(record) {
         if (!record.selection) return false;
+        if (record.selection.textId && !record.selection.pathId && !record.selection.shapeId) {
+            const text = textById(record, record.selection.textId);
+            if (!text) return false;
+            record.clipboard = { type: "text", text: clone(text) };
+            return true;
+        }
         if (record.selection.shapeId && !record.selection.pathId) {
             const shape = shapeById(record, record.selection.shapeId);
             if (!shape || shape.exploded) return false;
@@ -1020,6 +1293,21 @@
     function pasteClipboard(record) {
         const clip = record.clipboard;
         if (!clip) return false;
+        if (clip.type === "text" && clip.text) {
+            const pasted = applyText(record, Object.assign({}, clip.text, {
+                id: null,
+                outlines: (clip.text.outlines || []).map((ring) => (ring.points || []).map((point) => ({
+                    x_mm: point.x_mm + 10,
+                    y_mm: point.y_mm + 10,
+                }))),
+                export_approved: false,
+            }));
+            if (pasted) {
+                const created = textById(record, pasted);
+                record.clipboard = { type: "text", text: clone(created) };
+            }
+            return Boolean(pasted);
+        }
         if (clip.type === "shape") {
             const pasted = createShape(record, clip.kind, shiftParams(clip.kind, clip.params, 10, 10));
             if (pasted) record.clipboard = { type: "shape", kind: clip.kind, params: shiftParams(clip.kind, clip.params, 10, 10) };
@@ -1355,6 +1643,11 @@
                 if (!record) return false;
                 const hit = hitSegment(record, point, threshold);
                 if (!hit) return false;
+                if (hit.textId) {
+                    record.selection = selectionOf({ textId: hit.textId });
+                    clearStatus(record);
+                    return true;
+                }
                 if (hit.shapeId) {
                     record.selection = selectionOf({ shapeId: hit.shapeId });
                     clearStatus(record);
@@ -1397,6 +1690,35 @@
             convertShape(shapeId) {
                 const record = current();
                 return Boolean(record && convertShape(record, shapeId));
+            },
+            applyText(spec) {
+                const record = current();
+                return record ? applyText(record, spec) : false;
+            },
+            moveText(textId, dx, dy, options) {
+                const record = current();
+                return Boolean(record && moveText(record, textId, dx, dy, options));
+            },
+            scaleText(textId, factor, options) {
+                const record = current();
+                return Boolean(record && scaleText(record, textId, factor, options));
+            },
+            rotateText(textId, degrees, options) {
+                const record = current();
+                return Boolean(record && rotateText(record, textId, degrees, options));
+            },
+            convertText(textId) {
+                const record = current();
+                return Boolean(record && convertText(record, textId));
+            },
+            setTextExport(textId, approved) {
+                const record = current();
+                return Boolean(record && setTextExport(record, textId, approved));
+            },
+            textBounds(textId) {
+                const record = current();
+                const text = record && textById(record, textId);
+                return text ? textBounds(text) : null;
             },
             duplicateSelection() {
                 const record = current();
