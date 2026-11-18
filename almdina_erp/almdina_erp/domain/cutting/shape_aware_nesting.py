@@ -22,6 +22,8 @@ import time
 from itertools import combinations
 from typing import Any, Mapping, Sequence
 
+from almdina_erp.almdina_erp.domain.orders.glass_margins import has_glass_opening
+
 from .dxf_geometry import point_in_polygon, polygon_distance, polygons_overlap
 from .glass_opening_nesting import material_outline_cm, occupancy_outline_cm
 from .primitives import make_placed_piece, num
@@ -2029,7 +2031,7 @@ def _fill_free_space(
         )
         if (
             str(piece.get("piece_type") or "") == "Glass"
-            and num(piece.get("glass_margin_mm")) > 0
+            and has_glass_opening(piece)
             and not guest.get("glass_hole_local_mm")
         ):
             leftover.append(piece)

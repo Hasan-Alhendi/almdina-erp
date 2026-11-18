@@ -232,13 +232,13 @@ class TestSmartCuttingIntegration(FrappeTestCase):
                     imported=import_saved_plan(saved,rows,export_real_js(rebuilt,Path(directory)))
                 self.assertEqual(sum(len(s['pieces']) for s in imported['sheets']),sum(r['qty'] for r in rows))
 
-    def test_unprovable_corner_machining_preview_does_not_change_existing_plan(self):
+    def test_symmetric_corner_machining_preview_does_not_change_existing_plan(self):
         from almdina_erp.tests.geometry_nesting_cases import source_rows
         order,_=self._order(45.3,45.3,0,source_rows('P5-addon-ambiguous'))
         before=self._plan(order).snapshot_json
-        with self.assertRaises(frappe.ValidationError):
-            previews.preview_cutting_plan(order.name,packing_mode='smart',cutting_machine_type='CNC Router',
-                kerf_mm=3,trim_margin_mm=0,optimization_time_limit_sec=2)
+        preview=previews.preview_cutting_plan(order.name,packing_mode='smart',cutting_machine_type='CNC Router',
+            kerf_mm=3,trim_margin_mm=0,optimization_time_limit_sec=2)
+        self.assertTrue(preview['preview_id'])
         self.assertEqual(self._plan(order).snapshot_json,before)
 
     def test_equivalent_corner_bands_keep_exact_machining_proof_on_native_save(self):

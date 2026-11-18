@@ -395,7 +395,7 @@ Object.entries(corners).forEach(([handle, point]) => {
 }
 
 const page = fs.readFileSync(path.join(root, "almdina_erp/page/board_editor/board_editor.js"), "utf8");
-assert.match(page, /drawing_space\.js\?v=6/);
+assert.match(page, /drawing_space\.js\?v=7/);
 assert.match(page, /drawing_model\.js\?v=12/);
 
 console.log("board editor resize tests passed");

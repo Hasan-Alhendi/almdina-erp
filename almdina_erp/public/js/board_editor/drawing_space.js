@@ -33,9 +33,11 @@
         const rad = (num(angleDeg) * Math.PI) / 180;
         const cos = Math.cos(rad);
         const sin = Math.sin(rad);
+        // Same chirality as RotationGeometry.rotatePoint and SVG rotate:
+        // positive angle is clockwise with Y downward.
         return {
-            x: num(pivot.x) + dx * cos + dy * sin,
-            y: num(pivot.y) - dx * sin + dy * cos,
+            x: num(pivot.x) + dx * cos - dy * sin,
+            y: num(pivot.y) + dx * sin + dy * cos,
         };
     }
 

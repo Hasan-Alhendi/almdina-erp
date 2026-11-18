@@ -220,6 +220,12 @@ assert.equal(translations.get("Opening Width"), "عرض الفتحة");
 assert.equal(translations.get("Opening Length"), "طول الفتحة");
 assert.equal(translations.get("Apply Shape"), "اعتماد الشكل");
 assert.equal(translations.get("Invalid Glass Margin"), "هامش البلور غير صالح");
+assert.equal(translations.get("All Directions"), "كل الاتجاهات");
+assert.equal(translations.get("Individual Sides"), "كل جهة");
+assert.equal(translations.get("Top Margin"), "الهامش العلوي");
+assert.equal(translations.get("Bottom Margin"), "الهامش السفلي");
+assert.equal(translations.get("Right Margin"), "الهامش الأيمن");
+assert.equal(translations.get("Left Margin"), "الهامش الأيسر");
 
 documentStub.documentElement.lang = "en";
 const english = api.shapeButtonState(reference, { editable: true, virtual: false });
@@ -267,9 +273,43 @@ const frameWidth = Number(enlargedPreview.match(/class="dco-glass-frame"[^>]*wid
 assert.ok(frameWidth > 170, `glass drawing should fill more of the preview, got ${frameWidth}`);
 assert.match(enlargedPreview, /class="dco-glass-opening"/);
 assert.match(desktopStyles, /var\(--card-bg/);
-assert.match(assetManifest, /\/assets\/almdina_erp\/css\/door_cutting_order_glass_shape\.css\?v=1/);
+assert.match(assetManifest, /\/assets\/almdina_erp\/css\/door_cutting_order_glass_shape\.css\?v=2/);
 assert.doesNotMatch(source, /createElement\("style"\)|installStyles|editorStyles/);
 assert.equal(Object.prototype.hasOwnProperty.call(api, "editorStyles"), false);
 assert.doesNotMatch(desktopStyles, /overflow-y:\s*auto/);
+assert.match(source, /data-glass-mode/);
+assert.match(desktopStyles, /\.dco-glass-mode\{[^}]*display:flex/);
+assert.match(desktopStyles, /\.dco-glass-sides\{[^}]*grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/);
+const sideOrder = ["top", "bottom", "right", "left"].map((side) => source.indexOf(`data-glass-side="${side}"`));
+assert.ok(sideOrder.every((index) => index > -1));
+assert.deepEqual(sideOrder, sideOrder.slice().sort((left, right) => left - right));
+
+const individual = api.applyForm({
+    piece_type: "Glass",
+    width_cm: 100,
+    length_cm: 100,
+}, {
+    mode: "Individual Sides",
+    top: "5",
+    bottom: "8",
+    right: "4",
+    left: "6",
+});
+assert.equal(individual.ok, true);
+assert.equal(individual.values.glass_margin_mode, "Individual Sides");
+assert.equal(individual.values.glass_margin_top_mm, 50);
+assert.equal(individual.values.glass_margin_bottom_mm, 80);
+assert.equal(individual.values.glass_margin_right_mm, 40);
+assert.equal(individual.values.glass_margin_left_mm, 60);
+assert.equal(individual.values.glass_margin_mm, 0);
+const sideOpening = api.openingFromSides(100, 100, { top: 50, bottom: 80, right: 40, left: 60 }, "Individual Sides");
+assert.equal(sideOpening.openingWidthMm, 900);
+assert.equal(sideOpening.openingLengthMm, 870);
+assert.equal(sideOpening.originXmm, 60);
+assert.equal(sideOpening.originYmm, 50);
+const shifted = api.previewSvg(100, 100, { status: "valid", opening: sideOpening });
+const openingX = Number(shifted.match(/class="dco-glass-opening"[^>]*x="([0-9.]+)"/)[1]);
+const frameX = Number(shifted.match(/class="dco-glass-frame"[^>]*x="([0-9.]+)"/)[1]);
+assert.ok(openingX > frameX, "the opening starts after the left margin");
 
 console.log("door_cutting_order_glass_shape_ux.test.js: ok");

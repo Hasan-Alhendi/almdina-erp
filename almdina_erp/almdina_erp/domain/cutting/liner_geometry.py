@@ -66,6 +66,10 @@ class LinerPiece:
     clipped_corner_position: str = "Top Right"
     clipped_corner_width_cm: float = 0.0
     clipped_corner_length_cm: float = 0.0
+    glass_frame_left_mm: float = 0.0
+    glass_frame_right_mm: float = 0.0
+    glass_frame_top_mm: float = 0.0
+    glass_frame_bottom_mm: float = 0.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -633,6 +637,18 @@ def validation_code(piece: LinerPiece, side: str, offset_cm: float, width_cm: fl
             return "strip_outside"
     if has_self_intersection(strip, GEOMETRY_TOLERANCE_MM):
         return "strip_outside"
+    if piece.piece_type == GLASS_TYPE:
+        frames = {
+            SIDE_LEFT: piece.glass_frame_left_mm,
+            SIDE_RIGHT: piece.glass_frame_right_mm,
+            SIDE_TOP: piece.glass_frame_top_mm,
+            SIDE_BOTTOM: piece.glass_frame_bottom_mm,
+        }
+        if any(value > 0 for value in frames.values()):
+            frame = frames.get(side, 0.0)
+            extent = _mm(offset) + _mm(width)
+            if frame <= GEOMETRY_TOLERANCE_MM or extent > frame + GEOMETRY_TOLERANCE_MM:
+                return "liner_enters_glass_opening"
     return ""
 
 
@@ -909,7 +925,12 @@ def compare_liner_path(
     return selected
 
 
-def cutter_center_offsets_mm(width_mm: float, diameter_mm: float) -> list[float]:
+def cutter_center_offsets_mm(
+    width_mm: float,
+    diameter_mm: float,
+    *,
+    stepover_mm: float | None = None,
+) -> list[float]:
     """Centers across the liner width, measured from the edge nearest the reference.
 
     The first center sits one radius in from that edge and the last sits one
@@ -929,6 +950,23 @@ def cutter_center_offsets_mm(width_mm: float, diameter_mm: float) -> list[float]
     radius = diameter_mm / 2.0
     if abs(width_mm - diameter_mm) <= GEOMETRY_TOLERANCE_MM:
         return [width_mm / 2.0]
+    if stepover_mm is not None:
+        try:
+            stepover = float(stepover_mm)
+        except (TypeError, ValueError) as exc:
+            raise LinerGeometryError("stepover_invalid") from exc
+        if (
+            not math.isfinite(stepover)
+            or stepover <= GEOMETRY_TOLERANCE_MM
+            or stepover > diameter_mm + GEOMETRY_TOLERANCE_MM
+        ):
+            raise LinerGeometryError("stepover_invalid")
+        span = width_mm - diameter_mm
+        intervals = max(1, math.ceil((span - 1e-9) / stepover))
+        if intervals > 10_000:
+            raise LinerGeometryError("stepover_invalid")
+        actual_step = span / intervals
+        return [radius + actual_step * index for index in range(intervals + 1)]
     # Full tool steps from both edges. The leftover, which is at most one
     # diameter, sits in one interior gap instead of being spread evenly.
     leading = [radius]
@@ -1115,6 +1153,7 @@ def _cutter_passes(
     start_cm: float | None,
     length_cm: float | None,
     *,
+    stepover_mm: float | None = None,
     start_sawn: bool | None = None,
     end_sawn: bool | None = None,
     flat_contour: bool = False,
@@ -1133,7 +1172,11 @@ def _cutter_passes(
     error = validation_code(piece, side, offset_cm, width_cm)
     if error:
         raise LinerGeometryError(error)
-    centers = cutter_center_offsets_mm(_mm(width_cm), float(cutter_diameter_mm))
+    centers = cutter_center_offsets_mm(
+        _mm(width_cm),
+        float(cutter_diameter_mm),
+        stepover_mm=stepover_mm,
+    )
     polygon = piece_polygon_mm(piece)
     reference, clipped, _start, _end, boundary_start, boundary_end = _prepared_reference(
         piece, side, start_cm, length_cm
@@ -1147,13 +1190,41 @@ def _cutter_passes(
     needs_flat = not saw_start or not saw_end
     if needs_flat and len(centers) < 2:
         raise LinerGeometryError("liner_flat_end_unmachinable")
+    lines = _span_cutter_lines(
+        clipped,
+        sign=sign,
+        polygon=polygon,
+        centers=centers,
+        offset_mm=_mm(offset_cm),
+        radius=radius,
+        extend_start=extend_start,
+        extend_end=extend_end,
+        obstacles=obstacles,
+    )
+    return lines, saw_start, saw_end
+
+
+def _span_cutter_lines(
+    clipped: Sequence[Point],
+    *,
+    sign: float,
+    polygon: Sequence[Point],
+    centers: Sequence[float],
+    offset_mm: float,
+    radius: float,
+    extend_start: bool,
+    extend_end: bool,
+    obstacles: Sequence[Mapping[str, Any] | Sequence[Point]] | None,
+) -> list[list[Point]]:
+    """Cutter centers offset from one reference span, including an L bend."""
+
     trim_start = 0.0 if extend_start else radius
     trim_end = 0.0 if extend_end else radius
     if _polyline_length(clipped) + GEOMETRY_TOLERANCE_MM < trim_start + trim_end:
         raise LinerGeometryError("liner_flat_end_unmachinable")
     lines: list[list[Point]] = []
     for center in centers:
-        line = _offset_polyline(clipped, _mm(offset_cm) + center, sign)
+        line = _offset_polyline(clipped, offset_mm + center, sign)
         if trim_start:
             line = _subpolyline(line, trim_start, _polyline_length(line))
         if trim_end:
@@ -1181,7 +1252,7 @@ def _cutter_passes(
                 end_extension=end_extension,
             )
         lines.append(line)
-    return lines, saw_start, saw_end
+    return lines
 
 
 def _collinear_point(start: Point, middle: Point, end: Point) -> bool:
@@ -1254,6 +1325,7 @@ def liner_toolpath_mm(
     start_cm: float | None = None,
     length_cm: float | None = None,
     *,
+    stepover_mm: float | None = None,
     start_sawn: bool | None = None,
     end_sawn: bool | None = None,
     flat_contour: bool = False,
@@ -1278,6 +1350,7 @@ def liner_toolpath_mm(
         cutter_diameter_mm,
         start_cm,
         length_cm,
+        stepover_mm=stepover_mm,
         start_sawn=start_sawn,
         end_sawn=end_sawn,
         flat_contour=flat_contour,
@@ -2566,6 +2639,445 @@ def _close_component_path(
     return path
 
 
+def _segment_direction(start: Point, end: Point) -> Point | None:
+    dx = end[0] - start[0]
+    dy = end[1] - start[1]
+    length = math.hypot(dx, dy)
+    if length <= GEOMETRY_TOLERANCE_MM:
+        return None
+    return (dx / length, dy / length)
+
+
+def _segment_inward_sign(start: Point, end: Point, polygon: Sequence[Point]) -> float:
+    normal = _left_normal(start, end)
+    midpoint = ((start[0] + end[0]) / 2.0, (start[1] + end[1]) / 2.0)
+    probe = (midpoint[0] + normal[0], midpoint[1] + normal[1])
+    if point_in_polygon(probe, polygon):
+        return 1.0
+    return -1.0
+
+
+def _flag_at(flags: Sequence[bool | None] | None, index: int) -> bool | None:
+    if not flags or index >= len(flags):
+        return None
+    return flags[index]
+
+
+def _axis_rectangle(points: Sequence[Point]) -> tuple[float, float, float, float] | None:
+    ring = _closed_ring(points)
+    if len(ring) != 4:
+        return None
+    xs = [point[0] for point in ring]
+    ys = [point[1] for point in ring]
+    bounds = (min(xs), min(ys), max(xs), max(ys))
+    if (
+        bounds[2] - bounds[0] <= GEOMETRY_TOLERANCE_MM
+        or bounds[3] - bounds[1] <= GEOMETRY_TOLERANCE_MM
+    ):
+        return None
+    for start, end in zip(ring, ring[1:] + ring[:1]):
+        if (
+            abs(start[0] - end[0]) > GEOMETRY_TOLERANCE_MM
+            and abs(start[1] - end[1]) > GEOMETRY_TOLERANCE_MM
+        ):
+            return None
+    return bounds
+
+
+def _band_protrusions(
+    bounds: tuple[float, float, float, float],
+    overlap: tuple[float, float, float, float],
+) -> tuple[str, ...]:
+    min_x, min_y, max_x, max_y = bounds
+    overlap_min_x, overlap_min_y, overlap_max_x, overlap_max_y = overlap
+    directions = []
+    if min_x < overlap_min_x - GEOMETRY_TOLERANCE_MM:
+        directions.append("left")
+    if max_x > overlap_max_x + GEOMETRY_TOLERANCE_MM:
+        directions.append("right")
+    if min_y < overlap_min_y - GEOMETRY_TOLERANCE_MM:
+        directions.append("up")
+    if max_y > overlap_max_y + GEOMETRY_TOLERANCE_MM:
+        directions.append("down")
+    return tuple(directions)
+
+
+def _sign_toward(start: Point, end: Point, target: Point) -> float:
+    normal = _left_normal(start, end)
+    midpoint = ((start[0] + end[0]) / 2.0, (start[1] + end[1]) / 2.0)
+    toward = (target[0] - midpoint[0], target[1] - midpoint[1])
+    return 1.0 if normal[0] * toward[0] + normal[1] * toward[1] >= 0.0 else -1.0
+
+
+def _region_l_corner_span(
+    piece: LinerPiece,
+    items: Sequence[Any],
+    indices: tuple[int, int],
+    width_cm: float,
+    *,
+    start_sawn: Sequence[bool | None] | None = None,
+    end_sawn: Sequence[bool | None] | None = None,
+) -> dict[str, Any] | None:
+    """Build an L reference from two mill bands, not from the door-edge ends.
+
+    Equal offsets and a shared reference endpoint are not required. The bands
+    form an L when their rectangles overlap and each continues in exactly one
+    perpendicular direction. The reference is then the two near edges, so the
+    existing cutter-center offset miters each pass at its own corner.
+    """
+
+    bands = []
+    polygon = piece_polygon_mm(piece)
+    for index in indices:
+        side, offset_cm, start_cm, length_cm = _liner_spec_tuple(items[index])
+        try:
+            offset = float(offset_cm)
+            _reference, clipped, _start, _end, boundary_start, boundary_end = _prepared_reference(
+                piece, side, start_cm, length_cm
+            )
+            if len(clipped) != 2:
+                return None
+            sign = _inward_sign(_reference, polygon)
+            near = _offset_polyline(clipped, _mm(offset), sign)
+            far = _offset_polyline(clipped, _mm(offset) + _mm(width_cm), sign)
+            region = near + list(reversed(far))
+        except (LinerGeometryError, TypeError, ValueError):
+            return None
+        bounds = _axis_rectangle(region)
+        if bounds is None or len(near) != 2 or len(far) != 2:
+            return None
+        bands.append({
+            "near": near,
+            "bounds": bounds,
+            "start_boundary": boundary_start,
+            "end_boundary": boundary_end,
+            "start_sawn": _flag_at(start_sawn, index),
+            "end_sawn": _flag_at(end_sawn, index),
+        })
+    first, second = bands
+    overlap = (
+        max(first["bounds"][0], second["bounds"][0]),
+        max(first["bounds"][1], second["bounds"][1]),
+        min(first["bounds"][2], second["bounds"][2]),
+        min(first["bounds"][3], second["bounds"][3]),
+    )
+    if (
+        overlap[2] - overlap[0] <= GEOMETRY_TOLERANCE_MM
+        or overlap[3] - overlap[1] <= GEOMETRY_TOLERANCE_MM
+    ):
+        return None
+    first_arms = _band_protrusions(first["bounds"], overlap)
+    second_arms = _band_protrusions(second["bounds"], overlap)
+    if len(first_arms) != 1 or len(second_arms) != 1:
+        return None
+    horizontal = {"left", "right"}
+    if (first_arms[0] in horizontal) == (second_arms[0] in horizontal):
+        return None
+    shared = []
+    for first_index, first_point in enumerate(first["near"]):
+        for second_index, second_point in enumerate(second["near"]):
+            if math.dist(first_point, second_point) <= GEOMETRY_TOLERANCE_MM:
+                shared.append((first_index, second_index, first_point))
+    if len(shared) != 1:
+        return None
+    first_corner, second_corner, corner = shared[0]
+    arm_x = overlap[2] if "left" in first_arms + second_arms else overlap[0]
+    arm_y = overlap[3] if "up" in first_arms + second_arms else overlap[1]
+    if math.dist(corner, (arm_x, arm_y)) > GEOMETRY_TOLERANCE_MM:
+        return None
+
+    def oriented(band: dict[str, Any], corner_index: int) -> dict[str, Any]:
+        if corner_index == 1:
+            return {
+                "start": band["near"][0],
+                "end": band["near"][1],
+                "start_boundary": band["start_boundary"],
+                "end_boundary": band["end_boundary"],
+                "start_sawn": band["start_sawn"],
+                "end_sawn": band["end_sawn"],
+            }
+        return {
+            "start": band["near"][1],
+            "end": band["near"][0],
+            "start_boundary": band["end_boundary"],
+            "end_boundary": band["start_boundary"],
+            "start_sawn": band["end_sawn"],
+            "end_sawn": band["start_sawn"],
+        }
+
+    def reversed_span(span: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "start": span["end"],
+            "end": span["start"],
+            "start_boundary": span["end_boundary"],
+            "end_boundary": span["start_boundary"],
+            "start_sawn": span["end_sawn"],
+            "end_sawn": span["start_sawn"],
+        }
+
+    lead = oriented(first, first_corner)
+    trail = reversed_span(oriented(second, second_corner))
+    clipped = [lead["start"], corner, trail["end"]]
+    if (clipped[2][0], clipped[2][1]) < (clipped[0][0], clipped[0][1]):
+        lead, trail = reversed_span(trail), reversed_span(lead)
+        clipped = [lead["start"], corner, trail["end"]]
+    center = (
+        (overlap[0] + overlap[2]) / 2.0,
+        (overlap[1] + overlap[3]) / 2.0,
+    )
+    sign = _sign_toward(clipped[0], clipped[1], center)
+    if _sign_toward(clipped[1], clipped[2], center) != sign:
+        return None
+    first_direction = _segment_direction(clipped[0], clipped[1])
+    second_direction = _segment_direction(clipped[1], clipped[2])
+    if first_direction is None or second_direction is None:
+        return None
+    dot = abs(
+        first_direction[0] * second_direction[0]
+        + first_direction[1] * second_direction[1]
+    )
+    if dot > 1e-6:
+        return None
+    return {
+        "clipped": clipped,
+        "offset_cm": 0.0,
+        "width_cm": width_cm,
+        "sign": sign,
+        "polygon": polygon,
+        "boundary_start": lead["start_boundary"],
+        "boundary_end": trail["end_boundary"],
+        "start_sawn": lead["start_sawn"],
+        "end_sawn": trail["end_sawn"],
+    }
+
+
+def _l_corner_span(
+    piece: LinerPiece,
+    items: Sequence[Any],
+    indices: tuple[int, int],
+    width_cm: float,
+    *,
+    start_sawn: Sequence[bool | None] | None = None,
+    end_sawn: Sequence[bool | None] | None = None,
+) -> dict[str, Any] | None:
+    """Join two straight liners whose mill regions form one L.
+
+    A shared door-edge endpoint is one way to see the corner. Partial starts
+    and unequal offsets use the actual band rectangles instead. A T or a plus
+    keeps the older clip merge.
+    """
+
+    region_span = _region_l_corner_span(
+        piece,
+        items,
+        indices,
+        width_cm,
+        start_sawn=start_sawn,
+        end_sawn=end_sawn,
+    )
+    if region_span is not None:
+        return region_span
+    prepared = []
+    offsets: list[float] = []
+    for index in indices:
+        side, offset_cm, start_cm, length_cm = _liner_spec_tuple(items[index])
+        try:
+            offset = float(offset_cm)
+        except (TypeError, ValueError):
+            return None
+        if not math.isfinite(offset):
+            return None
+        try:
+            _reference, clipped, _start, _end, boundary_start, boundary_end = _prepared_reference(
+                piece, side, start_cm, length_cm
+            )
+        except LinerGeometryError:
+            return None
+        if len(clipped) != 2:
+            return None
+        prepared.append({
+            "start": clipped[0],
+            "end": clipped[1],
+            "start_boundary": boundary_start,
+            "end_boundary": boundary_end,
+            "start_sawn": _flag_at(start_sawn, index),
+            "end_sawn": _flag_at(end_sawn, index),
+        })
+        offsets.append(offset)
+    if abs(offsets[0] - offsets[1]) * CM_TO_MM > GEOMETRY_TOLERANCE_MM:
+        return None
+    first, second = prepared
+    joints = (
+        (True, True),
+        (True, False),
+        (False, True),
+        (False, False),
+    )
+    matches = []
+    for first_at_start, second_at_start in joints:
+        first_point = first["start"] if first_at_start else first["end"]
+        second_point = second["start"] if second_at_start else second["end"]
+        if math.dist(first_point, second_point) <= GEOMETRY_TOLERANCE_MM:
+            matches.append((first_at_start, second_at_start))
+    if len(matches) != 1:
+        return None
+    first_at_start, second_at_start = matches[0]
+
+    def reverse_span(span: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "start": span["end"],
+            "end": span["start"],
+            "start_boundary": span["end_boundary"],
+            "end_boundary": span["start_boundary"],
+            "start_sawn": span["end_sawn"],
+            "end_sawn": span["start_sawn"],
+        }
+
+    # Walk into the shared corner, then leave along the other arm.
+    lead = reverse_span(first) if first_at_start else first
+    trail = second if second_at_start else reverse_span(second)
+    if math.dist(lead["end"], trail["start"]) > GEOMETRY_TOLERANCE_MM:
+        return None
+    clipped = [lead["start"], lead["end"], trail["end"]]
+    if (clipped[-1][0], clipped[-1][1]) < (clipped[0][0], clipped[0][1]):
+        lead, trail = reverse_span(trail), reverse_span(lead)
+        clipped = [lead["start"], lead["end"], trail["end"]]
+    polygon = piece_polygon_mm(piece)
+    first_direction = _segment_direction(clipped[0], clipped[1])
+    second_direction = _segment_direction(clipped[1], clipped[2])
+    if first_direction is None or second_direction is None:
+        return None
+    dot = abs(first_direction[0] * second_direction[0] + first_direction[1] * second_direction[1])
+    if dot > 1e-6:
+        return None
+    inward = _segment_inward_sign(clipped[0], clipped[1], polygon)
+    if _segment_inward_sign(clipped[1], clipped[2], polygon) != inward:
+        return None
+    return {
+        "clipped": clipped,
+        "offset_cm": offsets[0],
+        "width_cm": width_cm,
+        "sign": inward,
+        "polygon": polygon,
+        "boundary_start": lead["start_boundary"],
+        "boundary_end": trail["end_boundary"],
+        "start_sawn": lead["start_sawn"],
+        "end_sawn": trail["end_sawn"],
+    }
+
+
+def _joined_l_toolpath_mm(
+    piece: LinerPiece,
+    items: Sequence[Any],
+    indices: tuple[int, int],
+    width_cm: float,
+    cutter_diameter_mm: float,
+    *,
+    start_sawn: Sequence[bool | None] | None = None,
+    end_sawn: Sequence[bool | None] | None = None,
+    flat_contour: bool = False,
+    obstacles: Sequence[Mapping[str, Any] | Sequence[Point]] | None = None,
+) -> list[Point] | None:
+    span = _l_corner_span(
+        piece,
+        items,
+        indices,
+        width_cm,
+        start_sawn=start_sawn,
+        end_sawn=end_sawn,
+    )
+    if span is None:
+        return None
+    try:
+        centers = cutter_center_offsets_mm(_mm(width_cm), float(cutter_diameter_mm))
+    except LinerGeometryError:
+        return None
+    radius = float(cutter_diameter_mm) / 2.0
+    saw_start = _resolve_sawn(span["start_sawn"], span["boundary_start"])
+    saw_end = _resolve_sawn(span["end_sawn"], span["boundary_end"])
+    extend_start = span["boundary_start"] and not (flat_contour and not saw_start)
+    extend_end = span["boundary_end"] and not (flat_contour and not saw_end)
+    needs_flat = not saw_start or not saw_end
+    if needs_flat and len(centers) < 2:
+        return None
+    try:
+        lines = _span_cutter_lines(
+            span["clipped"],
+            sign=span["sign"],
+            polygon=span["polygon"],
+            centers=centers,
+            offset_mm=_mm(span["offset_cm"]),
+            radius=radius,
+            extend_start=extend_start,
+            extend_end=extend_end,
+            obstacles=obstacles,
+        )
+    except LinerGeometryError:
+        return None
+    if any(len(line) < 3 for line in lines):
+        return None
+    path: list[Point] = []
+    for index, line in enumerate(lines):
+        sequence = line if index % 2 == 0 else list(reversed(line))
+        if path and math.dist(path[-1], sequence[0]) <= 1e-6:
+            sequence = sequence[1:]
+        path.extend(sequence)
+    if not saw_start:
+        path = _prepend_closure(path, [line[0] for line in lines])
+    if not saw_end:
+        path = _append_closure(path, [line[-1] for line in lines], lines[-1])
+    return path if len(path) >= 2 else None
+
+
+def _band_polygon(reference: Sequence[Point], offset_mm: float, width_mm: float, sign: float) -> list[Point]:
+    near = _offset_polyline(reference, offset_mm, sign)
+    far = _offset_polyline(reference, offset_mm + width_mm, sign)
+    return near + list(reversed(far))
+
+
+def merged_liner_region_polygons_mm(
+    piece: LinerPiece,
+    specs: Sequence[Any],
+    width_cm: float,
+) -> list[list[Point]]:
+    """Illustrative mill outlines. A connected L corner is one ring, not two overlaps."""
+
+    items = tuple(specs or ())
+    if not items:
+        return []
+    regions = [
+        liner_region_polygon_mm(piece, *_liner_spec_tuple(spec)[:2], width_cm, *_liner_spec_tuple(spec)[2:])
+        for spec in items
+    ]
+    if len(items) == 1:
+        return regions
+    consumed: set[int] = set()
+    joined: dict[int, dict[str, Any]] = {}
+    for component in _connected_liner_components(regions):
+        if len(component) != 2:
+            continue
+        span = _l_corner_span(piece, items, (component[0], component[1]), width_cm)
+        if span is None:
+            continue
+        joined[component[0]] = span
+        consumed.add(component[1])
+    polygons: list[list[Point]] = []
+    for index in range(len(items)):
+        if index in consumed:
+            continue
+        span = joined.get(index)
+        if span is None:
+            polygons.append(regions[index])
+            continue
+        polygons.append(_band_polygon(
+            span["clipped"],
+            _mm(span["offset_cm"]),
+            _mm(width_cm),
+            span["sign"],
+        ))
+    return polygons
+
+
 def merged_liner_toolpaths_mm(
     piece: LinerPiece,
     specs: Sequence[Any],
@@ -2613,6 +3125,21 @@ def merged_liner_toolpaths_mm(
 
     paths: list[list[Point]] = []
     for component in _connected_liner_components(regions):
+        if len(component) == 2:
+            joined = _joined_l_toolpath_mm(
+                piece,
+                items,
+                (component[0], component[1]),
+                width_cm,
+                cutter_diameter_mm,
+                start_sawn=start_sawn,
+                end_sawn=end_sawn,
+                flat_contour=flat_contour,
+                obstacles=obstacles,
+            )
+            if joined is not None:
+                paths.append(joined)
+                continue
         covered: list[list[Point]] = []
         for index in component:
             spec = items[index]
@@ -2925,6 +3452,7 @@ __all__ = [
     "liner_region_polygon_mm",
     "liner_strip_polygon_mm",
     "localize_path",
+    "merged_liner_region_polygons_mm",
     "merged_liner_toolpaths_mm",
     "mill_regions_connected",
     "obstacle_polygon_mm",

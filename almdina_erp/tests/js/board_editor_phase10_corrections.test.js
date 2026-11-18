@@ -216,7 +216,8 @@ const turned = Space.pieceFrame({
 }, { 1: { origin_x_mm: 0, origin_y_mm: 0, trim_x_mm: 0, trim_y_mm: 0 } }, { widthMm: 500, lengthMm: 300 });
 const start = Space.doorToWorld(turned, 0, 0);
 const shifted = Space.worldToDoor(turned, start.x + 30, start.y);
-assert.equal(Math.round(shifted.y * 1000) / 1000, 30);
+// Clockwise 90° (Y down): +X in world is -Y on the door.
+assert.equal(Math.round(shifted.y * 1000) / 1000, -30);
 assert.equal(Math.round(shifted.x * 1000) / 1000, 0);
 
 const page = fs.readFileSync(path.join(root, "almdina_erp/page/board_editor/board_editor.js"), "utf8");
@@ -310,8 +311,8 @@ assert.equal(chrome.CanvasRenderer.copyPlanReady({ ...readyBase, savedDrawingRea
 
 assert.match(page, /drawing_model\.js\?v=12/);
 assert.match(page, /drawing_compile\.js\?v=4/);
-assert.match(page, /canvas_renderer\.js\?v=57/);
-assert.match(page, /controller\.js\?v=56/);
+assert.match(page, /canvas_renderer\.js\?v=58/);
+assert.match(page, /controller\.js\?v=57/);
 assert.match(controller, /drawingsDirty/);
 assert.match(controller, /endVectorGesture\("cancel"\)/);
 assert.match(controller, /lostpointercapture/);

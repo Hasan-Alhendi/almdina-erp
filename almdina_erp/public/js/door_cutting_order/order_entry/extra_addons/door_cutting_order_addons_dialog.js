@@ -41,6 +41,22 @@
         return fields().find(item => item.fieldname === fieldname) || null;
     }
 
+    function glassLinerOnly(row) {
+        return String((row && row.piece_type) || "") === "Glass";
+    }
+
+    function sessionFields() {
+        return fields();
+    }
+
+    function glassAddonLocked(session, fieldname) {
+        return Boolean(session && glassLinerOnly(session.row) && fieldname !== "extra_liner");
+    }
+
+    function addonEditable(session, editable, fieldname) {
+        return Boolean(editable) && !glassAddonLocked(session, fieldname);
+    }
+
     function machiningSupported(row) {
         const geometry = window.AlmdinaLinerGeometry;
         const editor = editorApi();
@@ -65,6 +81,7 @@
             ? editor.hostPiece(frm, row)
             : (window.AlmdinaLinerGeometry && window.AlmdinaLinerGeometry.pieceFromRow(row));
         const drafts = {};
+        const glassOnly = glassLinerOnly(row);
         if (supported && editor && typeof editor.draftFromRow === "function") {
             fields().forEach((item) => {
                 const kind = kindFor(item.fieldname);
@@ -121,7 +138,9 @@
             doubleSides,
             drafts,
             initial,
-            activeField: known ? preferredField : (fields()[0] ? fields()[0].fieldname : ""),
+            activeField: glassOnly
+                ? "extra_liner"
+                : (known ? preferredField : (fields()[0] ? fields()[0].fieldname : "")),
         };
     }
 
@@ -135,6 +154,8 @@
         if (["offsetCm", "widthCm", "startCm", "lengthCm"].some(key => Number(draft[key]) !== Number(initial[key]))) {
             return true;
         }
+        const face = (value) => (value === "front" || value === "back" ? value : null);
+        if (face(draft.face) !== face(initial.face)) return true;
         return JSON.stringify(linerSnapshot(draft)) !== JSON.stringify(linerSnapshot(initial));
     }
 
@@ -153,6 +174,7 @@
 
     function setEnabled(session, fieldname, enabled) {
         if (!session || !fieldByName(fieldname)) return session;
+        if (glassLinerOnly(session.row) && fieldname !== "extra_liner") return session;
         const next = enabled ? 1 : 0;
         if (session.presenceOnly && !FLAG_FIELDS.includes(fieldname)) {
             session.flags[fieldname] = next;
@@ -345,7 +367,7 @@
     }
 
     function shellHtml(session, editable) {
-        const tabs = fields().map((item) => {
+        const tabs = sessionFields(session).map((item) => {
             const selected = item.fieldname === session.activeField;
             const enabled = isEnabled(session, item.fieldname);
             const dot = enabled
@@ -362,7 +384,7 @@
             <div class="dco-addons-tabs" role="tablist">${tabs}</div>
             <div class="dco-addons-error" data-addons-error hidden></div>
             <div class="dco-addons-body">
-                <section class="dco-addons-settings" data-addons-settings>${settingsMarkup(session, editable)}</section>
+                <section class="dco-addons-settings" data-addons-settings>${settingsMarkup(session, addonEditable(session, editable, session.activeField))}</section>
                 <section class="dco-addons-preview-pane">
                     <div class="dco-addons-preview-card">
                         <div class="dco-addons-preview-title">${esc(translate("Piece preview"))}</div>
@@ -593,9 +615,10 @@
 
     function syncChrome(root, session, editable) {
         if (!root) return;
+        const activeEditable = addonEditable(session, editable, session.activeField);
         syncTabs(root, session);
-        syncEnable(root, session, editable);
-        syncRemove(root, session, editable);
+        syncEnable(root, session, activeEditable);
+        syncRemove(root, session, activeEditable);
         syncSides(root, session.drafts[session.activeField], session);
         if (editorApi() && typeof editorApi().syncHandleChoices === "function") {
             editorApi().syncHandleChoices(root, session.drafts[session.activeField]);
@@ -607,7 +630,7 @@
 
     function paintStructure(root, session, editable) {
         const settings = root && root.querySelector("[data-addons-settings]");
-        if (settings) settings.innerHTML = settingsMarkup(session, editable);
+        if (settings) settings.innerHTML = settingsMarkup(session, addonEditable(session, editable, session.activeField));
         if (root) root._addonsField = session.activeField;
         syncChrome(root, session, editable);
     }
@@ -642,6 +665,7 @@
             lengthCm: draft.lengthCm,
             fullLength: Boolean(draft.fullLength),
             legacyCheckboxOnly: Boolean(draft.legacyCheckboxOnly),
+            face: draft.face === "front" || draft.face === "back" ? draft.face : null,
             liners: linerSnapshot(draft),
         };
     }
@@ -673,6 +697,18 @@
         }
         const values = {};
         const touched = [];
+        if (glassLinerOnly(session.row)) {
+            const editor = editorApi();
+            const draft = session.drafts && session.drafts.extra_liner;
+            if (session.supported && editor && draft && machiningDirty(session, "extra_liner")) {
+                const next = editor.valuesFor(draft.kind, draft, draft.enabled);
+                if (!sameValues(session.row, next)) {
+                    Object.assign(values, next);
+                    touched.push("extra_liner");
+                }
+            }
+            return { values, touched };
+        }
         if (doubleSidesDirty(session)) {
             values.extra_double = session.flags.extra_double ? 1 : 0;
             values.extra_double_reference_sides = session.flags.extra_double
@@ -1033,6 +1069,7 @@
                 ? editor.hostPiece(frm, row)
                 : geometry.pieceFromRow(row);
             for (const item of fields()) {
+                if (glassLinerOnly(row) && item.fieldname !== "extra_liner") continue;
                 const kind = kindFor(item.fieldname);
                 if (!kind || !Number(row && row[item.fieldname])) continue;
                 const draft = editor.draftFromRow(row, kind, { blankWhenMissing: true });
@@ -1059,6 +1096,7 @@
         open,
         createSession,
         settingsMarkup,
+        shellHtml,
         collectValues,
         selectTab,
         setEnabled,

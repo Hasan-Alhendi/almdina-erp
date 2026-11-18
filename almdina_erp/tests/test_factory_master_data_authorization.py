@@ -91,6 +91,7 @@ class TestFactoryMasterDataAuthorization(unittest.TestCase):
                 Capability.EDIT_FACTORY_COST_DEFAULTS,
                 Capability.EDIT_FACTORY_PRODUCTION_CONTROLS,
                 Capability.EDIT_FACTORY_PRINT_IDENTITY,
+                Capability.EDIT_FACTORY_CNC_DEFAULTS,
                 Capability.EDIT_WHATSAPP_MESSAGES,
                 Capability.MANAGE_BACKUPS,
             }

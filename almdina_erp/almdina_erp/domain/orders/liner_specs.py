@@ -16,6 +16,9 @@ from typing import Any
 
 LINER_SPECS_FIELD = "liner_specs_json"
 LEGACY_LINER_ID = "liner_1"
+LINER_FACE_FRONT = "front"
+LINER_FACE_BACK = "back"
+_LINER_FACES = frozenset({LINER_FACE_FRONT, LINER_FACE_BACK})
 _LINER_ID_PATTERN = re.compile(r"^liner_(\d+)$")
 
 
@@ -39,9 +42,15 @@ class DoorLinerSpec:
 
 @dataclass(frozen=True, slots=True)
 class DoorLinerSet:
+    """One liner add-on. ``face`` is the sheet face, not a geometric path.
+
+    ``None`` means the face was not chosen. It is never coerced to front.
+    """
+
     enabled: bool
     width_cm: float
     liners: tuple[DoorLinerSpec, ...]
+    face: str | None = None
 
     @property
     def first(self) -> DoorLinerSpec | None:
@@ -63,24 +72,42 @@ def allocate_liner_id(existing: Sequence[str]) -> str:
     return f"liner_{used + 1}"
 
 
+def liner_face_value(value: Any) -> str | None:
+    """Return ``front`` or ``back``. Missing and unknown values stay unset."""
+
+    if value is None:
+        return None
+    text = str(value).strip().lower()
+    if text in _LINER_FACES:
+        return text
+    return None
+
+
 def serialize_door_liners(payload: DoorLinerSet) -> str:
-    """Persist a compact JSON object. Empty when the add-on is off."""
+    """Persist a compact JSON object. Empty when the add-on is off.
+
+    The face is stored once on the add-on. It is omitted while unset so older
+    payloads keep the same JSON shape.
+    """
 
     if not payload.enabled or not payload.liners:
         return ""
-    body = {
+    body: dict[str, Any] = {
         "width_cm": _finite_number(payload.width_cm, "liner_width_invalid"),
-        "liners": [
-            {
-                "id": spec.liner_id,
-                "side": spec.side,
-                "offset_cm": spec.offset_cm,
-                "start_cm": spec.start_cm,
-                "length_cm": spec.length_cm,
-            }
-            for spec in payload.liners
-        ],
     }
+    face = liner_face_value(payload.face)
+    if face:
+        body["face"] = face
+    body["liners"] = [
+        {
+            "id": spec.liner_id,
+            "side": spec.side,
+            "offset_cm": spec.offset_cm,
+            "start_cm": spec.start_cm,
+            "length_cm": spec.length_cm,
+        }
+        for spec in payload.liners
+    ]
     return json.dumps(body, separators=(",", ":"), ensure_ascii=True)
 
 
@@ -91,7 +118,7 @@ def door_liners_from_source(source: Any) -> DoorLinerSet:
     raw_json = _field(source, LINER_SPECS_FIELD, "")
     parsed = _parse_specs_json(raw_json) if _has_text(raw_json) else None
     if parsed is not None:
-        width_cm, liners = parsed
+        width_cm, liners, face = parsed
         if not enabled:
             return empty_door_liners()
         if not liners:
@@ -101,7 +128,7 @@ def door_liners_from_source(source: Any) -> DoorLinerSet:
             shared = _optional_number(_field(source, "liner_width_cm", 0), "liner_width_invalid")
         if shared is None or shared <= 0:
             raise DoorLinerError("liner_width_invalid")
-        return DoorLinerSet(enabled=True, width_cm=shared, liners=liners)
+        return DoorLinerSet(enabled=True, width_cm=shared, liners=liners, face=face)
 
     if not enabled:
         return empty_door_liners()
@@ -158,11 +185,12 @@ def normalized_door_liners(
             enabled=True,
             width_cm=current.width_cm,
             liners=current.liners,
+            face=current.face,
         )
     return current
 
 
-def _parse_specs_json(raw: Any) -> tuple[float | None, tuple[DoorLinerSpec, ...]]:
+def _parse_specs_json(raw: Any) -> tuple[float | None, tuple[DoorLinerSpec, ...], str | None]:
     try:
         data = json.loads(raw) if isinstance(raw, str) else raw
     except (TypeError, ValueError, json.JSONDecodeError) as error:
@@ -203,7 +231,7 @@ def _parse_specs_json(raw: Any) -> tuple[float | None, tuple[DoorLinerSpec, ...]
                 ),
             )
         )
-    return width_cm, tuple(liners)
+    return width_cm, tuple(liners), liner_face_value(data.get("face"))
 
 
 def _field(source: Any, name: str, default: Any = None) -> Any:
@@ -247,10 +275,13 @@ __all__ = [
     "DoorLinerSpec",
     "LEGACY_LINER_ID",
     "LINER_SPECS_FIELD",
+    "LINER_FACE_BACK",
+    "LINER_FACE_FRONT",
     "allocate_liner_id",
     "door_liner_fields",
     "door_liners_from_source",
     "empty_door_liners",
+    "liner_face_value",
     "normalized_door_liners",
     "serialize_door_liners",
 ]

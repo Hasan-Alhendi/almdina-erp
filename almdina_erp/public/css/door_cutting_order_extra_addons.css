@@ -333,6 +333,111 @@ body[dir="ltr"] .dco-addons-preview-pane {
     min-width: 0;
 }
 
+.dco-liner-shared-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--alm-space-3, 12px);
+    align-items: end;
+    min-width: 0;
+}
+
+.dco-liner-width-field,
+.dco-liner-face {
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    gap: var(--alm-space-1, 4px);
+    margin: 0;
+    padding: 0;
+    border: 0;
+    min-width: 0;
+    min-inline-size: 0;
+}
+
+.dco-addons-modal .dco-liner-width-field .dco-corner-input-wrap > label {
+    display: none;
+}
+
+.dco-liner-face legend {
+    display: block;
+    float: none;
+    width: auto;
+    padding: 0;
+    margin: 0;
+}
+
+.dco-liner-face-options {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: stretch;
+    gap: 6px;
+    height: calc(var(--alm-height-button, 42px) + 2px);
+    min-width: 0;
+}
+
+.dco-addons-modal .dco-liner-width-field .dco-corner-input-shell {
+    box-sizing: border-box;
+    height: calc(var(--alm-height-button, 42px) + 2px);
+}
+
+.dco-addons-modal .dco-liner-width-field .dco-corner-input-shell input {
+    height: 100%;
+}
+
+.dco-liner-face-option {
+    display: flex;
+    flex: 1 1 0;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    box-sizing: border-box;
+    height: 100%;
+    margin: 0;
+    min-width: 0;
+    min-height: 0;
+    padding: 0 6px;
+    overflow: hidden;
+    border: 1px solid var(--alm-border, #dfe3e8);
+    border-radius: var(--alm-radius-button, 10px);
+    background: var(--alm-card, #fff);
+    color: var(--alm-text-secondary, #344054);
+    font-size: 12px;
+    font-weight: var(--alm-font-weight-semibold, 600);
+    line-height: var(--alm-line-height-tight, 1.35);
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.dco-liner-face-option span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.dco-liner-face-option input {
+    flex: 0 0 auto;
+    margin: 0;
+    accent-color: var(--alm-primary, #172033);
+}
+
+.dco-liner-face-option:has(input:checked) {
+    border-color: var(--alm-primary, #172033);
+    background: var(--alm-surface-muted, #f4f6f8);
+}
+
+.dco-liner-face-option:focus-within {
+    outline: 2px solid var(--alm-focus-ring, var(--alm-primary, #172033));
+    outline-offset: 1px;
+}
+
+@media (min-width: 960px) {
+    .dco-addons-modal .dco-liner-shared-grid {
+        grid-template-columns: minmax(108px, 0.78fr) minmax(0, 1.22fr);
+    }
+}
+
 .dco-liner-item {
     padding: var(--alm-space-2, 8px);
     border: 1px solid var(--alm-border-subtle, #eaecf0);

@@ -379,19 +379,15 @@
                 }, 5);
             } else if (!ok) {
                 const snapshot = typeof previews.snapshot === "function" ? previews.snapshot(frm) : null;
-                frappe.msgprint(translate(
-                    snapshot && snapshot.error
-                        ? snapshot.error
-                        : "Could not create the preview."
-                ));
+                if (snapshot && snapshot.error) frappe.msgprint(translate(snapshot.error));
             }
             return Boolean(ok);
         } catch (error) {
             console.error("Cutting plan calculation failed", error);
-            const message = error && error.message
-                ? error.message
-                : "Could not prepare the cutting plan service. Reload the page and try again.";
-            frappe.msgprint(translate(message));
+            const reported = previews && typeof previews.publicCalculationError === "function"
+                ? previews.publicCalculationError(error)
+                : (error && error.message) || "No manufacturing-valid cutting plan was found.";
+            frappe.msgprint(translate(reported));
             return false;
         }
     }

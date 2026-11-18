@@ -36,6 +36,7 @@ class TestMainWorkspaceAdministrationEntryPoints(unittest.TestCase):
             "إدارة الصلاحيات": ("factory-permissions", "Page"),
             "إدارة المستخدمين": ("factory-workforce", "Page"),
             "إدارة مسارات الإنتاج": ("factory-master-data", "Page"),
+            "إدارة الملفات التشغيلية": ("cnc-operational-files", "Page"),
         }
         shortcuts = {
             row["label"]: (row["link_to"], row["type"])
@@ -56,6 +57,7 @@ class TestMainWorkspaceAdministrationEntryPoints(unittest.TestCase):
             "إدارة الصلاحيات",
             "إدارة المستخدمين",
             "إدارة مسارات الإنتاج",
+            "إدارة الملفات التشغيلية",
         ):
             with self.subTest(label=label):
                 self.assertEqual(cards.get(label), 3)

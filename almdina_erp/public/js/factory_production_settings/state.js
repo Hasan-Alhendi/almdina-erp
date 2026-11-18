@@ -17,7 +17,7 @@
 
     function create() {
         const frontend = foundation();
-        const data = { current: {} };
+        const data = { current: {}, activeTab: "settings" };
         const requests = Object.freeze({
             settings: frontend.createLatestRequestGate(),
             audit: frontend.createLatestRequestGate(),

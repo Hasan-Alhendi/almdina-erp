@@ -32,7 +32,7 @@
 
     if (window.AlmdinaFactoryProductionSettingsController) return;
 
-    function mount(wrapper) {
+    function mount(wrapper, options = {}) {
         if (!wrapper) throw new Error("Production Settings wrapper is required");
         if (
             wrapper.__almdinaProductionSettingsController
@@ -80,16 +80,32 @@
         if (typeof page.clear_inner_toolbar === "function") page.clear_inner_toolbar();
         page.add_inner_button(translate("Change log"), openAudit, null, "history");
         page.add_inner_button(translate("Refresh"), load, null, "refresh");
+        if (options.mode === "operational_files") state.activeTab = "operational_files";
+        const cncEditable = () => viewModel.sectionEditable(state.current, "cnc");
+        const cncPresets = window.AlmdinaFactoryProductionSettingsCncPresets ? window.AlmdinaFactoryProductionSettingsCncPresets.attach({ editable: cncEditable }) : null;
+        const cncMachines = window.AlmdinaFactoryProductionSettingsCncMachines ? window.AlmdinaFactoryProductionSettingsCncMachines.attach({ editable: cncEditable }) : null;
         interactionsModule.bind({
             $body,
             lifecycle: store.lifecycle,
             callbacks: {
+                onSelectTab: key => { state.activeTab = key === "operational_files" ? "operational_files" : "settings"; render(); },
                 onEditSection: openSectionDialog,
                 onCreateWhatsApp: () => whatsapp && whatsapp.create(),
                 onReconnectWhatsApp: () => whatsapp && whatsapp.reconnect(),
+                onManageToolPresets: () => cncPresets && cncPresets.manage(),
+                onAddToolPreset: () => cncPresets && cncPresets.create(),
+                onManageMachiningProfiles: () => {
+                    if (window.frappe && typeof frappe.set_route === "function") frappe.set_route("List", "CNC Machining Profile");
+                },
+                onAddMachiningProfile: () => {
+                    if (!cncEditable()) return;
+                    if (window.frappe && typeof frappe.new_doc === "function") frappe.new_doc("CNC Machining Profile");
+                    else if (window.frappe && typeof frappe.set_route === "function") frappe.set_route("Form", "CNC Machining Profile", "new");
+                },
+                onManageCncMachines: () => cncMachines && cncMachines.manage(),
+                onAddCncMachine: () => cncMachines && cncMachines.create(),
             },
         });
-
         const instance = Object.freeze({
             load,
             dispose() {
@@ -97,9 +113,7 @@
                 if (backups && typeof backups.dispose === "function") backups.dispose();
                 dialogs.dispose();
                 store.dispose();
-                if (wrapper.__almdinaProductionSettingsController === instance) {
-                    wrapper.__almdinaProductionSettingsController = null;
-                }
+                if (wrapper.__almdinaProductionSettingsController === instance) wrapper.__almdinaProductionSettingsController = null;
             },
         });
         wrapper.__almdinaProductionSettingsController = instance;
@@ -164,18 +178,20 @@
         }
 
         function render() {
-            renderer.render(viewModel.page(state.current));
+            const model = viewModel.page(state);
+            renderer.render(model);
+            if (model.activeTab !== "settings") return;
             // Full-page render always replaces the live session card with the
             // loading placeholder, so the OpenWA snapshot must be re-fetched.
             if (
-                viewModel.canManageWhatsAppSession(state.current)
+                model.canManageWhatsAppSession
                 && whatsapp
                 && typeof whatsapp.refresh === "function"
             ) {
                 whatsapp.refresh();
             }
             if (
-                viewModel.page(state.current).showBackupPanel
+                model.showBackupPanel
                 && backups
                 && typeof backups.refresh === "function"
             ) {

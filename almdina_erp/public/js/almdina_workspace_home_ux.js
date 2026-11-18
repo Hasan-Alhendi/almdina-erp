@@ -45,6 +45,7 @@
         "permission-management-shortcut": "factory-permissions",
         "user-management-shortcut": "factory-workforce",
         "routing-management-shortcut": "factory-master-data",
+        "operational-files-shortcut": "cnc-operational-files",
         "orders-shortcut": "Door Cutting Order",
         "stages-shortcut": "shop-floor-inbox",
     });

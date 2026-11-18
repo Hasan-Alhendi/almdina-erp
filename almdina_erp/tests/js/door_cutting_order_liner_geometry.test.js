@@ -65,7 +65,84 @@ const jsonLiners = geometry.parseDoorLiners({
 });
 assert.equal(jsonLiners.widthCm, 1.8);
 assert.equal(jsonLiners.liners.length, 2);
+assert.equal(jsonLiners.face, null);
+assert.equal(geometry.doorLinerFace({
+    extra_liner: 1,
+    liner_specs_json: JSON.stringify({
+        width_cm: 1.8,
+        liners: [{ id: "liner_1", side: "edge_width_top", offset_cm: 2, start_cm: 0, length_cm: 40 }],
+    }),
+}), null);
 assert.equal(geometry.serializeDoorLiners(jsonLiners).includes("liner_2"), true);
+assert.equal(geometry.serializeDoorLiners(jsonLiners).includes("face"), false);
+
+const blankLiner = editor.draftFromRow({
+    piece_type: "Regular",
+    width_cm: 40,
+    length_cm: 60,
+}, "liner");
+assert.equal(blankLiner.face, null);
+const blankLinerHtml = editor.linerSetHtml(blankLiner);
+assert.equal(blankLinerHtml.includes(" checked"), false);
+assert.equal((blankLinerHtml.match(/type="radio"/g) || []).length, 2);
+assert.match(blankLinerHtml, /name="liner_face"/);
+assert.match(blankLinerHtml, /Liner face/);
+assert.match(blankLinerHtml, /Front face/);
+assert.match(blankLinerHtml, /Back face/);
+
+function facedPiece(face) {
+    const liners = [{
+        id: "liner_1",
+        side: "edge_width_top",
+        offsetCm: 2,
+        startCm: 0,
+        lengthCm: 40,
+    }];
+    return {
+        piece_type: "Regular",
+        width_cm: 40,
+        length_cm: 60,
+        x: 1,
+        y: 2,
+        w: 40,
+        h: 60,
+        extra_liner: 1,
+        liner_reference_side: "edge_width_top",
+        liner_offset_cm: 2,
+        liner_width_cm: 1.5,
+        liner_start_cm: 0,
+        liner_length_cm: 40,
+        liner_specs_json: face
+            ? geometry.serializeDoorLiners({ enabled: true, widthCm: 1.5, face, liners })
+            : geometry.serializeDoorLiners({ enabled: true, widthCm: 1.5, liners }),
+    };
+}
+const frontPiece = facedPiece("front");
+const backPiece = facedPiece("back");
+const unsetPiece = facedPiece(null);
+assert.equal(geometry.doorLinerFace(frontPiece), "front");
+assert.equal(geometry.doorLinerFace(backPiece), "back");
+assert.equal(geometry.doorLinerFace(unsetPiece), null);
+assert.equal(geometry.parseDoorLiners(frontPiece).liners[0].side, geometry.parseDoorLiners(backPiece).liners[0].side);
+assert.equal(geometry.parseDoorLiners(frontPiece).liners[0].offsetCm, 2);
+assert.equal(geometry.parseDoorLiners(backPiece).widthCm, 1.5);
+assert.deepEqual(
+    geometry.visualCenterline(frontPiece).geometry.path,
+    geometry.visualCenterline(backPiece).geometry.path,
+);
+assert.deepEqual(
+    geometry.visualCenterline(backPiece).geometry.path,
+    geometry.visualCenterline(unsetPiece).geometry.path,
+);
+const savedFront = editor.valuesFor("liner", editor.draftFromRow(frontPiece, "liner"), true);
+const savedBack = editor.valuesFor("liner", editor.draftFromRow(backPiece, "liner"), true);
+assert.equal(JSON.parse(savedFront.liner_specs_json).face, "front");
+assert.equal(JSON.parse(savedBack.liner_specs_json).face, "back");
+assert.equal(savedFront.liner_reference_side, savedBack.liner_reference_side);
+assert.equal(savedFront.liner_offset_cm, savedBack.liner_offset_cm);
+assert.equal(savedFront.liner_width_cm, savedBack.liner_width_cm);
+assert.equal(savedFront.liner_length_cm, savedBack.liner_length_cm);
+assert.equal(editor.draftFromRow(unsetPiece, "liner").face, null);
 
 assert.deepEqual(
     copy(geometry.availableSides("Regular")),
@@ -80,6 +157,27 @@ assert.deepEqual(
     ["edge_width_top", "edge_width_bottom", "edge_long_left", "edge_long_right", "edge_break"]
 );
 assert.deepEqual(copy(geometry.availableSides("Special")), []);
+assert.deepEqual(
+    copy(geometry.availableSides("Glass")),
+    copy(geometry.availableSides("Regular"))
+);
+assert.equal(geometry.validationCode({
+    pieceType: "Glass",
+    widthCm: 100,
+    lengthCm: 100,
+    glassFrameMm: { left: 60, right: 40, top: 50, bottom: 80 },
+}, "edge_long_left", 1, 2), "");
+assert.equal(geometry.validationCode({
+    pieceType: "Glass",
+    widthCm: 100,
+    lengthCm: 100,
+    glassFrameMm: { left: 60, right: 40, top: 50, bottom: 80 },
+}, "edge_long_left", 4, 3), "liner_enters_glass_opening");
+assert.equal(geometry.validationCode({
+    pieceType: "Regular",
+    widthCm: 100,
+    lengthCm: 100,
+}, "edge_long_left", 4, 3), "");
 assert.deepEqual(
     copy(geometry.normalizeSideSelection("", "Regular", true)),
     copy(geometry.availableSides("Regular")),
@@ -288,6 +386,7 @@ assert.equal(editor.draftFromRow({
 assert.match(editor.validationMessage(blank), /reference side/);
 const secondPreview = editor.previewSvg(moved);
 assert.match(firstPreview, /data-liner-strip="1"/);
+assert.doesNotMatch(firstPreview, /data-glass-opening/);
 assert.match(firstPreview, /data-liner-offset-line="1"/);
 assert.match(firstPreview, /data-liner-width-line="1"/);
 assert.match(firstPreview, /data-liner-side="edge_width_top"/);
@@ -1150,6 +1249,183 @@ fakeWindow.AlmdinaClippedCornerEditor.resolveChildRow = () => Object.assign({}, 
 assert.equal(await editor.applyLiner(frm, staleRow, linerValues), false);
 assert.equal(writes.length, 1);
 }
+
+function hostPath(path) {
+    return Array.from(path, point => [
+        Math.round(point[0] * 1000) / 1000,
+        Math.round(point[1] * 1000) / 1000,
+    ]);
+}
+
+function properCrossings(path) {
+    function side(start, end, point) {
+        return (end[0] - start[0]) * (point[1] - start[1]) - (end[1] - start[1]) * (point[0] - start[0]);
+    }
+    let hits = 0;
+    for (let index = 0; index < path.length - 1; index += 1) {
+        for (let other = index + 2; other < path.length - 1; other += 1) {
+            const first = side(path[index], path[index + 1], path[other])
+                * side(path[index], path[index + 1], path[other + 1]);
+            const second = side(path[other], path[other + 1], path[index])
+                * side(path[other], path[other + 1], path[index + 1]);
+            if (first < -1e-6 && second < -1e-6) hits += 1;
+        }
+    }
+    return hits;
+}
+
+function overlappingRuns(path) {
+    const segments = [];
+    for (let index = 0; index < path.length - 1; index += 1) {
+        const length = Math.hypot(path[index + 1][0] - path[index][0], path[index + 1][1] - path[index][1]);
+        if (length > 1e-6) segments.push([path[index], path[index + 1], length]);
+    }
+    let hits = 0;
+    segments.forEach(([start, end, length], index) => {
+        const axis = [(end[0] - start[0]) / length, (end[1] - start[1]) / length];
+        segments.slice(index + 1).forEach(([otherStart, otherEnd]) => {
+            const area = point => Math.abs(
+                (end[0] - start[0]) * (point[1] - start[1]) - (end[1] - start[1]) * (point[0] - start[0])
+            );
+            if (area(otherStart) > 0.25 * Math.max(Math.hypot(start[0] - otherStart[0], start[1] - otherStart[1]), 1)) return;
+            if (area(otherEnd) > 0.25 * Math.max(Math.hypot(start[0] - otherEnd[0], start[1] - otherEnd[1]), 1)) return;
+            const projected = point => (point[0] - start[0]) * axis[0] + (point[1] - start[1]) * axis[1];
+            const low = Math.min(projected(otherStart), projected(otherEnd));
+            const high = Math.max(projected(otherStart), projected(otherEnd));
+            if (Math.min(high, length) - Math.max(low, 0) > 0.25) hits += 1;
+        });
+    });
+    return hits;
+}
+
+const canonicalSpecs = [
+    { side: "edge_width_top", offsetCm: 2, startCm: 0, lengthCm: 0 },
+    { side: "edge_long_left", offsetCm: 2, startCm: 0, lengthCm: 0 },
+];
+const canonicalPath = geometry.mergedToolpathsMm(regular, canonicalSpecs, 1.5, 5);
+const swappedPath = geometry.mergedToolpathsMm(regular, canonicalSpecs.slice().reverse(), 1.5, 5);
+assert.equal(canonicalPath.length, 1);
+assert.deepEqual(hostPath(canonicalPath[0]), hostPath(swappedPath[0]));
+assert.deepEqual(hostPath(canonicalPath[0]), [
+    [22.5, 602.5],
+    [22.5, 22.5],
+    [402.5, 22.5],
+    [402.5, 27.5],
+    [27.5, 27.5],
+    [27.5, 602.5],
+    [32.5, 602.5],
+    [32.5, 32.5],
+    [402.5, 32.5],
+]);
+assert.equal(properCrossings(canonicalPath[0]), 0);
+assert.equal(overlappingRuns(canonicalPath[0]), 0);
+const rings = geometry.mergedRegionPolygonsMm(regular, canonicalSpecs, 1.5);
+assert.equal(rings.length, 1);
+assert.deepEqual(hostPath(rings[0]), [
+    [20, 600],
+    [20, 20],
+    [400, 20],
+    [400, 35],
+    [35, 35],
+    [35, 600],
+]);
+const turned = canonicalPath[0].map(point => geometry.transformPoint(point, false, 1, 400, 600));
+const restored = Array.from(turned, point => geometry.inverseTransformPoint(point, false, 1, 400, 600));
+assert.deepEqual(hostPath(restored), hostPath(canonicalPath[0]));
+assert.equal(properCrossings(turned), 0);
+assert.equal(overlappingRuns(turned), 0);
+
+[
+    ["edge_width_top", "edge_long_left"],
+    ["edge_width_top", "edge_long_right"],
+    ["edge_width_bottom", "edge_long_left"],
+    ["edge_width_bottom", "edge_long_right"],
+].forEach(([first, second]) => {
+    const specs = [
+        { side: first, offsetCm: 2, startCm: 0, lengthCm: 0 },
+        { side: second, offsetCm: 2, startCm: 0, lengthCm: 0 },
+    ];
+    const paths = geometry.mergedToolpathsMm(regular, specs, 1.5, 5);
+    const reversed = geometry.mergedToolpathsMm(regular, specs.slice().reverse(), 1.5, 5);
+    assert.equal(paths.length, 1);
+    assert.deepEqual(hostPath(paths[0]), hostPath(reversed[0]));
+    assert.equal(properCrossings(paths[0]), 0);
+    assert.equal(overlappingRuns(paths[0]), 0);
+    const cornerRings = geometry.mergedRegionPolygonsMm(regular, specs, 1.5);
+    assert.equal(cornerRings.length, 1);
+    assert.equal(cornerRings[0].length, 6);
+});
+
+[4, 6, 8, 10].forEach(diameter => {
+    const path = geometry.mergedToolpathsMm(regular, canonicalSpecs, 1.8, diameter)[0];
+    assert.equal(properCrossings(path), 0);
+    assert.equal(overlappingRuns(path), 0);
+    const bends = path.filter(point => Math.abs(point[0] - point[1]) <= 1e-6 && point[0] > 20 && point[0] < 38);
+    assert.ok(bends.length >= 1);
+});
+
+const separated = geometry.mergedToolpathsMm(regular, [
+    { side: "edge_width_top", offsetCm: 2, startCm: 8, lengthCm: 0 },
+    { side: "edge_long_left", offsetCm: 2, startCm: 8, lengthCm: 0 },
+], 1.5, 5);
+assert.equal(separated.length, 2);
+assert.deepEqual(
+    hostPath(separated[0]),
+    hostPath(geometry.toolpathMm(regular, "edge_width_top", 2, 1.5, 5, 8, 0))
+);
+assert.deepEqual(
+    hostPath(separated[1]),
+    hostPath(geometry.toolpathMm(regular, "edge_long_left", 2, 1.5, 5, 8, 0))
+);
+
+const partialSpecs = [
+    { side: "edge_width_top", offsetCm: 2, startCm: 2, lengthCm: 0 },
+    { side: "edge_long_left", offsetCm: 2, startCm: 2, lengthCm: 0 },
+];
+const partialPath = geometry.mergedToolpathsMm(regular, partialSpecs, 1.5, 5);
+const partialReversed = geometry.mergedToolpathsMm(regular, partialSpecs.slice().reverse(), 1.5, 5);
+assert.deepEqual(hostPath(partialPath[0]), hostPath(canonicalPath[0]));
+assert.deepEqual(hostPath(partialReversed[0]), hostPath(partialPath[0]));
+assert.equal(properCrossings(partialPath[0]), 0);
+assert.equal(overlappingRuns(partialPath[0]), 0);
+assert.deepEqual(hostPath(geometry.mergedRegionPolygonsMm(regular, partialSpecs, 1.5)[0]), [
+    [20, 600],
+    [20, 20],
+    [400, 20],
+    [400, 35],
+    [35, 35],
+    [35, 600],
+]);
+const unequal = geometry.mergedToolpathsMm(regular, [
+    { side: "edge_width_top", offsetCm: 2, startCm: 4, lengthCm: 0 },
+    { side: "edge_long_left", offsetCm: 4, startCm: 2, lengthCm: 0 },
+], 1.5, 5);
+assert.equal(unequal.length, 1);
+assert.equal(properCrossings(unequal[0]), 0);
+assert.ok(hostPath(unequal[0]).some(point => point[0] === 42.5 && point[1] === 22.5));
+assert.ok(hostPath(unequal[0]).some(point => point[0] === 47.5 && point[1] === 27.5));
+assert.ok(hostPath(unequal[0]).some(point => point[0] === 52.5 && point[1] === 32.5));
+const singlePass = geometry.mergedToolpathsMm(regular, partialSpecs, 1.5, 15);
+assert.deepEqual(hostPath(singlePass[0]), [
+    [27.5, 607.5],
+    [27.5, 27.5],
+    [407.5, 27.5],
+]);
+
+const lDoor = geometry.pieceFromRow({
+    piece_type: "L-Shaped Corner",
+    width_cm: 100,
+    length_cm: 80,
+    clipped_corner_position: "Top Right",
+    clipped_corner_width_cm: 20,
+    clipped_corner_length_cm: 30,
+});
+assert.deepEqual(
+    Array.from(geometry.mergedToolpathsMm(lDoor, [
+        { side: "edge_break", offsetCm: 1, startCm: 0, lengthCm: 0 },
+    ], 0.8, 4), path => hostPath(path)),
+    [hostPath(geometry.toolpathMm(lDoor, "edge_break", 1, 0.8, 4))]
+);
 
 persistenceChecks().catch(error => {
     console.error(error);

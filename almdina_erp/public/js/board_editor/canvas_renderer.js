@@ -171,6 +171,13 @@
         ));
     }
 
+    function marqueeBlockedTarget(target) {
+        if (!target || typeof target.closest !== "function") return true;
+        return Boolean(target.closest(
+            "[data-piece-id], [data-piece-key], [data-abe-rotate-handle], [data-abe-angle-mirror], [data-board-drag], .abe-float-dock, .abe-canvas-tools, button, input, textarea, select, a"
+        ));
+    }
+
     function leftOuterEdgeMidpoint(points) {
         if (!Array.isArray(points) || points.length < 2) return null;
         let best = null;
@@ -1166,13 +1173,49 @@
         if (!world) return;
         let ghost = world.querySelector("[data-abe-ghost]");
         let angleBadge = world.querySelector("[data-abe-angle-badge]");
-        world.querySelectorAll("[data-abe-drag-shift]").forEach((node) => {
-            const base = node.getAttribute("data-abe-base-transform");
-            if (base != null) node.setAttribute("transform", base);
-            else node.removeAttribute("transform");
-            node.removeAttribute("data-abe-base-transform");
-            node.removeAttribute("data-abe-drag-shift");
-        });
+        const dragHomes = patchDragPreview._dragHomes || (patchDragPreview._dragHomes = new Map());
+        function restoreDragHomes() {
+            world.querySelectorAll("[data-abe-drag-shift]").forEach((node) => {
+                const base = node.getAttribute("data-abe-base-transform");
+                if (base != null) node.setAttribute("transform", base);
+                else node.removeAttribute("transform");
+                node.removeAttribute("data-abe-base-transform");
+                node.removeAttribute("data-abe-drag-shift");
+                const home = dragHomes.get(node);
+                if (home && home.parent && home.parent.isConnected) {
+                    if (home.next && home.next.parentNode === home.parent) {
+                        home.parent.insertBefore(node, home.next);
+                    } else {
+                        home.parent.appendChild(node);
+                    }
+                }
+                dragHomes.delete(node);
+            });
+            const emptyLayer = world.querySelector("[data-abe-drag-layer]");
+            if (emptyLayer && !emptyLayer.childNodes.length) emptyLayer.remove();
+        }
+        function ensureDragLayer() {
+            let layer = world.querySelector("[data-abe-drag-layer]");
+            if (!layer) {
+                layer = document.createElementNS("http://www.w3.org/2000/svg", "g");
+                layer.setAttribute("data-abe-drag-layer", "1");
+            }
+            // Keep the live drag layer above sheet groups so destination boards
+            // cannot cover a piece still parented under its origin sheet group.
+            if (ghost && ghost.parentNode === world) world.insertBefore(layer, ghost);
+            else world.appendChild(layer);
+            return layer;
+        }
+        function elevateDragNode(node, layer) {
+            if (!dragHomes.has(node)) {
+                dragHomes.set(node, {
+                    parent: node.parentNode,
+                    next: node.nextSibling,
+                });
+            }
+            layer.appendChild(node);
+        }
+        restoreDragHomes();
         world.querySelectorAll("[data-abe-guide]").forEach((node) => node.remove());
         world.querySelectorAll("[data-abe-rotate-preview]").forEach((node) => node.remove());
         if (!preview) {
@@ -1236,6 +1279,7 @@
         }
         if (angleBadge) angleBadge.remove();
         if (preview.kind === "piece" && Array.isArray(preview.ids)) {
+            const dragLayer = ensureDragLayer();
             preview.ids.forEach((pieceKey) => {
                 const instanceId = String(pieceKey).replace(/^instance:/, "");
                 world.querySelectorAll(`[data-piece-key="${attrSel(pieceKey)}"], [data-piece-instance="${attrSel(instanceId)}"], [data-abe-selection-for="${attrSel(pieceKey)}"]`).forEach((node) => {
@@ -1243,6 +1287,7 @@
                         node.setAttribute("data-abe-base-transform", node.getAttribute("transform") || "");
                     }
                     const base = node.getAttribute("data-abe-base-transform") || "";
+                    elevateDragNode(node, dragLayer);
                     node.setAttribute("transform", `${base} translate(${dx},${dy})`.trim());
                     node.setAttribute("data-abe-drag-shift", "1");
                 });
@@ -1287,16 +1332,42 @@
                 line.setAttribute("y1", String(Number(guide.y1) || 0));
                 line.setAttribute("x2", String(Number(guide.x2) || 0));
                 line.setAttribute("y2", String(Number(guide.y2) || 0));
-                line.setAttribute("stroke", "#0b5fff");
-                // Alignment guides stay solid and thinner; kerf/board edge guides stay dashed.
+                // Piece-to-piece alignment is a solid red stroke. Kerf and board
+                // edges stay blue and dashed so they are not read as the same cue.
                 const isAlignment = guide.kind === "alignment";
-                line.setAttribute("stroke-width", isAlignment ? "1" : "1.25");
+                line.setAttribute("stroke", isAlignment ? "#d92d20" : "#0b5fff");
+                line.setAttribute("stroke-width", isAlignment ? "2" : "1.25");
                 if (!isAlignment) line.setAttribute("stroke-dasharray", "6 4");
                 line.setAttribute("vector-effect", "non-scaling-stroke");
                 line.setAttribute("pointer-events", "none");
                 world.appendChild(line);
             });
         }
+    }
+
+    function patchMarqueeOverlay(host, rect) {
+        const world = host && host.querySelector(".abe-world");
+        if (!world) return;
+        let node = world.querySelector("[data-abe-marquee]");
+        if (!rect || !(Number(rect.w) > 0 || Number(rect.h) > 0)) {
+            if (node) node.remove();
+            return;
+        }
+        if (!node) {
+            node = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+            node.setAttribute("data-abe-marquee", "1");
+            node.setAttribute("class", "abe-marquee");
+            node.setAttribute("pointer-events", "none");
+            node.setAttribute("fill", "rgba(11, 95, 255, 0.12)");
+            node.setAttribute("stroke", "#0b5fff");
+            node.setAttribute("stroke-width", "1.25");
+            node.setAttribute("vector-effect", "non-scaling-stroke");
+            world.appendChild(node);
+        }
+        node.setAttribute("x", String(Number(rect.x) || 0));
+        node.setAttribute("y", String(Number(rect.y) || 0));
+        node.setAttribute("width", String(Math.max(0, Number(rect.w) || 0)));
+        node.setAttribute("height", String(Math.max(0, Number(rect.h) || 0)));
     }
 
     function patchMeasureOverlay(host, lines, scale) {
@@ -1819,6 +1890,27 @@
         </div>`;
     }
 
+    function finiteScrollPair(x, y) {
+        const sx = Number(x);
+        const sy = Number(y);
+        if (!Number.isFinite(sx) || !Number.isFinite(sy)) return null;
+        return { x: sx, y: sy };
+    }
+
+    function liveCameraScroll(stage, handlers) {
+        // The stage's scroll is the visual camera. Read it even when the scroll
+        // listener has not yet copied the latest pointerup value into liveScroll.
+        if (stage) {
+            const fromStage = finiteScrollPair(stage.scrollLeft, stage.scrollTop);
+            if (fromStage) return fromStage;
+        }
+        if (handlers && typeof handlers.readScroll === "function") {
+            const value = handlers.readScroll() || {};
+            return finiteScrollPair(value.x, value.y);
+        }
+        return null;
+    }
+
     function render(host, storeView, handlers) {
         const projection = storeView.projection || {};
         const session = storeView.session || null;
@@ -1856,12 +1948,51 @@
         let padY = openingFrame
             ? openingFrame.padY
             : (storeView.viewport.padY != null ? viewportPads.padY : SCENE_PAD_PX);
-        let scrollX = openingFrame
-            ? openingFrame.scrollX
-            : (Number(storeView.viewport.scrollX) || 0);
-        let scrollY = openingFrame
-            ? openingFrame.scrollY
-            : (Number(storeView.viewport.scrollY) || 0);
+        const cameraToken = Number(storeView.viewport.cameraToken) || 0;
+        // Peek only. takeCamera() commits the token after the new stage accepts
+        // the scroll, so a failed paint can still apply the same command.
+        const takeOwned = Boolean(
+            handlers && (
+                typeof handlers.cameraUnapplied === "function"
+                    ? handlers.cameraUnapplied(cameraToken)
+                    : (typeof handlers.takeCamera === "function" && handlers.takeCamera(cameraToken))
+            )
+        );
+        const cameraConsumedEarly = Boolean(
+            takeOwned
+            && handlers
+            && typeof handlers.cameraUnapplied !== "function"
+            && typeof handlers.takeCamera === "function"
+        );
+        const cameraProtocol = Boolean(
+            handlers && (
+                typeof handlers.takeCamera === "function"
+                || typeof handlers.cameraUnapplied === "function"
+                || typeof handlers.readScroll === "function"
+            )
+        );
+        // Repaints (drop, undo, message) keep the stage image. A new cameraToken
+        // — zoom, fit, reveal, opening — supplies the scroll instead.
+        const followLive = Boolean(
+            cameraProtocol
+            && !openingFrame
+            && !takeOwned
+            && (storeView.viewport.opened || storeView.viewport.userAdjusted)
+        );
+        const storedScrollX = Number(storeView.viewport.scrollX) || 0;
+        const storedScrollY = Number(storeView.viewport.scrollY) || 0;
+        let scrollX = storedScrollX;
+        let scrollY = storedScrollY;
+        if (openingFrame) {
+            scrollX = openingFrame.scrollX;
+            scrollY = openingFrame.scrollY;
+        } else if (followLive) {
+            const live = liveCameraScroll(previousStage, handlers);
+            if (live) {
+                scrollX = live.x;
+                scrollY = live.y;
+            }
+        }
         let trailX = Number(storeView.viewport.trailX);
         let trailY = Number(storeView.viewport.trailY);
         if (!(trailX >= 0)) trailX = SCENE_PAD_PX;
@@ -1942,6 +2073,27 @@
             )
         ) {
             handlers.persistCamera({
+                trailX,
+                trailY,
+                minX: metrics.minX,
+                minY: metrics.minY,
+            });
+        }
+        if (
+            followLive
+            && handlers
+            && handlers.persistCamera
+            && (
+                Math.abs(scrollX - storedScrollX) > 0.5
+                || Math.abs(scrollY - storedScrollY) > 0.5
+            )
+        ) {
+            // Catch the viewport up to the stage without emitting another paint.
+            handlers.persistCamera({
+                scrollX,
+                scrollY,
+                padX,
+                padY,
                 trailX,
                 trailY,
                 minX: metrics.minX,
@@ -2036,12 +2188,17 @@
                 const pos = layout.positions[String(element.sheet_no)] || sheetPos;
                 const isOffcut = String((element.payload && element.payload.resource_kind) || "").toUpperCase() === "OFFCUT";
                 const style = displayStyle();
+                // Count by live session sheet_no. Projection.sheet_no stays at the
+                // manufacturing origin and must not hide cross-sheet session moves.
                 const boardPieces = ((storeView.projection && storeView.projection.pieces) || []).filter((row) => {
-                    if (Number(row.sheet_no) !== Number(element.sheet_no)) return false;
-                    if (!session || !session.pieces) return true;
+                    if (!session || !session.pieces) {
+                        return Number(row.sheet_no) === Number(element.sheet_no);
+                    }
                     const instanceId = String(row.piece_instance_id || "").trim();
                     const live = instanceId ? session.pieces[`instance:${instanceId}`] : null;
-                    if (!live) return true;
+                    if (!live) {
+                        return Number(row.sheet_no) === Number(element.sheet_no);
+                    }
                     if (live.distribution === "excluded") return false;
                     return Number(live.sheet_no) === Number(element.sheet_no);
                 });
@@ -2107,7 +2264,12 @@
                     <rect x="${pos.originX}" y="${pos.originY}" width="${fullW}" height="${fullH}" fill="#ffffff" stroke="#111111" stroke-width="2" vector-effect="non-scaling-stroke"/>
                     <rect class="abe-board-waste-hatch" x="${pos.originX}" y="${pos.originY}" width="${fullW}" height="${fullH}" fill="url(#abe-waste-hatch)" pointer-events="none"/>
                 </g>`;
-                (sheetGroups[String(element.sheet_no)] || body).push(html);
+                // Frame must stay under pieces. Cross-sheet session moves keep the
+                // projection element order of the origin sheet; a later push of this
+                // frame would cover the relocated piece (empty blue selection only).
+                const frameBucket = sheetGroups[String(element.sheet_no)];
+                if (frameBucket) frameBucket.unshift(html);
+                else body.push(html);
                 return;
             }
 
@@ -2525,25 +2687,24 @@
         const svg = host.querySelector(".abe-svg");
         host.__abeWorldMetrics = metrics;
         host.__abeLayout = layout;
-        const cameraToken = Number(storeView.viewport.cameraToken) || 0;
-        const takeOwned = handlers && handlers.takeCamera && handlers.takeCamera(cameraToken);
-        let targetScrollX = takeOwned
-            ? scrollX
-            : (handlers && handlers.readScroll
-                ? Number((handlers.readScroll() || {}).x) || 0
-                : scrollX);
-        let targetScrollY = takeOwned
-            ? scrollY
-            : (handlers && handlers.readScroll
-                ? Number((handlers.readScroll() || {}).y) || 0
-                : scrollY);
+        let targetScrollX = scrollX;
+        let targetScrollY = scrollY;
+        if (!takeOwned && !followLive && handlers && typeof handlers.readScroll === "function") {
+            const parkedValue = handlers.readScroll() || {};
+            const parked = finiteScrollPair(parkedValue.x, parkedValue.y);
+            if (parked) {
+                targetScrollX = parked.x;
+                targetScrollY = parked.y;
+            }
+        }
         // Content was sized for the camera scroll; still verify browser acceptance once.
+        const holdCamera = takeOwned || followLive;
         stage.scrollLeft = targetScrollX;
         stage.scrollTop = targetScrollY;
-        const appliedX = Number(stage.scrollLeft) || 0;
-        const appliedY = Number(stage.scrollTop) || 0;
+        let appliedX = Number(stage.scrollLeft) || 0;
+        let appliedY = Number(stage.scrollTop) || 0;
         if (
-            takeOwned
+            holdCamera
             && handlers
             && handlers.persistCamera
             && (
@@ -2551,7 +2712,8 @@
                 || Math.abs(appliedY - targetScrollY) > 0.5
             )
         ) {
-            // Expand trail so the intended scroll becomes attainable on next paint.
+            // The browser clamped the visual scroll. Grow the scrollport so the
+            // same world point can stay on the same pixel.
             const rescue = fitCameraScroll({
                 scale,
                 scrollX: targetScrollX,
@@ -2579,13 +2741,37 @@
             svg.setAttribute("width", String(rescue.contentW));
             svg.setAttribute("height", String(rescue.contentH));
             svg.setAttribute("viewBox", `0 0 ${rescue.contentW} ${rescue.contentH}`);
+            if (Math.abs(rescue.padX - padX) > 1e-6 || Math.abs(rescue.padY - padY) > 1e-6) {
+                const world = svg.querySelector && svg.querySelector(".abe-world");
+                if (world && world.setAttribute) {
+                    world.setAttribute(
+                        "transform",
+                        `translate(${rescue.padX - metrics.minX * scale},${rescue.padY - metrics.minY * scale}) scale(${scale})`
+                    );
+                }
+                padX = rescue.padX;
+                padY = rescue.padY;
+                metrics.pad = rescue.padX;
+                metrics.padX = rescue.padX;
+                metrics.padY = rescue.padY;
+            }
             stage.scrollLeft = rescue.scrollX;
             stage.scrollTop = rescue.scrollY;
+            appliedX = Number(stage.scrollLeft) || 0;
+            appliedY = Number(stage.scrollTop) || 0;
             metrics.contentWidth = rescue.contentW;
             metrics.contentHeight = rescue.contentH;
             metrics.trailX = rescue.trailX;
             metrics.trailY = rescue.trailY;
-        } else if (takeOwned && handlers && handlers.onScroll) {
+            scrollX = rescue.scrollX;
+            scrollY = rescue.scrollY;
+        }
+        metrics.scrollX = appliedX;
+        metrics.scrollY = appliedY;
+        if (takeOwned && !cameraConsumedEarly && handlers && typeof handlers.takeCamera === "function") {
+            handlers.takeCamera(cameraToken);
+        }
+        if (holdCamera && handlers && handlers.onScroll) {
             handlers.onScroll(appliedX, appliedY);
         }
         stage.addEventListener("scroll", () => {
@@ -2816,7 +3002,13 @@
             );
         }
 
-        const suppressed = () => handlers && handlers.consumeClickSuppression && handlers.consumeClickSuppression();
+        const suppressed = () => {
+            if (handlers && handlers.consumeClickSuppression && handlers.consumeClickSuppression()) return true;
+            if (handlers && handlers.consumeMarqueeClickSuppression && handlers.consumeMarqueeClickSuppression()) {
+                return true;
+            }
+            return false;
+        };
 
         const angleInput = host.querySelector(".abe-angle-input");
         if (angleInput && selectedSessionPiece) {
@@ -2982,6 +3174,18 @@
                 if (handlers.beginMeasureGesture(event)) {
                     stage.setPointerCapture(event.pointerId);
                 }
+                return;
+            }
+            if (
+                event.button === 0
+                && handlers
+                && handlers.beginMarqueeGesture
+                && !marqueeBlockedTarget(event.target)
+            ) {
+                if (handlers.beginMarqueeGesture(event)) {
+                    // Capture only after marquee activates (real drag); pending empty
+                    // clicks are settled by marquee finish + click suppression.
+                }
             }
         });
         stage.addEventListener("dblclick", (event) => {
@@ -2992,6 +3196,19 @@
         stage.addEventListener("pointermove", (event) => {
             if (handlers && handlers.onCanvasPointerMove) handlers.onCanvasPointerMove(event);
             if (handlers && handlers.onStagePointerMove) handlers.onStagePointerMove(event);
+            if (
+                !ignoreBackgroundClick
+                && handlers
+                && handlers.isMarqueeSelecting
+                && handlers.isMarqueeSelecting()
+            ) {
+                ignoreBackgroundClick = true;
+                try {
+                    stage.setPointerCapture(event.pointerId);
+                } catch (err) {
+                    /* ignore */
+                }
+            }
             if (!panning) return;
             const delta = clientDeltaToLocal(stage, event.clientX - lastX, event.clientY - lastY);
             lastX = event.clientX;
@@ -3017,6 +3234,7 @@
         if (Array.isArray(host.__abeMeasureLines) && host.__abeMeasureLines.length) {
             patchMeasureOverlay(host, host.__abeMeasureLines, scale);
         }
+        patchMarqueeOverlay(host, null);
 
         metrics.contentWidth = contentW;
         metrics.contentHeight = contentH;
@@ -3026,6 +3244,7 @@
             metrics,
             patchDragPreview: (preview) => patchDragPreview(host, preview),
             patchMeasureOverlay: (lines) => patchMeasureOverlay(host, lines, scale),
+            patchMarqueeOverlay: (rect) => patchMarqueeOverlay(host, rect),
         };
     }
 
@@ -3660,7 +3879,9 @@
         patchPenPreview,
         bindDrawingMeasure,
         copyPlanReady,
+        patchMarqueeOverlay,
         clickTargetKeepsSelection,
+        marqueeBlockedTarget,
         leftOuterEdgeMidpoint,
         FIT_PADDING_PX,
         SCENE_PAD_PX,

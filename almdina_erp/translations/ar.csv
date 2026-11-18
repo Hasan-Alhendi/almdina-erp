@@ -864,6 +864,10 @@ Choose a reference side.,اختر الجهة المرجعية.
 Choose a reference side to include this add-on.,اختر الجهة المرجعية لتضمين هذه الإضافة.
 Edge Offset,المسافة عن الحافة
 Liner Width,عرض اللاينر
+Liner face,اللاينر على الوجه
+Front face,الوجه الأمامي
+Back face,الوجه الخلفي
+Liner on the back,لاينر من الخلف
 Add liner,إضافة لاينر
 Liner {0},لاينر {0}
 Remove liner {0},إزالة اللاينر {0}
@@ -2804,6 +2808,16 @@ Opening Width,عرض الفتحة
 Opening Length,طول الفتحة
 Apply Shape,اعتماد الشكل
 Invalid Glass Margin,هامش البلور غير صالح
+All Directions,كل الاتجاهات
+Individual Sides,كل جهة
+Glass Margin Mode,طريقة تحديد الهامش
+Top Margin,الهامش العلوي
+Bottom Margin,الهامش السفلي
+Right Margin,الهامش الأيمن
+Left Margin,الهامش الأيسر
+The liner does not fit inside the glass door frame. Reduce its width or its distance from the edge.,اللاينر لا يتسع داخل إطار درفة البلور. قلّل عرضه أو بعده عن الحافة.
+Row {0}: A glass door can only add a liner.,الصف {0}: درفة البلور تقبل اللاينر فقط.
+A glass door can only add a liner.,درفة البلور تقبل اللاينر فقط.
 Glass margin is measured from the entered outer size. The cut size can differ after edge banding.,هامش البلور يُقاس من المقاس الخارجي المدخل. مقاس القص قد يختلف بعد القشاط.
 Glass shape applied,تم اعتماد شكل البلور
 Saw blade thickness conflict: {0} mm versus {1} mm in the cutting plan. DXF was not exported.,سماكة الشفرة متعارضة: {0} مم مقابل {1} مم في خطة القص، ولم يُصدَّر الملف.
@@ -3030,6 +3044,432 @@ The server is temporarily unavailable. Check the current status before repeating
 The request timed out. Check the current status before repeating the operation.,انتهت مهلة الطلب. تحقّق من الحالة الحالية قبل تكرار الإجراء.
 An unexpected system error prevented completion. Contact support.,تعذر إكمال العملية بسبب خطأ غير متوقع في النظام. تواصل مع الدعم.
 "The DXF upload service is not ready. Save or cancel unsaved changes, then reload the page.",خدمة رفع DXF ليست جاهزة. احفظ التعديلات غير المحفوظة أو ألغها، ثم أعد تحميل الصفحة.
+Operational Files,الملفات التشغيلية
+CNC Tool Preset,إعداد تشغيل CNC
+CNC Operational File,ملف تشغيلي
+Settings Revision,إصدار إعدادات اللوح
+Monotonic revision of persisted sheet settings used for optimistic concurrency control.,إصدار متزايد لإعدادات اللوح المحفوظة يُستخدم للتحكم بالتزامن التفاؤلي.
+CNC Operational Operation,عملية تشغيل
+CNC Operational Path,مسار تشغيل
+CNC Operational Defaults,إعدادات التشغيل الافتراضية
+Cut Between Pieces Preset,إعداد القص بين الدرفات
+Liner Preset,إعداد اللاينر
+Rear Groove Preset,إعداد فرزة الظهر
+Handle Recess Preset,إعداد مسكة الغطس
+Sample Tool Number,رقم الريشة في العينة
+Sample Spindle Speed RPM,سرعة دوران العينة
+Sample Cutting Feed MM/Min,سرعة القطع في العينة
+Sample Plunge Feed MM/Min,سرعة النزول في العينة
+Sample Retract Z MM,ارتفاع السحب في العينة
+Sample Distance Mode,نمط الإحداثيات في العينة
+Sample Work Offset,إزاحة العمل في العينة
+Sample Example Depth A MM,عمق المثال الأول
+Sample Example Depth B MM,عمق المثال الثاني
+Machine Profile Approved For Production,اعتماد ملف الماكينة للإنتاج
+Machine Profile Source Note,ملاحظة مصدر ملف الماكينة
+View operational files,عرض الملفات التشغيلية
+Prepare operational files,إعداد الملفات التشغيلية
+Edit CNC defaults,إعدادات التشغيل الافتراضية
+CNC operational defaults,إعدادات التشغيل الافتراضية
+"Default tool presets for the operational DXF layers, plus the sample machine profile. A sheet that still uses the factory preset inherits a new default. A sheet or path with its own choice keeps that choice. Saved machine files and generation snapshots stay as they were, and a generated file is marked when its effective preset changes. This sample is not approved for production and does not generate an NC file.",إعدادات الريش الافتراضية لطبقات التشغيل، مع عينة ملف الماكينة. اللوح الذي ما زال يستخدم إعداد المصنع يرث الإعداد الجديد. اللوح أو المسار الذي له اختيار خاص يحتفظ به. ملفات الماكينة المحفوظة ولقطات التوليد تبقى كما هي، ويُعلَّم الملف المولَّد عندما يتغير الإعداد الفعلي. هذه العينة غير معتمدة للإنتاج ولا تولّد ملف NC.
+Cut between pieces,القص بين الدرفات
+Liner operation,اللاينر
+Rear groove,فرزة الظهر
+Handle recess,مسكة الغطس
+Sample tool number,رقم الريشة في العينة
+Sample spindle speed (RPM),سرعة دوران العينة (دورة/دقيقة)
+Sample cutting feed (mm/min),سرعة القطع في العينة (مم/دقيقة)
+Sample plunge feed (mm/min),سرعة النزول في العينة (مم/دقيقة)
+Sample retract Z (mm),ارتفاع السحب في العينة (مم)
+Sample distance mode,نمط الإحداثيات في العينة
+Sample work offset,إزاحة العمل في العينة
+Sample example depth A (mm),عمق المثال الأول (مم)
+Sample example depth B (mm),عمق المثال الثاني (مم)
+Machine profile,ملف الماكينة
+Approved for production,معتمد للإنتاج
+Sample only — not approved for production,عينة فقط — غير معتمدة للإنتاج
+Profile note,ملاحظة الملف
+Edit CNC operational defaults,تعديل إعدادات التشغيل الافتراضية
+DXF layer CUT_PATH. Leave empty when this operation has no factory default.,طبقة CUT_PATH. اترك الحقل فارغًا إذا لم يكن لهذه العملية إعداد افتراضي.
+DXF layer Liner. Leave empty when this operation has no factory default.,طبقة Liner. اترك الحقل فارغًا إذا لم يكن لهذه العملية إعداد افتراضي.
+DXF layer Rear Groove. Leave empty when this operation has no factory default.,طبقة Rear Groove. اترك الحقل فارغًا إذا لم يكن لهذه العملية إعداد افتراضي.
+DXF layer Handle Recess. Leave empty when this operation has no factory default.,طبقة Handle Recess. اترك الحقل فارغًا إذا لم يكن لهذه العملية إعداد افتراضي.
+"Example from a previous file, such as T9. This is not a confirmed tool for every job.",مثال من ملف سابق مثل T9. ليست ريشة مؤكدة لكل تشغيل.
+Stored sample token, such as G90. This does not choose a controller.,رمز العينة المحفوظ مثل G90. لا يحدّد نوع وحدة التحكم.
+Stored sample token, such as G54. This does not set the machine origin.,رمز العينة المحفوظ مثل G54. لا يحدّد نقطة صفر الماكينة.
+Mark the sample as approved for production,اعتماد العينة للإنتاج
+"The stored sample is not a controller, origin, or travel-limit specification.",العينة المحفوظة ليست مواصفة لوحدة التحكم أو نقطة الصفر أو حدود حركة الماكينة.
+Not generated,لم يتم التوليد
+Generated,تم التوليد
+Needs regeneration,يحتاج إعادة توليد
+System plan,خطة من النظام
+Uploaded plan,خطة مرفوعة
+Uses the operation preset,يستخدم إعداد العملية
+Save sheet settings,حفظ إعدادات اللوح
+Sheet {0},اللوح {0}
+Operation,العملية
+DXF layer,طبقة DXF
+Tool preset,إعداد الريشة
+Path-level preset changes are not available in this step.,تخصيص إعداد لمسار واحد غير متاح في هذه الخطوة.
+Path,المسار
+Preset override,إعداد خاص بالمسار
+Earlier operational files,ملفات تشغيلية سابقة
+These files stay linked to the plan revision they were prepared for.,تبقى هذه الملفات مرتبطة بإصدار الخطة الذي جُهّزت له.
+Plan revision,إصدار الخطة
+Approved plan,الخطة المعتمدة
+The stored machine profile is marked approved for production.,ملف الماكينة المحفوظ معلّم بأنه معتمد للإنتاج.
+The stored machine profile is a sample and is not approved for production.,ملف الماكينة المحفوظ عينة وغير معتمد للإنتاج.
+This step saves machining settings only. It does not create a machine file.,هذه الخطوة تحفظ إعدادات التشغيل فقط. لا تنشئ ملف ماكينة.
+Save the order before preparing operational files.,احفظ الطلب قبل تجهيز الملفات التشغيلية.
+Loading operational files...,جارٍ تحميل الملفات التشغيلية...
+Operational files could not be loaded.,تعذر تحميل الملفات التشغيلية.
+"This order has no approved cutting plan. Operational files can be prepared only from the current approved plan, whether the system calculated it or it was uploaded and then approved.",لا توجد خطة قص معتمدة لهذا الطلب. لا يمكن تجهيز الملفات التشغيلية إلا من الخطة المعتمدة الحالية، سواء حُسبت في النظام أو رُفعت ثم اعتُمدت.
+This approved plan source cannot be used for operational files.,لا يمكن استخدام مصدر هذه الخطة المعتمدة للملفات التشغيلية.
+The approved plan is missing a stable piece identity.,الخطة المعتمدة تفتقد هوية ثابتة للدرفة.
+The approved plan liner setup cannot be read.,تعذر قراءة إعداد اللاينر في الخطة المعتمدة.
+That sheet is not part of the approved cutting plan.,هذا اللوح ليس جزءًا من خطة القص المعتمدة.
+That machining operation is not on this sheet.,عملية التشغيل هذه غير موجودة على هذا اللوح.
+That machining path is not on this sheet.,مسار التشغيل هذا غير موجود على هذا اللوح.
+The selected CNC tool preset does not exist.,إعداد الريشة المحدد غير موجود.
+The selected CNC tool preset is disabled.,إعداد الريشة المحدد معطّل.
+One board file must keep the same physical tool number.,يجب أن يحتفظ ملف اللوح الواحد برقم الريشة الفيزيائية نفسه.
+The same milling group cannot use different tool diameters.,لا يمكن استخدام أقطار ريش مختلفة ضمن مجموعة تفريز واحدة.
+Tool number must look like T9.,يجب أن يكون رقم الريشة بالشكل T9.
+Tool diameter must be a positive number of millimetres within the supported range.,يجب أن يكون قطر الريشة رقمًا موجبًا بالمليمتر ضمن المدى المدعوم.
+Final depth must be a positive number of millimetres within the supported range.,يجب أن يكون العمق النهائي رقمًا موجبًا بالمليمتر ضمن المدى المدعوم.
+Spindle speed must be a positive whole number of RPM within the supported range.,يجب أن تكون سرعة الدوران عددًا صحيحًا موجبًا من الدورات في الدقيقة ضمن المدى المدعوم.
+Feed rate must be a positive number of millimetres per minute within the supported range.,يجب أن تكون سرعة القطع رقمًا موجبًا بالمليمتر في الدقيقة ضمن المدى المدعوم.
+Plunge rate must be a positive number of millimetres per minute within the supported range.,يجب أن تكون سرعة النزول رقمًا موجبًا بالمليمتر في الدقيقة ضمن المدى المدعوم.
+Pass depth must be a positive number of millimetres within the supported range.,يجب أن يكون عمق التمريرة رقمًا موجبًا بالمليمتر ضمن المدى المدعوم.
+Pass depth cannot be deeper than the final depth.,لا يجوز أن يتجاوز عمق التمريرة العمق النهائي.
+You do not have permission to use operational files for this order.,ليست لديك صلاحية استخدام الملفات التشغيلية لهذا الطلب.
+Operational file settings are not valid.,إعدادات الملف التشغيلي غير صالحة.
+The approved plan snapshot cannot be read.,تعذر قراءة لقطة الخطة المعتمدة.
+The CNC machine profile sample is not valid.,عينة ملف الماكينة غير صالحة.
+Preset name is required.,اسم الإعداد مطلوب.
+Tool name is required.,اسم الريشة مطلوب.
+Operational file status is not valid.,حالة الملف التشغيلي غير صالحة.
+Operational file identity is incomplete.,هوية الملف التشغيلي غير مكتملة.
+An operational file already exists for this approved sheet.,يوجد ملف تشغيلي لهذا اللوح في الخطة المعتمدة.
+This CNC tool preset is in use and cannot be deleted: {0},إعداد الريشة مستخدم ولا يمكن حذفه: {0}
+Preset Name,اسم الإعداد
+Tool Name,اسم الريشة
+Tool Number,رقم الريشة
+Tool Diameter (mm),قطر الريشة (مم)
+Final Depth (mm),العمق النهائي (مم)
+Spindle Speed (RPM),سرعة الدوران (دورة/دقيقة)
+Feed Rate (mm/min),سرعة التغذية (مم/دقيقة)
+Plunge Rate (mm/min),سرعة الغطس (مم/دقيقة)
+Pass Depth (mm),عمق التمريرة (مم)
+Plan Revision,إصدار الخطة
+Plan Source Type,مصدر الخطة
+Sheet Key,مفتاح اللوح
+Identity Key,مفتاح الهوية
+Settings Fingerprint,بصمة الإعدادات
+Operations,العمليات
+Paths,المسارات
+Generated File,الملف الناتج
+Generated By,ولّده
+Generated On,تاريخ التوليد
+Generation Snapshot,لقطة التوليد
+Path Key,مفتاح المسار
+Operation Key,مفتاح العملية
+Piece Instance ID,هوية الدرفة
+DXF Layer,طبقة DXF
+Tool Preset,إعداد الريشة
+Tool Preset Override,إعداد خاص بالمسار
+Open sheet settings,فتح إعدادات اللوح
+"{0} paths",{0} مسارات
+"Piece {0}",الدرفة {0}
+Piece number is not available,رقم الدرفة غير متاح
+"Select a path to see its piece, layer, and preset.",اختر مسارًا لعرض الدرفة والطبقة وإعداد التشغيل.
+"Path {0}",المسار {0}
+Shared path,مسار مشترك
+"Pass {0}",التمريرة {0}
+"Pass {0}: Depth {1} mm",التمريرة {0}: العمق {1} مم
+Uses the layer preset,يستخدم إعداد الطبقة
+Custom preset,إعداد مخصص
+Use the layer preset,استخدم إعداد الطبقة
+Show paths,عرض المسارات
+Hide paths,إخفاء المسارات
+Operation order,ترتيب عمليات التشغيل
+Move earlier,تقديم
+Move later,تأخير
+"Cutting first may let the pieces move after they separate from the board.",تقديم القص قد يؤدي إلى تحرك الدرفات بعد فصلها عن اللوح.
+I understand and want to keep this operation order.,أفهم ذلك وأريد الإبقاء على هذا الترتيب.
+Board preview is not available.,معاينة اللوح غير متاحة.
+Loading cutting paths...,جارٍ تحميل مسارات القص...
+Cutting paths could not be loaded.,تعذر تحميل مسارات القص.
+No cutting paths are available for this sheet preview.,لا توجد مسارات قص متاحة لمعاينة هذا اللوح.
+No machining paths are available for this sheet preview.,لا توجد مسارات تشغيل متاحة لمعاينة هذا اللوح.
+Operation colors,ألوان العمليات
+Cutting path preview is incomplete.,معاينة مسارات القص غير مكتملة.
+CNC sheet settings,إعدادات لوح CNC
+CNC Sheet Settings,إعدادات لوح CNC
+Loading sheet settings...,جارٍ تحميل إعدادات اللوح...
+Sheet settings could not be loaded.,تعذر تحميل إعدادات اللوح.
+The sheet settings link is incomplete.,رابط إعدادات اللوح غير مكتمل.
+This sheet is not available on the approved plan.,هذا اللوح غير متاح في الخطة المعتمدة.
+Back to the order,العودة إلى الطلب
+Preview zoom,تكبير المعاينة
+Board preview viewport,مساحة عرض اللوح
+Zoom in,تكبير
+Zoom out,تصغير
+Fit to view,ملاءمة العرض
+Fit,ملاءمة
+Discard the unsaved changes?,هل تريد تجاهل التغييرات غير المحفوظة؟
+Operational files saved.,تم حفظ إعدادات الملف التشغيلي.
+The operation order does not include every operation on this sheet.,ترتيب العمليات لا يشمل كل العمليات الموجودة على هذا اللوح.
+Confirm the warning before saving a cut that comes before the internal operations.,أكّد التنبيه قبل حفظ قص يسبق عمليات التشغيل الداخلية.
+Cut Path Early Confirmation,تأكيد تقديم القص
+"Records that this sheet's cut was placed before an internal operation. It does not waive later generation checks.",يسجّل أن قص هذا اللوح وُضع قبل عملية تشغيل داخلية. لا يلغي فحوص التوليد اللاحقة.
+Preparing the machining preview...,جارٍ تجهيز معاينة التشغيل...
+The machining preview could not be prepared.,تعذر تجهيز معاينة التشغيل.
+Machining preview,معاينة التشغيل
+"Depth {0} mm",العمق {0} مم
+"{0} passes",{0} تمريرات
+Counterclockwise,عكس عقارب الساعة
+Clockwise,مع عقارب الساعة
+Start to end,من البداية إلى النهاية
+Path start,بداية المسار
+Path end,نهاية المسار
+"This preview uses positive depths in millimetres. The machine origin is not established, so it is not a machine file.",هذه المعاينة تستخدم أعماقًا موجبة بالمليمتر. أصل الماكينة غير محدد، لذا هذه ليست ملف ماكينة.
+"The drawing units are not millimetres, so the path was not prepared.",وحدات الرسم ليست بالمليمتر، لذلك لم يُجهَّز المسار.
+"The sheet frame could not be established, so the path was not prepared.",تعذر تحديد إطار اللوح، لذلك لم يُجهَّز المسار.
+"A machining path overlaps more than one sheet, so it was not assigned.",يتداخل مسار تشغيل مع أكثر من لوح، لذلك لم يُنسب إلى لوح.
+"A machining path is outside the approved sheet outlines.",يوجد مسار تشغيل خارج حدود الألواح المعتمدة.
+"The kerf is missing, so cutter centers were not calculated.",سماكة القص غير موجودة، لذلك لم تُحسب مراكز الريشة.
+The approved plan has no finished geometry for this piece.,الخطة المعتمدة لا تحتوي هندسة نهائية لهذه الدرفة.
+This path geometry cannot be used.,لا يمكن استخدام هندسة هذا المسار.
+"This closed region is not a cutter path, and the approved plan does not include the mill settings needed to calculate one.",هذه المنطقة المغلقة ليست مسار ريشة، والخطة المعتمدة لا تتضمن إعدادات التفريز اللازمة لحسابه.
+"This cut is the piece boundary, not a cutter center.",هذا القص هو حد الدرفة وليس مركز الريشة.
+The cutter compensation for this path is not verified.,تعويض الريشة لهذا المسار غير مؤكد.
+The cut side of this closed path is not known.,جهة القص لهذا المسار المغلق غير معروفة.
+This path has no tool preset.,هذا المسار بلا إعداد ريشة.
+A shared cut cannot use a different preset for each piece.,القص المشترك لا يقبل إعدادًا مختلفًا لكل درفة.
+The approved drawing does not contain this machining path.,الرسم المعتمد لا يحتوي مسار التشغيل هذا.
+The uploaded cut does not match the approved cutter centers.,القص المرفوع لا يطابق مراكز الريشة المعتمدة.
+The operational drawing could not be read.,تعذر قراءة رسم التشغيل.
+"{0} RPM",{0} دورة/دقيقة
+"Feed {0} mm/min",تغذية {0} مم/دقيقة
+"Plunge {0} mm/min",نزول {0} مم/دقيقة
+Factory default,إعداد المصنع
+Sheet choice,اختيار خاص باللوح
+Restore the factory preset,استعادة إعداد المصنع
+Restore factory presets for this sheet,استعادة إعدادات المصنع للوح
+Customize this path,تخصيص هذا المسار
+Layer presets,إعدادات الطبقات
+Add a tool preset,إضافة إعداد ريشة
+"No CNC tool presets have been created yet.",لم تُنشأ إعدادات ريش CNC بعد.
+"No CNC tool presets have been created yet. A factory settings manager must create them.",لم تُنشأ إعدادات ريش CNC بعد. يجب أن ينشئها مسؤول إعدادات المصنع.
+"Every saved tool preset is disabled. Enable one before preparing new machining.",كل إعدادات الريش المحفوظة معطلة. فعّل إعدادًا قبل تجهيز تشغيل جديد.
+"You can review these settings. Preparing operational files is not available for your current permissions.",يمكنك مراجعة هذه الإعدادات. تجهيز الملفات التشغيلية غير متاح لصلاحياتك الحالية.
+"This tool preset is no longer available. It remains visible for history and cannot be used for new machining.",إعداد الريشة هذا لم يعد متاحًا. يبقى ظاهرًا للسجل ولا يمكن استخدامه لتشغيل جديد.
+"This tool preset is disabled. It remains visible for history and cannot be used for new machining.",إعداد الريشة هذا معطّل. يبقى ظاهرًا للسجل ولا يمكن استخدامه لتشغيل جديد.
+CNC tool presets,إعدادات ريش CNC
+Operational file settings,إعدادات الملفات التشغيلية
+Operating settings,إعدادات التشغيل
+Factory settings sections,أقسام إعدادات المعمل
+Operational files,الملفات التشغيلية
+Manage tool presets,إدارة الريش
+"Manage CNC tool presets from Desk",إدارة إعدادات ريش CNC من Desk
+"List View and Form View use the current factory CNC permissions",قائمة Desk ونموذج السجل يستخدمان صلاحيات CNC الحالية في المعمل
+"Manage saved CNC tool presets with the standard Desk list and form. Board NC settings only select a saved preset or create a new one.",أدِر إعدادات ريش CNC المحفوظة عبر قائمة Desk والنموذج القياسيين. إعدادات ملف NC للوح تقتصر على اختيار ريشة محفوظة أو إنشاء ريشة جديدة.
+"{0} saved tool presets are available in Desk.",يتوفر {0} من إعدادات الريش المحفوظة في Desk.
+"Diameter {0} mm",القطر {0} مم
+Preset name,اسم الإعداد
+Tool name,اسم الريشة
+Tool number,رقم الريشة
+"Tool diameter (mm)",قطر الريشة (مم)
+"Final depth (mm)",العمق النهائي (مم)
+"Spindle speed (RPM)",سرعة دوران الريشة (دورة/دقيقة)
+"Cutting feed (mm/min)",سرعة القطع (مم/دقيقة)
+"Plunge feed (mm/min)",سرعة النزول (مم/دقيقة)
+"Pass depth (mm)",عمق التمريرة (مم)
+"Optional. Leave empty for one pass.",اختياري. اتركه فارغًا لتمريرة واحدة.
+Save tool preset,حفظ إعداد الريشة
+Edit tool preset,تعديل إعداد الريشة
+"Saving tool preset...",جارٍ حفظ إعداد الريشة...
+"Delete the unused tool preset {0}?",حذف إعداد الريشة غير المستخدم {0}؟
+"Deleting tool preset...",جارٍ حذف إعداد الريشة...
+"A factory settings manager must create the tool presets.",يجب أن ينشئ مسؤول إعدادات المصنع إعدادات الريش.
+"You do not have permission to edit CNC tool presets.",ليست لديك صلاحية تعديل إعدادات ريش CNC.
+Enter a preset name.,أدخل اسم الإعداد.
+Enter a tool name.,أدخل اسم الريشة.
+The preset name cannot be changed.,لا يمكن تغيير اسم الإعداد.
+"This tool preset is still used. Disable it instead of deleting it.",إعداد الريشة هذا ما زال مستخدمًا. عطّله بدل حذفه.
+The CNC tool preset is not valid.,إعداد ريشة CNC غير صالح.
+The layer preset source is not valid.,مصدر إعداد الطبقة غير صالح.
+"The drawing does not state its units, so millimetres were not assumed and the path was not prepared.",الرسم لا يصرّح بوحداته، لذلك لم تُفترض المليمترات ولم يُجهَّز المسار.
+"This CUT_PATH was calculated for the approved kerf and does not match the selected tool diameter.",حُسب مسار CUT_PATH لسماكة القص المعتمدة ولا يطابق قطر الريشة المختارة.
+The {0} tool diameter does not match the approved cutting plan.,قطر ريشة {0} غير مطابق لخطة القص.
+"{0} — approved diameter {1} mm, selected diameter {2} mm.","{0} — القطر المعتمد {1} مم، والقطر المختار {2} مم."
+"Choose a tool whose diameter is {0} mm, the diameter used to create the approved paths.",اختر ريشة قطرها {0} مم، المطابق للقطر الذي تم إنشاء المسارات المعتمدة باستخدامه.
+Choose a tool whose diameter matches the approved cutting plan.,اختر ريشة قطرها يطابق قطر خطة القص المعتمد.
+"The tool property {0} cannot be changed here. Choose another tool to replace the protected tool properties.",لا يمكن تغيير خاصية الريشة {0} هنا. اختر ريشة أخرى إذا أردت استبدال الخصائص المحمية.
+Stepover size and stepover percent must describe the same fraction of the tool diameter.,يجب أن يعبّر عرض التداخل ونسبته عن الجزء نفسه من قطر الريشة.
+Handle Recess,مسكة الغطس
+Rear Groove,فرزة الظهر
+Tool settings,إعدادات الريشة
+Editable tool settings,إعدادات الريشة القابلة للتعديل
+Stepover Percent,نسبة التداخل
+Stepover Size,مقدار التداخل
+Stepover Size (mm),مقدار التداخل (مم)
+Diameter (mm),قطر الريشة (مم)
+Choose a tool to copy its protected properties.,اختر ريشة لنسخ خصائصها المحمية.
+"CUT_PATH {0} was calculated for the approved kerf and does not match the selected tool diameter.",مسار CUT_PATH {0} حُسب لسماكة القص المعتمدة ولا يطابق قطر الريشة المختارة.
+the shared cut,القص المشترك
+"This milling path is not a verified cutter center for the selected tool.",مسار التفريز هذا ليس مركز ريشة مؤكدًا للريشة المختارة.
+"The approved plan does not record where this piece sits, so the milling path was not calculated.",الخطة المعتمدة لا تسجّل موضع هذه الدرفة، لذلك لم يُحسب مسار التفريز.
+"The approved plan does not include the side, offset, and width needed to calculate this milling path.",الخطة المعتمدة لا تتضمن الجهة والإزاحة والعرض اللازمين لحساب مسار التفريز.
+"This milling path needs the layer tool diameter before its cutter center can be calculated.",يحتاج مسار التفريز إلى قطر ريشة الطبقة قبل حساب مركز الريشة.
+"The selected tool is wider than this milling band, so the path was not calculated.",الريشة المختارة أعرض من شريط التفريز، لذلك لم يُحسب المسار.
+"This piece shape has no supported side for this milling operation.",شكل هذه الدرفة بلا جهة مدعومة لعملية التفريز هذه.
+"Overlapping milling cannot use a different preset for each path.",التفريز المتداخل لا يقبل إعدادًا مختلفًا لكل مسار.
+"Tool diameter {0} mm",قطر الريشة {0} مم
+"The uploaded milling path does not match the approved milling geometry.",مسار التفريز المرفوع لا يطابق هندسة التفريز المعتمدة.
+"The machining geometry is not ready, so an NC file was not created.",هندسة التشغيل غير جاهزة، لذلك لم يُنشأ ملف NC.
+"The generated NC file does not match the intermediate program.",ملف NC المولَّد لا يطابق البرنامج الوسيط.
+"A production controller is not confirmed for this factory profile.",متحكم الإنتاج غير مؤكد لملف الماكينة في المصنع.
+"This coordinate space cannot be posted to NC.",لا يمكن إرسال فضاء الإحداثيات هذا إلى NC.
+"Only absolute distance mode G90 is supported.",يُدعم وضع المسافة المطلقة G90 فقط.
+"The selected tool preset is missing spindle or feed values needed for NC.",إعداد الريشة المختار ينقصه قيم المغزل أو التغذية اللازمة لـ NC.
+"This intermediate motion cannot be posted to NC.",لا يمكن إرسال هذه الحركة الوسيطة إلى NC.
+"The intermediate program is not valid.",البرنامج الوسيط غير صالح.
+"The machine profile values are not valid for NC generation.",قيم ملف الماكينة غير صالحة لتوليد NC.
+Geometry ready,الهندسة جاهزة
+Geometry not ready,الهندسة غير جاهزة
+Machine ready,الماكينة جاهزة
+Machine not ready,الماكينة غير جاهزة
+Simulation NC export ready,تصدير NC للمحاكاة جاهز
+Simulation NC export not ready,تصدير NC للمحاكاة غير جاهز
+Prepare simulation NC,تجهيز NC للمحاكاة
+Download simulation NC,تنزيل NC للمحاكاة
+Simulation NC,NC للمحاكاة
+"{0} paths",{0} مسارات
+"{0} depth passes",{0} مراحل عمق
+NC matches the intermediate program,NC يطابق البرنامج الوسيط
+NC verification failed,فشل التحقق من NC
+"Simulation NC prepared. This file is not approved for a workshop machine.",جُهّز NC للمحاكاة. هذا الملف غير معتمد لماكينة الورشة.
+"The simulation NC file could not be prepared.",تعذر تجهيز ملف NC للمحاكاة.
+simulation_dialect_only,لهجة المحاكاة فقط
+machine_origin_not_established,أصل الماكينة غير محدد
+Generate simulation NC,توليد NC تجريبي
+Generate NC file,توليد ملف NC
+Download NC file,تنزيل ملف NC
+Download previous simulation NC,تنزيل النسخة السابقة من NC التجريبي
+Move the operation earlier,تقديم العملية
+Move the operation later,تأخير العملية
+What is the problem?,ما المشكلة؟
+Where is it?,أين المشكلة؟
+What should I do?,ماذا أفعل؟
+Affected paths,المسارات المتأثرة
+NC generation could not be completed,تعذر إكمال توليد ملف NC
+The NC file could not be prepared.,تعذر تجهيز ملف NC.
+No NC file was created.,لم يُنشأ ملف NC.
+"{0} unique validation problems must be fixed before NC generation.",يجب إصلاح {0} من مشاكل التحقق الفريدة قبل توليد ملف NC.
+Choose a tool preset whose diameter matches the approved kerf.,اختر إعداد ريشة قطرها يطابق سماكة القص المعتمدة.
+Recalculate or re-approve the cutting plan so finished geometry is available.,أعد حساب خطة القص أو اعتمدها من جديد حتى تتوفر الهندسة النهائية.
+Fix the path geometry in the approved plan, then open this sheet again.,أصلح هندسة المسار في الخطة المعتمدة، ثم افتح هذا اللوح مجددًا.
+Enable the tool preset in factory settings, or choose another enabled preset.,فعّل إعداد الريشة من إعدادات المعمل، أو اختر إعدادًا مفعّلًا آخر.
+Choose an available CNC tool preset.,اختر إعداد ريشة CNC متاحًا.
+Use one physical tool number for every operation on this sheet.,استخدم رقم ريشة فيزيائيًا واحدًا لكل عمليات هذا اللوح.
+Use one tool diameter for this milling group.,استخدم قطر ريشة واحدًا لمجموعة التفريز هذه.
+Resolve the listed geometry problems, then generate the NC file again.,أصلح المشاكل الهندسية المدرجة، ثم ولّد ملف NC مجددًا.
+Complete the milling parameters on the approved plan, then try again.,أكمل معاملات التفريز في الخطة المعتمدة، ثم أعد المحاولة.
+Choose a narrower tool, or widen the milling band on the approved plan.,اختر ريشة أضيق، أو وسّع شريط التفريز في الخطة المعتمدة.
+Correct the listed issue, then generate the NC file again.,صحّح المشكلة المدرجة، ثم ولّد ملف NC مجددًا.
+Download the simulation NC file now? It is not approved for a workshop machine.,هل تريد تنزيل ملف NC التجريبي الآن؟ وهو غير معتمد لماكينة الورشة.
+Simulation NC is for review only. It is not approved for a workshop machine.,ملف NC التجريبي للمراجعة فقط. وهو غير معتمد لماكينة الورشة.
+The stored simulation NC needs regeneration.,ملف NC التجريبي المخزّن يحتاج إعادة توليد.
+"{0} geometry problems block simulation NC generation.",{0} مشاكل هندسية تمنع توليد NC التجريبي.
+Geometry is not ready, so simulation NC generation stays disabled.,الهندسة غير جاهزة، لذلك يبقى توليد NC التجريبي معطّلاً.
+The simulation NC file could not be stored.,تعذر حفظ ملف NC التجريبي.
+The simulation NC record could not be completed.,تعذر إكمال سجل NC التجريبي.
+No simulation NC file is stored for this sheet.,لا يوجد ملف NC تجريبي محفوظ لهذا اللوح.
+The stored simulation NC file could not be found.,تعذر العثور على ملف NC التجريبي المخزّن.
+You do not have permission to download this simulation NC file.,ليست لديك صلاحية تنزيل ملف NC التجريبي هذا.
+The simulation NC file could not be downloaded.,تعذر تنزيل ملف NC التجريبي.
+Public simulation NC downloads are not allowed.,تنزيل ملفات NC التجريبية العامة غير مسموح.
+Simulation NC must stay private.,يجب أن يبقى ملف NC التجريبي خاصًا.
+Generated status requires a stored simulation NC file.,حالة «تم التوليد» تتطلب ملف NC تجريبيًا محفوظًا.
+Generation snapshot is incomplete.,لقطة التوليد غير مكتملة.
+Generated status requires a private attached NC file.,حالة «تم التوليد» تتطلب مرفق NC خاصًا.
+Cut paths for {0} pieces could not be prepared because finished geometry is missing from the approved plan.,تعذر تجهيز مسارات قص {0} درفة لأن هندستها النهائية غير متاحة في الخطة المعتمدة.
+"{0} problems: {1}",{0} مشاكل: {1}
+Geometry is ready. Simulation NC can be generated for review.,الهندسة جاهزة. يمكن توليد NC التجريبي للمراجعة.
+Preparing the simulation NC file...,جاري تجهيز ملف NC التجريبي...
+Sheet perimeter cut method,طريقة قص محيط اللوح
+Disconnected perimeter,محيط غير متصل
+Connected perimeter,محيط متصل
+Sheet perimeter — Perimeter Cut,محيط اللوح — Perimeter Cut
+Sheet Perimeter Cut,قص محيط اللوح
+Inherited from Cut between pieces,موروث من القص بين الدرفات
+Cutting the sheet perimeter first may let the pieces move after they separate from the board.,قص محيط اللوح أولاً قد يجعل القطع تتحرك بعد انفصالها عن اللوح.
+Cutting the sheet perimeter before milling may let pieces move after they separate from the board.,قص محيط اللوح قبل التفريز قد يجعل القطع تتحرك بعد انفصالها عن اللوح.
+I understand and want to cut the sheet perimeter before the other CUT_PATH paths.,أفهم وأريد قص محيط اللوح قبل مسارات CUT_PATH الأخرى.
+I understand and want to cut the sheet perimeter before liner, recessed handle, or rear groove.,أفهم وأريد قص محيط اللوح قبل البطانة أو اليد الغاطسة أو الأخدود الخلفي.
+Move the path earlier,تقديم المسار
+Move the path later,تأخير المسار
+The sheet perimeter join mode is not valid.,طريقة وصل محيط اللوح غير صالحة.
+A connected sheet perimeter could not be formed from the approved cut network.,تعذر تكوين محيط لوح متصل من شبكة القص المعتمدة.
+The outer cut network is not a closed perimeter.,شبكة القص الخارجية ليست محيطًا مغلقًا.
+The outer cut network has branches that prevent one safe perimeter.,شبكة القص الخارجية تحتوي تفرعات تمنع تكوين محيط واحد آمن.
+The outer cut network has more than one separate component.,شبكة القص الخارجية تحتوي على أكثر من مكوّن منفصل.
+The connected perimeter would change the approved cut geometry.,المحيط المتصل سيغيّر هندسة القص المعتمدة.
+The CUT_PATH execution order is not valid for this sheet.,ترتيب تنفيذ مسارات CUT_PATH غير صالح لهذا اللوح.
+Confirm the warning before cutting the sheet perimeter before the other CUT_PATH paths.,أكّد التحذير قبل قص محيط اللوح قبل مسارات CUT_PATH الأخرى.
+Confirm the warning before cutting the sheet perimeter before liner, recessed handle, or rear groove.,أكّد التحذير قبل قص محيط اللوح قبل البطانة أو اليد الغاطسة أو الأخدود الخلفي.
+Keep separate cut paths, or fix the outer cut network so one closed perimeter can be formed.,أبقِ مسارات القص منفصلة، أو أصلح شبكة القص الخارجية حتى يمكن تكوين محيط مغلق واحد.
+Close the outer cut network, or keep separate cut paths.,أغلق شبكة القص الخارجية، أو أبقِ مسارات القص منفصلة.
+Remove branches from the outer cut network, or keep separate cut paths.,أزل التفرعات من شبكة القص الخارجية، أو أبقِ مسارات القص منفصلة.
+Join the separate outer cut components, or keep separate cut paths.,اربط مكوّنات القص الخارجية المنفصلة، أو أبقِ مسارات القص منفصلة.
+Keep the approved cut geometry unchanged, or keep separate cut paths.,أبقِ هندسة القص المعتمدة دون تغيير، أو أبقِ مسارات القص منفصلة.
+Choose either a separate or a connected sheet perimeter.,اختر محيط لوح غير متصل أو محيطًا متصلًا.
+Restore a valid CUT_PATH order that includes every cut path on this sheet.,استعد ترتيب CUT_PATH صالحًا يشمل كل مسارات القص على هذا اللوح.
+Piece-bound CNC paths must keep a piece instance id.,مسارات CNC المرتبطة بدرفة يجب أن تحتفظ بهوية درفة.
+The sheet perimeter path must not be tied to a piece instance.,مسار محيط اللوح يجب ألا يُربط بهوية درفة.
+A sheet may keep only one connected perimeter path.,اللوح يحتفظ بمسار محيط متصل واحد فقط.
+CNC Machines,ماكينات CNC
+Manage CNC machines,إدارة ماكينات CNC
+Add a CNC machine,إضافة ماكينة CNC
+"{0} CNC machines are available in Desk.",يتوفر {0} من ماكينات CNC في Desk.
+No CNC machines have been created yet.,لم تُنشأ ماكينات CNC بعد.
+A factory settings manager must create the CNC machines.,يجب أن ينشئ مسؤول إعدادات المصنع ماكينات CNC.
+"Register each CNC machine by name, bed width (X), and bed length (Y). Set the work zero and the left and bottom stops on the machine. Sheet geometry stays bottom-left, with X to the right and Y upward.",سجّل كل ماكينة CNC بالاسم وعرض السطح (X) وطول السطح (Y). اضبط صفر العمل والمصادم الأيسر والسفلي على الماكينة. هندسة اللوح تبقى أسفل اليسار، وX إلى اليمين وY إلى الأعلى.
+Sheet placement on CNC machine,تموضع اللوح على ماكينة CNC
+CNC machine,ماكينة CNC
+Choose a CNC machine,اختر ماكينة CNC
+"Machine size: {0} cm × {1} cm (width × length)",أبعاد الماكينة: {0} سم × {1} سم (عرض × طول)
+Select a machine to place the sheet with that machine's stops.,اختر ماكينة لوضع اللوح بمصادمها.
+Distance from left (cm),البعد عن اليسار (سم)
+Distance from bottom (cm),البعد عن الأسفل (سم)
+The sheet is placed with this machine's stops. Work zero is applied only in the NC file.,يوضع اللوح بمصادم هذه الماكينة. يُطبَّق صفر العمل في ملف NC فقط.
+Choose a CNC machine before generating the NC file.,اختر ماكينة CNC قبل توليد ملف NC.
+The selected CNC machine was not found.,ماكينة CNC المحددة غير موجودة.
+The selected CNC machine is disabled.,ماكينة CNC المحددة معطّلة.
+CNC machine name is required.,اسم ماكينة CNC مطلوب.
+CNC machine width must be a positive number of centimetres.,عرض ماكينة CNC يجب أن يكون رقمًا موجبًا بالسنتيمتر.
+CNC machine length must be a positive number of centimetres.,طول ماكينة CNC يجب أن يكون رقمًا موجبًا بالسنتيمتر.
+Machine Name,اسم الماكينة
+Machine Width (cm),عرض سطح الماكينة (سم)
+Machine Length (cm),طول سطح الماكينة (سم)
+Usable machine bed width on the X axis. Entered in centimetres.,العرض المتاح لسطح الماكينة على المحور X. يُدخل بالسنتيمتر.
+Usable machine bed length on the Y axis. Entered in centimetres.,الطول المتاح لسطح الماكينة على المحور Y. يُدخل بالسنتيمتر.
+The left stop must be zero or a positive number of centimetres.,المصادم الأيسر يجب أن يكون صفرًا أو رقمًا موجبًا بالسنتيمتر.
+The bottom stop must be zero or a positive number of centimetres.,المصادم السفلي يجب أن يكون صفرًا أو رقمًا موجبًا بالسنتيمتر.
+The sheet plus the left stop exceeds the machine width.,اللوح مع المصادم الأيسر يتجاوز عرض الماكينة.
+The sheet plus the bottom stop exceeds the machine length.,اللوح مع المصادم السفلي يتجاوز طول الماكينة.
+Set the work zero and both stops on this CNC machine once. Saved sheet offsets are not copied onto the machine.,اضبط صفر العمل والمصادمين على ماكينة CNC هذه مرة واحدة. لا تُنسخ إزاحات الألواح المحفوظة إلى الماكينة.
+The selected work zero is not supported.,موضع صفر العمل المحدد غير مدعوم.
+Work Zero Position,موضع صفر العمل
+Left Stop (cm),المصادم الأيسر (سم)
+Bottom Stop (cm),المصادم السفلي (سم)
+Center,الوسط
+"G54 origin used when NC coordinates are written. It does not move the sheet, reverse the axes, or change path geometry.",أصل G54 الذي تُنسب إليه إحداثيات ملف NC. لا يحرّك اللوح ولا يعكس المحاور ولا يغيّر هندسة المسار.
+"Distance from the machine left edge to the sheet left edge, in centimetres. Zero is valid.",المسافة من الحافة اليسرى للماكينة إلى الحافة اليسرى للوح، بالسنتيمتر. الصفر مقبول.
+"Distance from the machine bottom edge to the sheet bottom edge, in centimetres. Zero is valid.",المسافة من الحافة السفلية للماكينة إلى الحافة السفلية للوح، بالسنتيمتر. الصفر مقبول.
+Sheet placement on the CNC machine is incomplete.,تموضع اللوح على ماكينة CNC غير مكتمل.
 Board layout editor,محرر توزيع القطع على الألواح
 Open board editor,فتح محرر الألواح
 "View and select only. Moving, rotating, and saving layouts are not available in this version.",العرض والتحديد فقط. التحريك والتدوير وحفظ التوزيع غير متاحة في هذا الإصدار.
@@ -3255,6 +3695,7 @@ Save the current distribution before applying it to the cutting plan.,احفظ �
 Save the board editor distribution before applying it to the cutting plan.,احفظ توزيع محرر الألواح قبل تطبيقه على خطة القص.
 The edited layout was applied as cutting plan {0}. It is not approved.,طُبّق التوزيع المعدّل كخطة قص {0}. وهي غير معتمدة.
 The layout could not be applied to a cutting plan.,تعذّر تطبيق التوزيع على خطة قص.
+The saved distribution is not ready. Review it and fix blocking issues first.,التوزيع المحفوظ غير جاهز. راجعه وأصلح المشاكل المانعة أولاً.
 Applying the layout to a cutting plan failed. The saved draft is unchanged.,فشل تطبيق التوزيع على خطة القص. المسودة المحفوظة لم تتغير.
 Could not apply layout,تعذّر تطبيق التوزيع
 "The draft changed. Save again, then apply it to the cutting plan.",تغيّرت المسودة. احفظ مجدداً ثم طبّقها على خطة القص.
@@ -3359,6 +3800,14 @@ Smart Search,بحث ذكي
 The cutting plan preview expired. Create a new preview.,انتهت صلاحية معاينة خطة القص. أنشئ معاينة جديدة.
 Invalid cutting plan candidate.,الخطة البديلة المحددة غير صالحة.
 No manufacturing-valid cutting plan was found.,لم يُعثر على خطة قص تجتاز فحوص التصنيع.
+"The corner door orientation could not be proven, so no manufacturing-valid cutting plan was found.",تعذر إثبات اتجاه درفة الزاوية، لذلك لم يُعثر على خطة قص تجتاز فحوص التصنيع.
+"The corner door outline does not match its saved shape, so no manufacturing-valid cutting plan was found.",محيط درفة الزاوية لا يطابق شكلها المحفوظ، لذلك لم يُعثر على خطة قص تجتاز فحوص التصنيع.
+"The corner door shape is not valid, so no manufacturing-valid cutting plan was found.",شكل درفة الزاوية غير صالح، لذلك لم يُعثر على خطة قص تجتاز فحوص التصنيع.
+"The corner door outline is missing, so no manufacturing-valid cutting plan was found.",محيط درفة الزاوية مفقود، لذلك لم يُعثر على خطة قص تجتاز فحوص التصنيع.
+"The corner door orientation does not match its edge bands, so no manufacturing-valid cutting plan was found.",اتجاه درفة الزاوية لا يطابق أشرطة القشاط، لذلك لم يُعثر على خطة قص تجتاز فحوص التصنيع.
+"The cutting plan uses a rotation that cannot be manufactured, so no manufacturing-valid cutting plan was found.",خطة القص تستخدم دورانًا لا يمكن تصنيعه، لذلك لم يُعثر على خطة قص تجتاز فحوص التصنيع.
+"A nested glass piece cannot carry liner, back groove, or handle machining, so no manufacturing-valid cutting plan was found.",قطعة الزجاج المتداخلة لا يمكن أن تحمل لاينر أو فرزة ظهر أو مسكة غطس، لذلك لم يُعثر على خطة قص تجتاز فحوص التصنيع.
+"The cutting plan failed placement checks, so no manufacturing-valid cutting plan was found.",فشلت خطة القص في فحوص التموضع، لذلك لم يُعثر على خطة قص تجتاز فحوص التصنيع.
 The search batch limit was reached. Create a new preview.,وصلت إلى الحد المسموح لدفعات البحث. أنشئ معاينة جديدة.
 Plan {0},الخطة {0}
 {0} boards,{0} ألواح
@@ -3450,6 +3899,164 @@ Backup encryption key does not match this site.,مفتاح تشفير النسخ
 Backup upload was interrupted.,انقطع رفع النسخة الاحتياطية.
 Backup package validation failed.,فشل التحقق من حزمة النسخة الاحتياطية.
 Imported backup is no longer compatible with this site.,النسخة المستوردة لم تعد متوافقة مع هذا الموقع.
+Edit Tool,تعديل الريشة
+Tool Type,نوع الريشة
+Tool Units,وحدات الريشة
+Rate Units,وحدات السرعة
+Diameter (D),قطر الريشة (مم)
+Stepdown,عمق التمريرة
+Final Tool Offset,الإزاحة النهائية للريشة
+Stepover size,مقدار التداخل
+Stepover percent of D,نسبة التداخل
+Spindle Speed (rpm),سرعة الدوران (دورة/دقيقة)
+Feed Rate (mm/sec),سرعة التغذية (مم/ث)
+Plunge Rate (mm/sec),سرعة الغطس (مم/ث)
+Already used,مستخدم مسبقًا
+Sheet Perimeter,محيط اللوح
+Profiles,البروفايلات
+Final Depth,العمق النهائي
+Safe Z,ارتفاع الأمان
+No profiles yet.,لا توجد بروفايلات بعد.
+Profile name,اسم البروفايل
+Tool,الريشة
+Choose,اختر
+Vector Association,ربط المتجهات
+Vectors,المتجهات
+Selected Vectors,المتجهات المحددة
+Profile,البروفايل
+Toolpath name,اسم مسار التشغيل
+Calculate Now,احسب الآن
+Toolpaths,مسارات التشغيل
+Sample machine profile,عينة تعريف الماكينة
+"Stored sample used by the NC post processor. It is not a per-sheet profile, and it is not approved for production.",عينة مخزنة يستخدمها مولد ملف NC. ليست بروفايل لوح، وليست معتمدة للإنتاج.
+Edit sample machine profile,تعديل عينة تعريف الماكينة
+Operational file management,إدارة الملفات التشغيلية
+Ball Nose tools and operational file settings,ريش Ball Nose وإعدادات الملفات التشغيلية
+Loading operational file settings,جارٍ تحميل إعدادات الملفات التشغيلية
+Could not load operational file settings.,تعذر تحميل إعدادات الملفات التشغيلية.
+Only a Ball Nose tool can be created here.,يمكن إنشاء ريشة Ball Nose فقط من هنا.
+Tool units must be mm.,وحدات الريشة يجب أن تكون مم.
+Rate units must be mm/sec.,وحدات السرعة يجب أن تكون مم/ث.
+Enter the tool description.,أدخل وصف الريشة.
+Tool number must be a whole number such as 9.,رقم الريشة يجب أن يكون عددًا صحيحًا مثل 9.
+Diameter must be a positive number of millimetres.,القطر يجب أن يكون عددًا موجبًا بالمليمتر.
+Stepdown must be a positive number of millimetres.,عمق التمريرة يجب أن يكون عددًا موجبًا بالمليمتر.
+Final tool offset must be zero or a positive number of millimetres.,إزاحة الريشة النهائية يجب أن تكون صفرًا أو عددًا موجبًا بالمليمتر.
+Enter the stepover size and its percent of diameter.,أدخل عرض التداخل ونسبته من القطر.
+Stepover size must be positive and no greater than the tool diameter.,يجب أن يكون عرض التداخل موجبًا وألا يتجاوز قطر الريشة.
+Spindle speed must be a positive whole number of RPM.,سرعة الدوران يجب أن تكون عددًا صحيحًا موجبًا من اللفات في الدقيقة.
+Feed rate must be a positive number of millimetres per second.,سرعة التغذية يجب أن تكون عددًا موجبًا من المليمتر في الثانية.
+Plunge rate must be a positive number of millimetres per second.,سرعة النزول يجب أن تكون عددًا موجبًا من المليمتر في الثانية.
+The tool notes are too long.,ملاحظات الريشة طويلة جدًا.
+The tool description cannot be changed.,لا يمكن تغيير وصف الريشة.
+A tool with this description already exists.,توجد ريشة بهذا الوصف.
+The CNC tool is not valid.,تعريف الريشة غير صالح.
+Choose a tool type.,اختر نوع الريشة.
+Stepdown must be a positive number of millimetres within the supported range.,عمق التمريرة يجب أن يكون عددًا موجبًا بالمليمتر ضمن المدى المدعوم.
+Final tool offset must be zero or a positive number of millimetres within the supported range.,إزاحة الريشة النهائية يجب أن تكون صفرًا أو عددًا موجبًا بالمليمتر ضمن المدى المدعوم.
+Enter a profile name.,أدخل اسم البروفايل.
+The profile is not valid.,البروفايل غير صالح.
+Each profile needs its own name.,كل بروفايل يحتاج اسمًا خاصًا به.
+The profile identity is not valid.,هوية البروفايل غير صالحة.
+The selected profile does not exist.,البروفايل المختار غير موجود.
+Choose a tool for this profile.,اختر ريشة لهذا البروفايل.
+Safe Z must be zero or a positive number of millimetres within the supported range.,ارتفاع الأمان يجب أن يكون صفرًا أو عددًا موجبًا بالمليمتر ضمن المدى المدعوم.
+Home X must be a finite number of millimetres.,إحداثي البداية X يجب أن يكون عددًا محدودًا بالمليمتر.
+Home Y must be a finite number of millimetres.,إحداثي البداية Y يجب أن يكون عددًا محدودًا بالمليمتر.
+Home Z must be zero or a positive number of millimetres within the supported range.,إحداثي البداية Z يجب أن يكون صفرًا أو عددًا موجبًا بالمليمتر ضمن المدى المدعوم.
+The vector association is not valid.,ربط المتجهات غير صالح.
+Each vector association needs its own identity.,كل ربط متجهات يحتاج هوية خاصة به.
+The vector association identity is not valid.,هوية ربط المتجهات غير صالحة.
+The vector association does not exist.,ربط المتجهات غير موجود.
+"Choose a layer, selected vectors, or the sheet perimeter.",اختر طبقة أو متجهات محددة أو محيط اللوح.
+That vector is not a machinable path on this sheet.,هذا المتجه ليس مسار تشغيل على هذا اللوح.
+That vector or layer is already assigned.,هذا المتجه أو هذه الطبقة مرتبطة مسبقًا.
+That layer has no machinable vectors on this sheet.,هذه الطبقة لا تحتوي متجهات قابلة للتشغيل على هذا اللوح.
+Sheet Perimeter is available only while Connected Perimeter is enabled.,محيط اللوح يظهر فقط عند تفعيل المحيط المتصل.
+Enter a toolpath name.,أدخل اسم مسار التشغيل.
+A calculated toolpath already uses that name.,يوجد مسار تشغيل محسوب بهذا الاسم.
+That path key matches more than one vector. Select the vector on the board again.,مفتاح المسار يطابق أكثر من متجه. حدّد المتجه على اللوح مرة أخرى.
+The sheet changed in another window. Reload it before repeating this action.,تغيّر اللوح في نافذة أخرى. أعد تحميله قبل تكرار الإجراء.
+That calculated toolpath already exists.,مسار التشغيل المحسوب موجود مسبقًا.
+The toolpath identity is not valid.,هوية مسار التشغيل غير صالحة.
+Ball Nose,ريشة كروية
+Save tool,حفظ الريشة
+Home position,نقطة البداية
+Edit profile,تعديل البروفايل
+Tool copy,نسخة الريشة
+Edit association,تعديل الربط
+Not the active toolpath,ليس مسار التشغيل النشط
+Stepover and the final tool offset are stored on the copy. This calculation follows the approved cutter-center path and does not build a pocket or raster.,عرض التداخل وإزاحة الريشة النهائية يُحفظان في النسخة. الحساب الحالي يتبع مسار مركز القص المعتمد ولا ينشئ تفريغ جيب أو مسحًا شبكيًا.
+This tool is still selected by a profile or vector association. Calculated toolpaths keep their own copy, but those live selections must choose another tool before this one can be disabled.,هذه الريشة ما زالت مختارة في بروفايل أو ربط متجهات. مسارات التشغيل المحسوبة تحتفظ بنسختها، لكن الاختيارات الحية يجب أن تختار ريشة أخرى قبل تعطيل هذه الريشة.
+This tool is used by a sheet, a profile, a vector association, or a calculated toolpath. It cannot be deleted.,هذه الريشة مستخدمة في لوح أو بروفايل أو ربط متجهات أو مسار تشغيل محسوب. لا يمكن حذفها.
+Machining profiles,بروفايلات التشغيل
+Create ArtCAM profiles here. Each profile keeps its own copy of a tool. Profiles are not part of board settings or default board settings.,تُنشأ بروفايلات ArtCAM هنا. يحتفظ كل بروفايل بنسخته من الريشة. البروفايلات ليست جزءًا من إعدادات اللوح أو إعدادات اللوح الافتراضية.
+Add a profile,إضافة بروفايل
+"{0} machining profiles are available.",يتوفر {0} من بروفايلات التشغيل.
+No machining profiles have been created yet.,لم تُنشأ بروفايلات تشغيل بعد.
+A factory settings manager must create the machining profiles.,يجب أن ينشئ مسؤول إعدادات المصنع بروفايلات التشغيل.
+You do not have permission to edit ArtCAM machining profiles.,ليست لديك صلاحية تعديل بروفايلات ArtCAM.
+Open the standard CNC Tool Preset list to add, edit, or delete tools. Final depth belongs to a machining profile, not to the tool.,افتح قائمة الريش القياسية لإضافة الريش أو تعديلها أو حذفها. العمق النهائي يخص بروفايل التشغيل وليس الريشة.
+Open the standard Machining Profile list. A profile copies one tool and keeps the final depth used for toolpaths.,افتح قائمة بروفايلات التشغيل القياسية. ينسخ البروفايل ريشة واحدة ويحتفظ بالعمق النهائي المستخدم في مسارات التشغيل.
+Notes is required.,ملاحظات الريشة مطلوبة.
+Tool type is required.,نوع الريشة مطلوب.
+Manage machining profiles,إدارة بروفايلات التشغيل
+Choose a CNC machine for this profile.,اختر ماكينة CNC لهذا البروفايل.
+This machining profile is in use and cannot be deleted: {0},بروفايل التشغيل مستخدم ولا يمكن حذفه: {0}
+This machining profile is used by a vector association on an operational file and cannot be deleted.,بروفايل التشغيل مستخدم في ربط متجهات داخل ملف تشغيل ولا يمكن حذفه.
+Delete tool,حذف الريشة
+Delete this tool?,حذف هذه الريشة؟
+This tool cannot be deleted.,لا يمكن حذف هذه الريشة.
+This tool is selected on a CNC operational file.,هذه الريشة مختارة في ملف تشغيل CNC.
+This tool is selected as a factory default.,هذه الريشة مختارة كإعداد افتراضي للمصنع.
+This tool is used by a machining profile.,هذه الريشة مستخدمة في بروفايل تشغيل.
+This tool is used by a vector association.,هذه الريشة مستخدمة في ربط متجهات.
+This tool is used by an active toolpath snapshot.,هذه الريشة مستخدمة في لقطة مسار تشغيل فعالة.
+Shift + Click to select vectors,Shift + نقرة لتحديد المتجهات
+Clear saved direction,إلغاء الاتجاه المحفوظ
+The saved direction could not be cleared.,تعذر إلغاء الاتجاه المحفوظ.
+"This path cannot be reversed safely, so the NC file was not created.",لا يمكن عكس هذا المسار بأمان، لذلك لم يُنشأ ملف NC.
+"A saved path direction belongs to an older geometry, so the NC file was not created.",اتجاه محفوظ يخص هندسة أقدم، لذلك لم يُنشأ ملف NC.
+"A saved path direction no longer matches a path on this sheet, so the NC file was not created.",اتجاه محفوظ لم يعد يطابق مساراً على هذا اللوح، لذلك لم يُنشأ ملف NC.
+The path direction was not changed.,لم يتغير اتجاه المسار.
+Restore the original direction,استعادة الاتجاه الأصلي
+The association was not calculated.,لم يُحسب الربط.
+Calculating the toolpath...,جارٍ حساب مسار التشغيل...
+"A saved path direction matches more than one path, so the NC file was not created. Restore the direction, then set it again on the path you want.",اتجاه محفوظ يطابق أكثر من مسار، لذلك لم يُنشأ ملف NC. استعد الاتجاه ثم عيّنه من جديد على المسار المطلوب.
+"The sheet perimeter already belongs to {0}. Edit that association and release the sheet perimeter before assigning it on its own.",محيط اللوح يخص الربط {0} بالفعل. عدّل ذلك الربط وافصل المحيط قبل إسناده وحده.
+Release the sheet perimeter from this association,افصل محيط اللوح عن هذا الربط
+The cutting preview could not be loaded.,تعذر تحميل معاينة القص.
+"Open the sheet again. If this continues, the approved plan or the sheet settings need to be checked.",افتح اللوح مرة أخرى. إذا استمر ذلك، راجع الخطة المعتمدة أو إعدادات اللوح.
+The connected sheet perimeter could not be formed.,تعذر تكوين محيط اللوح المتصل.
+The association could not be removed.,تعذر حذف الربط.
+"Keep this association, or try removing it again.",أبقِ هذا الربط، أو حاول حذفه مرة أخرى.
+Not Configured,غير مهيأ
+Settings Saved,تم حفظ الإعدادات
+NC,NC
+NC export ready,تصدير NC جاهز
+NC export not ready,تصدير NC غير جاهز
+Preparing the NC file...,جاري تجهيز ملف NC...
+NC file generated successfully.,تم توليد ملف NC بنجاح.
+"{0} geometry problems block NC generation.","{0} مشاكل هندسية تمنع توليد ملف NC."
+"Geometry is not ready, so NC generation stays disabled.",الهندسة غير جاهزة، لذلك يبقى توليد ملف NC متوقفًا.
+Stored NC files are no longer available. Generate NC to download the current file.,ملفات NC المخزنة لم تعد متاحة. ولّد ملف NC لتنزيل الملف الحالي.
+You do not have permission to download this NC file.,ليست لديك صلاحية تنزيل ملف NC هذا.
+Post Processor,معالج المخرجات
+Select a post processor,اختر معالج المخرجات
+IMA-WH (*.nc),IMA-WH (*.nc)
+Choose a post processor before generating the NC file.,اختر معالج المخرجات قبل توليد ملف NC.
+The selected post processor is not supported.,معالج المخرجات المحدد غير مدعوم.
+The IMA-WH parking move is outside the selected machine.,حركة التوقف الخاصة بـ IMA-WH خارج حدود الماكينة المحددة.
+"The selected machine travel is not known, so the IMA-WH parking move was not posted.",حدود حركة الماكينة المحددة غير معروفة، لذلك لم تُدرج حركة التوقف الخاصة بـ IMA-WH.
+The last machining profile has no home position.,آخر ملف تشغيل لا يحتوي على نقطة البداية.
+The profile home is outside the selected machine.,نقطة البداية خارج حدود الماكينة المحددة.
+The profile home is not high enough for a safe move.,ارتفاع نقطة البداية غير كافٍ لحركة آمنة.
+The move to profile home would travel at cutting depth.,الانتقال إلى نقطة البداية يتحرك عند عمق القص.
+The tool number cannot be posted.,لا يمكن إخراج رقم الريشة.
+The feed rate and plunge rate do not match their per-minute values.,سرعة التغذية وسرعة النزول لا تطابقان قيمهما بالدقيقة.
+"This sheet uses more than one tool number, so the NC file was not created.",هذا اللوح يستخدم أكثر من رقم ريشة، لذلك لم يُنشأ ملف NC.
+The NC program is too long for the selected post processor.,برنامج NC أطول مما يسمح به معالج المخرجات المحدد.
+The NC program contains a character this post processor cannot write.,برنامج NC يحتوي على حرف لا يستطيع معالج المخرجات كتابته.
 A restore is already in progress for this site.,توجد استعادة جارية لهذا الموقع. انتظر اكتمالها أو راجع مسؤول النظام.
 Wait for the current backup or import to finish before restoring.,انتظر انتهاء النسخ أو التحقق من الملف المرفوع قبل الاستعادة.
 Restore needs database administrator credentials in the operational configuration.,تتطلب الاستعادة بيانات دخول مسؤول قاعدة البيانات ضمن إعدادات التشغيل.
@@ -3715,8 +4322,59 @@ Convert the text to a path before approving it.,حوّل النص إلى مسا�
 The text outline is not valid.,حدود النص غير صالحة.
 Rotation (°),الدوران (°)
 Duplicate,تكرار
-Center,وسط
 The cutting plan cannot be approved because the finished outline is incomplete for these doors:,تعذر اعتماد خطة القص بسبب عدم اكتمال الهندسة النهائية للدرف التالية:
 The cutting plan cannot be exported because the finished outline is incomplete for these doors:,تعذر تصدير خطة القص بسبب عدم اكتمال الهندسة النهائية للدرف التالية:
 - Door {0} — sheet {1}.,- الدرفة {0} — اللوح {1}.
 Finish and approve the cut outline in the editor then create a new plan copy.,يرجى استكمال محيط القص واعتماده داخل المحرر، ثم إنشاء نسخة جديدة من الخطة.
+Stepdown (mm),عمق التمريرة (مم)
+Final Tool Offset (mm),الإزاحة النهائية للريشة (مم)
+Stepover Percent of D,نسبة التداخل
+Right Stop (cm),المصادم الأيمن (سم)
+Top Stop (cm),المصادم العلوي (سم)
+New Tool,ريشة جديدة
+New Profile,بروفايل جديد
+Edit Profile,تعديل البروفايل
+Profile Name,اسم البروفايل
+Association Name,اسم الربط
+Vector Source,مصدر المتجهات
+Home Position (mm),نقطة البداية (مم)
+Home X (mm),البداية X (مم)
+Home Y (mm),البداية Y (مم)
+Home Z (mm),البداية Z (مم)
+Safe Z (mm),ارتفاع الأمان (مم)
+SHEET_PERIMETER,محيط اللوح
+The right stop must be zero or a positive number of centimetres.,المصادم الأيمن يجب أن يكون صفرًا أو رقمًا موجبًا بالسنتيمتر.
+The top stop must be zero or a positive number of centimetres.,المصادم العلوي يجب أن يكون صفرًا أو رقمًا موجبًا بالسنتيمتر.
+The sheet does not fit the machine width with the stops for this work zero.,اللوح لا يتسع لعرض الماكينة مع مصادم نقطة الصفر هذه.
+The sheet does not fit the machine length with the stops for this work zero.,اللوح لا يتسع لطول الماكينة مع مصادم نقطة الصفر هذه.
+"Set the two stops for this work zero on the CNC machine. A stop from another edge is not copied across.",اضبط مصادمي نقطة الصفر هذه على ماكينة CNC. لا يُنسخ مصادم من جهة أخرى.
+"This CNC machine still uses Center as its work zero. Choose Bottom Left, Bottom Right, Top Left, or Top Right before generating a new file.",هذه الماكينة ما زالت تستخدم الوسط كنقطة صفر. اختر أسفل اليسار أو أسفل اليمين أو أعلى اليسار أو أعلى اليمين قبل توليد ملف جديد.
+"The sheet perimeter is disconnected, so it cannot be chosen as a vector source. Existing assignments keep their settings and their place in the operation order. Reconnect the perimeter, or edit the assignment and release the sheet perimeter.",محيط اللوح غير متصل، لذلك لا يمكن اختياره كمصدر للمتجهات. الربط الحالي يحتفظ بإعداداته ومكانه في ترتيب العمليات. أعد اتصال المحيط، أو عدّل الربط وحرّر محيط اللوح.
+The sheet perimeter is not valid for assignment. Existing assignments keep their settings. Fix the perimeter geometry before choosing it again.,محيط اللوح غير صالح للتعيين. الربط الحالي يحتفظ بإعداداته. صحّح هندسة المحيط قبل اختياره مرة أخرى.
+"Register each CNC machine by name, bed width (X), and bed length (Y). Choose a corner work zero, the width stop side, and the length stop side. The stop gap is calculated from the full board. Sheet geometry stays bottom-left, with X to the right and Y upward.",سجّل كل ماكينة CNC بالاسم وعرض السطح (X) وطول السطح (Y). اختر نقطة صفر عند زاوية، وجهة مصدم العرض، وجهة مصدم الطول. يُحسب فراغ المصادم من اللوح الكامل. هندسة اللوح تبقى أسفل اليسار، وX إلى اليمين وY إلى الأعلى.
+"Used only for Bottom Left and Top Left. Distance from the machine left edge to the sheet left edge, in centimetres. Zero is valid.",يُستخدم فقط لأسفل اليسار وأعلى اليسار. المسافة من الحافة اليسرى للماكينة إلى الحافة اليسرى للوح، بالسنتيمتر. الصفر مقبول.
+"Used only for Bottom Right and Top Right. Distance from the machine right edge to the sheet right edge, in centimetres. Zero is valid.",يُستخدم فقط لأسفل اليمين وأعلى اليمين. المسافة من الحافة اليمنى للماكينة إلى الحافة اليمنى للوح، بالسنتيمتر. الصفر مقبول.
+"Used only for Bottom Left and Bottom Right. Distance from the machine bottom edge to the sheet bottom edge, in centimetres. Zero is valid.",يُستخدم فقط لأسفل اليسار وأسفل اليمين. المسافة من الحافة السفلية للماكينة إلى الحافة السفلية للوح، بالسنتيمتر. الصفر مقبول.
+"Used only for Top Left and Top Right. Distance from the machine top edge to the sheet top edge, in centimetres. Zero is valid.",يُستخدم فقط لأعلى اليسار وأعلى اليمين. المسافة من الحافة العلوية للماكينة إلى الحافة العلوية للوح، بالسنتيمتر. الصفر مقبول.
+Choose a tool,اختر ريشة
+NC dialect used when a new file is generated for this machine.,صيغة NC المستخدمة عند توليد ملف جديد لهذه الماكينة.
+Complete the CNC machine settings. Choose the post processor on the machine before generating a new NC file.,أكمل إعدادات ماكينة CNC. اختر صيغة الملف التشغيلي على الماكينة قبل توليد ملف NC جديد.
+The post processor is set on the CNC machine and cannot be overridden for this sheet.,صيغة الملف التشغيلي محفوظة على ماكينة CNC ولا يمكن استبدالها من إعدادات اللوح.
+Historical post processor used when this file was saved. New NC uses the post processor on the CNC machine.,صيغة الملف التشغيلي التي استُخدمت عند حفظ هذا الملف. التوليد الجديد يستخدم صيغة ماكينة CNC.
+Feed Rate,سرعة التغذية
+Plunge Rate,سرعة الغطس
+"Positive whole number, for example 9. One board file uses one tool number.",عدد صحيح موجب، مثلاً 9. ملف اللوح الواحد يستخدم رقم ريشة واحداً.
+Width Stop Side,جهة مصدم العرض
+Length Stop Side,جهة مصدم الطول
+Left Side,يسار
+Right Side,يمين
+Bottom Side,أسفل
+Top Side,أعلى
+"Side of the width stop. It is independent of the work zero. The gap is calculated from the machine width and the full board width.",جهة مصدم العرض مستقلة عن نقطة الصفر. يُحسب الفراغ من عرض الماكينة وعرض اللوح الكامل.
+"Side of the length stop. It is independent of the work zero. The gap is calculated from the machine length and the full board length.",جهة مصدم الطول مستقلة عن نقطة الصفر. يُحسب الفراغ من طول الماكينة وطول اللوح الكامل.
+"Choose the width stop side and the length stop side on the CNC machine before generating a new file.",اختر جهة مصدم العرض وجهة مصدم الطول على الماكينة قبل توليد ملف جديد.
+"The board is larger than the machine width. NC cannot be generated.",اللوح أكبر من عرض الماكينة. لا يمكن توليد الملف التشغيلي.
+"The board is larger than the machine length. NC cannot be generated.",اللوح أكبر من طول الماكينة. لا يمكن توليد الملف التشغيلي.
+"The operational file has been generated.",تم توليد الملف التشغيلي
+CNC machine bed,سطح الماكينة
+Full board,اللوح الكامل

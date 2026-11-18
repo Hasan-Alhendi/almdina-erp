@@ -21,6 +21,11 @@ const server = message => JSON.stringify([JSON.stringify({ message })]);
     assert.equal(api.errorMessage({ _server_messages: "malformed" }, "fallback"), "fallback");
     assert.equal(api.errorMessage({ message: { private: "secret" } }, "fallback"), "fallback");
     assert.equal(api.normalizeError({ status: 504 }, { fallback: "Timed out" }).outcome, "unknown");
+    assert.equal(api.normalizeError({
+        status: 417,
+        responseJSON: { exc_type: "ValidationError", _server_messages: server("That vector is not a machinable path on this sheet.") },
+    }).outcome, "rejected");
+    assert.equal(api.normalizeError({ status: 0 }).outcome, "unknown");
     const envelope = { schema_version: 1, outcome: "rejected", title: "DXF", operation: "dxf_upload", issues: [{ code: "KERF_VIOLATION", problem: "Too close", target: "Board 3", action: "Move" }], request_reference: "ref-123" };
     const normalized = api.normalizeError({ responseJSON: { almdina_error: envelope } });
     assert.equal(normalized.issues[0].code, "KERF_VIOLATION");

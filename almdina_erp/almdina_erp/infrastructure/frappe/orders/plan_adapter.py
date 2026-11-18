@@ -96,12 +96,11 @@ class FrappeOrderPlanAdapter:
             ),
             "notes": row.notes or "",
         }
-        glass_margin_mm = canonical_glass_margin_mm(
-            getattr(row, "glass_margin_mm", None),
-            getattr(row, "piece_type", None) or "Regular",
+        from almdina_erp.almdina_erp.domain.orders.glass_margins import (
+            fingerprint_glass_fields,
         )
-        if glass_margin_mm is not None:
-            piece["glass_margin_mm"] = glass_margin_mm
+
+        piece.update(fingerprint_glass_fields(row))
         from almdina_erp.almdina_erp.domain.cutting.machining_overlay import (
             MACHINING_ADDONS,
         )
@@ -197,6 +196,11 @@ class FrappeOrderPlanAdapter:
                         getattr(row, "glass_margin_mm", None),
                         getattr(row, "piece_type", None) or "Regular",
                     ),
+                    glass_margin_mode=str(getattr(row, "glass_margin_mode", "") or ""),
+                    glass_margin_top_mm=getattr(row, "glass_margin_top_mm", None),
+                    glass_margin_bottom_mm=getattr(row, "glass_margin_bottom_mm", None),
+                    glass_margin_right_mm=getattr(row, "glass_margin_right_mm", None),
+                    glass_margin_left_mm=getattr(row, "glass_margin_left_mm", None),
                 )
                 for index, row in enumerate(source.pieces or [], start=1)
             ),

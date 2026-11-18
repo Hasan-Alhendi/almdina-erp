@@ -1114,9 +1114,20 @@
         let value = input.value;
         if (NUMBER_FIELDS.has(fieldname)) value = num(value);
         if (fieldname === "qty") value = Math.max(1, Math.trunc(value || 1));
-        if (!valuesEqual(fieldname, row[fieldname], value)) {
+        const previous = row[fieldname];
+        if (!valuesEqual(fieldname, previous, value)) {
             row[fieldname] = value;
             frm.dirty();
+            if (
+                fieldname === "piece_type"
+                && String(value || "") === "Glass"
+                && String(previous || "") !== "Glass"
+            ) {
+                const glass = window.AlmdinaGlassShape;
+                if (glass && typeof glass.applyNewGlassMargin === "function") {
+                    glass.applyNewGlassMargin(row);
+                }
+            }
         }
         if (["width_cm", "length_cm"].includes(fieldname)) {
             input._dcoLastAcceptedValue = input.value;

@@ -7,7 +7,7 @@ generated only after the resulting Cutting Plan is approved and exported.
 from __future__ import annotations
 
 import json
-from typing import Any
+from typing import Any, Mapping
 
 import frappe
 from frappe import _
@@ -22,6 +22,9 @@ from almdina_erp.almdina_erp.infrastructure.frappe.board_editor_plan_create_adap
     FrappeBoardEditorCuttingPlanPort,
     FrappeBoardEditorPlanCreateStore,
 )
+from almdina_erp.almdina_erp.services.board_editor_draft_review_service import (
+    format_board_editor_review_issue,
+)
 from almdina_erp.almdina_erp.services.board_editor_query_service import (
     _authorized_order,
     _capabilities,
@@ -33,7 +36,50 @@ from almdina_erp.almdina_erp.services.board_editor_query_service import (
 )
 
 
-def _error_message(code: str) -> str:
+def _decorate_review_issues(review: Any) -> dict[str, Any] | None:
+    if not isinstance(review, Mapping):
+        return None
+    decorated = dict(review)
+    issues = []
+    for raw in list(decorated.get("issues") or []):
+        if not isinstance(raw, Mapping):
+            continue
+        issue = dict(raw)
+        issue["message"] = str(issue.get("message") or "").strip() or format_board_editor_review_issue(issue)
+        issues.append(issue)
+    decorated["issues"] = issues
+    return decorated
+
+
+def _blocking_issue_lines(review: Mapping[str, Any] | None) -> list[str]:
+    if not review:
+        return []
+    lines: list[str] = []
+    for issue in list(review.get("issues") or []):
+        if not isinstance(issue, Mapping):
+            continue
+        severity = str(issue.get("severity") or "error").strip().lower() or "error"
+        if severity not in {"error", "blocking"}:
+            continue
+        message = str(issue.get("message") or "").strip()
+        if message:
+            lines.append(message)
+        if len(lines) >= 5:
+            break
+    return lines
+
+
+def _format_not_ready_message(review: Mapping[str, Any] | None) -> str:
+    base = _("The saved distribution is not ready. Review it and fix blocking issues first.")
+    details = _blocking_issue_lines(review)
+    if not details:
+        return base
+    return base + "\n\n" + "\n".join(f"• {line}" for line in details)
+
+
+def _error_message(code: str, review: Mapping[str, Any] | None = None) -> str:
+    if code == "not_ready":
+        return _format_not_ready_message(review)
     messages = {
         "draft_missing": _("Save the board editor distribution before applying it to the cutting plan."),
         "draft_mismatch": _("The selected draft does not match this order and source plan."),
@@ -43,7 +89,6 @@ def _error_message(code: str) -> str:
         "source_changed": _("The source plan changed after this draft was saved."),
         "source_plan_missing": _("The source cutting plan was not found for this order."),
         "order_scope": _("The selected cutting plan does not belong to this order."),
-        "not_ready": _("The saved distribution is not ready. Review it and fix blocking issues first."),
         "invalid_create_request_id": _("The apply request token is missing or invalid."),
         "create_failed": _("Applying the layout to a cutting plan failed. The saved draft is unchanged."),
         "geometry_rejected": _("The adopted cut outline cannot be manufactured. Fix it in Drawing Mode before copying the plan."),
@@ -58,6 +103,15 @@ def _error_message(code: str) -> str:
         ),
         "drawing_copy_failed": _("The drawing could not be copied onto the new cutting plan. The plan was not created."),
         "addon_unproven": _("This door has machining that was not proven against the new cut outline. The copy was not created."),
+        "invalid_layout": _("The saved draft is not a valid edit document."),
+        "schema": _("The saved draft is not a valid edit document."),
+        "forbidden_field": _("The saved draft contains a field that cannot be reviewed."),
+        "unknown_sheet": _("The draft uses a board that is not in the source plan."),
+        "invalid_distribution": _("The saved draft contains an unsupported distribution state."),
+        "forged_host": _("The saved draft changes a glass host that the source does not declare."),
+        "missing_piece": _("A required piece is missing from the draft."),
+        "duplicate_piece": _("A piece identity is repeated in the draft."),
+        "unknown_piece": _("The draft contains a piece that is not in the source plan."),
     }
     return messages.get(code, _("The layout could not be applied to a cutting plan."))
 
@@ -150,15 +204,21 @@ def create_board_editor_plan_copy(
         # DocType validate / snapshot apply failures must not leave orphans or
         # mutate the editor draft. Surface a create error distinct from save conflicts.
         frappe.clear_messages()
+        detail = str(exc).strip()
+        base = _error_message("create_failed")
         return {
             "ok": False,
             "code": "create_failed",
-            "message": str(exc) or _error_message("create_failed"),
+            "message": f"{base}\n\n• {detail}" if detail else base,
         }
 
     if not result.get("ok"):
-        result["message"] = _error_message(str(result.get("code") or ""))
-        if result.get("code") == "geometry_rejected":
+        code = str(result.get("code") or "")
+        review = _decorate_review_issues(result.get("review"))
+        if review is not None:
+            result["review"] = review
+        result["message"] = _error_message(code, review)
+        if code == "geometry_rejected":
             result["message"] = _geometry_message(
                 str(result.get("reason") or ""),
                 _piece_for_instance(payload.get("projection") or {}, result.get("piece_instance_id")),

@@ -55,10 +55,125 @@ def match_corner_contour(
     undirected result unchanged, including a real band-moving ambiguity.
     """
 
-    if not is_corner_cut(piece_type):
-        return CornerContourMatch(None, "invalid")
-    if position not in CLIPPED_CORNER_POSITIONS:
-        return CornerContourMatch(None, "invalid")
+    reason, groups = _corner_contour_groups(
+        outer_mm,
+        piece_type=piece_type,
+        position=position,
+        width_cm=width_cm,
+        length_cm=length_cm,
+        cut_width_cm=cut_width_cm,
+        cut_length_cm=cut_length_cm,
+        tolerance_mm=tolerance_mm,
+        edge_bands=edge_bands,
+        directed_ring_mm=directed_ring_mm,
+    )
+    if reason != "ok" or not groups:
+        return CornerContourMatch(None, "none" if reason == "ok" else reason)
+    if len(groups) > 1:
+        return CornerContourMatch(None, "ambiguous")
+    mirrored, quarter_turns = min(
+        next(iter(groups.values())),
+        key=lambda item: (item[0], item[1]),
+    )
+    return CornerContourMatch(quarter_turns, "unique", mirrored)
+
+
+def orientation_explains_corner_contour(
+    outer_mm: Sequence[Sequence[float]],
+    *,
+    mirrored: bool,
+    quarter_turns: int,
+    piece_type: str,
+    position: str,
+    width_cm: float,
+    length_cm: float,
+    cut_width_cm: float,
+    cut_length_cm: float,
+    tolerance_mm: float = GEOMETRY_TOLERANCE_MM,
+    edge_bands: Mapping[str, str] | None = None,
+    directed_ring_mm: Sequence[Sequence[float]] | None = None,
+) -> bool:
+    """True when this recorded transform places every semantic edge correctly.
+
+    A square notch can share its undirected outline with another transform.
+    That second transform is not a reason to discard the recorded one when
+    the recorded one itself reproduces the outline.
+    """
+
+    target = (bool(mirrored), int(quarter_turns) % 4)
+    return any(
+        item[:2] == target
+        for item in orientations_explaining_corner_contour(
+            outer_mm,
+            piece_type=piece_type,
+            position=position,
+            width_cm=width_cm,
+            length_cm=length_cm,
+            cut_width_cm=cut_width_cm,
+            cut_length_cm=cut_length_cm,
+            tolerance_mm=tolerance_mm,
+            edge_bands=edge_bands,
+            directed_ring_mm=directed_ring_mm,
+        )
+    )
+
+
+def orientations_explaining_corner_contour(
+    outer_mm: Sequence[Sequence[float]],
+    *,
+    piece_type: str,
+    position: str,
+    width_cm: float,
+    length_cm: float,
+    cut_width_cm: float,
+    cut_length_cm: float,
+    tolerance_mm: float = GEOMETRY_TOLERANCE_MM,
+    edge_bands: Mapping[str, str] | None = None,
+    directed_ring_mm: Sequence[Sequence[float]] | None = None,
+) -> tuple[tuple[bool, int, frozenset[tuple[int, str]]], ...]:
+    """Every transform whose semantic edges land on this contour.
+
+    The third item is the edge-role signature. Two transforms that share it
+    place every semantic edge, including a machining side, on the same
+    physical edge. Distinct signatures are different orientations.
+    """
+
+    reason, groups = _corner_contour_groups(
+        outer_mm,
+        piece_type=piece_type,
+        position=position,
+        width_cm=width_cm,
+        length_cm=length_cm,
+        cut_width_cm=cut_width_cm,
+        cut_length_cm=cut_length_cm,
+        tolerance_mm=tolerance_mm,
+        edge_bands=edge_bands,
+        directed_ring_mm=directed_ring_mm,
+    )
+    if reason != "ok":
+        return ()
+    return tuple(
+        (mirrored, turns, signature)
+        for signature, items in groups.items()
+        for mirrored, turns in items
+    )
+
+
+def _corner_contour_groups(
+    outer_mm: Sequence[Sequence[float]],
+    *,
+    piece_type: str,
+    position: str,
+    width_cm: float,
+    length_cm: float,
+    cut_width_cm: float,
+    cut_length_cm: float,
+    tolerance_mm: float,
+    edge_bands: Mapping[str, str] | None,
+    directed_ring_mm: Sequence[Sequence[float]] | None,
+) -> tuple[str, dict[frozenset[tuple[int, str]], list[tuple[bool, int]]]]:
+    if not is_corner_cut(piece_type) or position not in CLIPPED_CORNER_POSITIONS:
+        return "invalid", {}
 
     width_mm = float(width_cm) * 10.0
     height_mm = float(length_cm) * 10.0
@@ -70,7 +185,7 @@ def match_corner_contour(
         and 0 < cut_x < width_mm
         and 0 < cut_y < height_mm
     ):
-        return CornerContourMatch(None, "invalid")
+        return "invalid", {}
 
     canonical = _corner_polygon_mm(
         piece_type=piece_type,
@@ -81,11 +196,11 @@ def match_corner_contour(
         cut_y_mm=cut_y,
     )
     if canonical is None:
-        return CornerContourMatch(None, "invalid")
+        return "invalid", {}
 
     actual = _prepare_ring(outer_mm, tolerance_mm)
     if len(actual) < 3:
-        return CornerContourMatch(None, "none")
+        return "none", {}
     actual = _localize(_collapse_collinear(actual, tolerance_mm))
 
     groups: dict[frozenset[tuple[int, str]], list[tuple[bool, int]]] = {}
@@ -106,21 +221,14 @@ def match_corner_contour(
             groups.setdefault(signature, []).append((mirrored, quarter_turns))
 
     if not groups:
-        return CornerContourMatch(None, "none")
-    groups = _filter_groups_by_directed_ring(
+        return "none", {}
+    return "ok", _filter_groups_by_directed_ring(
         groups,
         canonical=canonical,
         directed_ring_mm=directed_ring_mm,
         width=width_mm,
         height=height_mm,
     )
-    if len(groups) > 1:
-        return CornerContourMatch(None, "ambiguous")
-    mirrored, quarter_turns = min(
-        next(iter(groups.values())),
-        key=lambda item: (item[0], item[1]),
-    )
-    return CornerContourMatch(quarter_turns, "unique", mirrored)
 
 
 def measure_l_remainings_cm(

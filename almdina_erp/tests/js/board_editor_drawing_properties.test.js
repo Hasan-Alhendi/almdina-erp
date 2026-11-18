@@ -137,9 +137,9 @@ assert.match(css, /\.abe-body\.is-drawing\s*\{[^}]*--abe-right-sidebar-width:\s*
 assert.match(css, /\.abe-body\.is-drawing\.is-draw-props-collapsed\s*\{[^}]*--abe-right-sidebar-width:\s*36px/);
 assert.match(css, /\.abe-page\[dir="rtl"\] \.abe-draw-props/);
 assert.match(page, /drawing_properties_panel\.js\?v=4/);
-assert.match(page, /canvas_renderer\.js\?v=57/);
-assert.match(page, /controller\.js\?v=56/);
-assert.match(page, /board_editor\.css\?v=52/);
+assert.match(page, /canvas_renderer\.js\?v=58/);
+assert.match(page, /controller\.js\?v=57/);
+assert.match(page, /board_editor\.css\?v=53/);
 assert.match(controller, /DrawingProperties\.render/);
 assert.match(controller, /lastCanvasStageWidth - stageWidth/);
 assert.doesNotMatch(controller.slice(controller.indexOf("const stageAfter"), controller.indexOf("restoreDrawingMeasureFocus(canvas)")), /scale:/);

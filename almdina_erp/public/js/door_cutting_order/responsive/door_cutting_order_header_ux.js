@@ -4,6 +4,7 @@
     const TAB_LABELS = {
         order_tab: "Order",
         results_tab: "Cutting Plan",
+        operational_files_tab: "Operational Files",
         cost_tab: "Order Cost",
     };
     const HIDE_EVENT = "hide.almdinaDcoHeaderUx";

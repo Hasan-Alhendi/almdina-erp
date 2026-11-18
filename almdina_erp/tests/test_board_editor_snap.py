@@ -426,6 +426,72 @@ class TestBoardEditorSnap(unittest.TestCase):
         self.assertAlmostEqual(check["local_x_mm"] + 200 + session["kerf_mm"], 500.0, places=3)
         self.assertAlmostEqual(check["local_y_mm"], 105.0, places=3)
 
+    def test_large_door_does_not_leap_to_the_opposite_usable_edge(self):
+        slack = 230.0
+        align_dx = -165.0
+        board = {
+            "sheet_no": 1,
+            "origin_x_mm": 0,
+            "origin_y_mm": 0,
+            "width_mm": 1210,
+            "height_mm": 2430,
+            "trim_x_mm": 0,
+            "trim_y_mm": 0,
+            "usable_width_mm": 1210,
+            "usable_length_mm": 2430,
+            "title_band_mm": 36,
+        }
+        mover = {
+            "piece_key": "instance:mover",
+            "piece_id": 21,
+            "piece_instance_id": "mover",
+            "sheet_no": 1,
+            "local_x_mm": slack,
+            "local_y_mm": 600,
+            "placement_cm": {"x": 23, "y": 60, "w": 98, "h": 50},
+            "outline_mm": [[230, 600], [1210, 600], [1210, 1100], [230, 1100]],
+            "editable": True,
+            "glass_host_key": None,
+        }
+        neighbour = {
+            "piece_key": "instance:neighbour",
+            "piece_id": 22,
+            "piece_instance_id": "neighbour",
+            "sheet_no": 1,
+            "local_x_mm": slack + align_dx,
+            "local_y_mm": 0,
+            "placement_cm": {"x": 6.5, "y": 0, "w": 98, "h": 50},
+            "outline_mm": [[65, 0], [1045, 0], [1045, 500], [65, 500]],
+            "editable": True,
+            "glass_host_key": None,
+        }
+        pieces = {"instance:mover": mover, "instance:neighbour": neighbour}
+        boards = {"1": board}
+        near = suggest_piece_snap(
+            piece=mover,
+            pieces=pieces,
+            boards=boards,
+            world_x_mm=slack - 40,
+            world_y_mm=600,
+            kerf_mm=0,
+            threshold_mm=15.9,
+        )
+        self.assertTrue(near["ok"])
+        self.assertAlmostEqual(near["dx"], 0.0, places=3)
+        toward = suggest_piece_snap(
+            piece=mover,
+            pieces=pieces,
+            boards=boards,
+            world_x_mm=slack - 150.8,
+            world_y_mm=600,
+            kerf_mm=0,
+            threshold_mm=15.9,
+        )
+        self.assertTrue(toward["ok"])
+        self.assertAlmostEqual(toward["dx"], align_dx, places=3)
+        self.assertIn("neighbour", str(toward["source"]))
+        self.assertNotAlmostEqual(toward["dx"], -slack, places=3)
+
 
 if __name__ == "__main__":
     unittest.main()

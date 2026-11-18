@@ -10,6 +10,7 @@ PLAN_COMMAND_CAPABILITIES = frozenset(
     {
         Capability.RECALCULATE_PLAN,
         Capability.EDIT_OPTIMIZER_SETTINGS,
+        Capability.USE_BOARD_EDITOR,
         Capability.EDIT_COST_SETTINGS,
         Capability.UPLOAD_DXF,
         Capability.REPLACE_DXF,

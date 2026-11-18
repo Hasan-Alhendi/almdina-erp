@@ -221,6 +221,43 @@ const persisted = Object.assign({}, clearanceHost, {
 const kept = engine.completeToolpaths(persisted, persisted.overlays, 5, null, clearanceHost.tool_diameters, neighbor);
 const keptPath = kept.overlays.find(item => item.kind === "liner").geometry.path;
 assert.deepEqual(keptPath, storedPath);
+
+const partialHost = Object.assign({}, crossed, {
+    liner_start_cm: 2,
+    tool_diameters: { liner: 5 },
+    liner_specs_json: JSON.stringify({
+        width_cm: 1.5,
+        liners: [
+            { id: "liner_1", side: "edge_width_top", offset_cm: 2, start_cm: 2, length_cm: 0 },
+            { id: "liner_2", side: "edge_long_left", offset_cm: 2, start_cm: 2, length_cm: 0 },
+        ],
+    }),
+    overlays: [{
+        kind: "liner",
+        geometry: {
+            schema_version: 1,
+            unit: "mm",
+            coordinate_space: "usable_sheet",
+            closed: false,
+            toolpath: true,
+            path: [[1, 1], [2, 2]],
+        },
+    }],
+});
+const refreshed = engine.completeToolpaths(partialHost, partialHost.overlays, 5, null, partialHost.tool_diameters);
+const refreshedLiners = refreshed.overlays.filter(item => item.kind === "liner");
+assert.equal(refreshedLiners.length, 1);
+assert.equal(JSON.stringify(refreshedLiners[0].geometry.path), JSON.stringify([
+    [22.5, 602.5],
+    [22.5, 22.5],
+    [402.5, 22.5],
+    [402.5, 27.5],
+    [27.5, 27.5],
+    [27.5, 602.5],
+    [32.5, 602.5],
+    [32.5, 32.5],
+    [402.5, 32.5],
+]));
 assert.equal(geometry.extensionConflict(keptPath, 8, null, [{
     polygon: [[150, -2], [250, -2], [250, 12], [150, 12]],
 }]), "liner_extension_hits_piece");

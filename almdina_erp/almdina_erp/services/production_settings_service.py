@@ -2,12 +2,39 @@ from __future__ import annotations
 
 import json
 import math
+from collections.abc import Sequence
 from typing import Any
 
 import frappe
 from frappe import _
 from frappe.utils import cint, flt
 
+from almdina_erp.almdina_erp.domain.cnc.machine_profile import (
+    MachineProfileError,
+    normalize_machine_profile,
+)
+from almdina_erp.almdina_erp.domain.cnc.artcam_machining import (
+    MachiningSetupError,
+    artcam_tool_storage,
+    machining_tool_uses,
+    new_machining_id,
+    normalize_artcam_tool,
+    normalize_profile,
+)
+from almdina_erp.almdina_erp.infrastructure.frappe.cnc_operational_file_repository import (
+    known_tool_presets,
+    machining_profile_catalog,
+)
+from almdina_erp.almdina_erp.domain.cnc.tool_preset import (
+    ToolPresetError,
+    catalog_tool_number,
+    mm_per_min_from_sec,
+    mm_per_sec_from_min,
+    normalize_tool_preset,
+    resolve_selected_presets,
+    tool_delete_blockers,
+    tool_delete_reason,
+)
 from almdina_erp.almdina_erp.domain.cutting.catalog import (
     DEFAULT_OPTIMIZATION_MODE_ID,
     MACHINE_TYPES as CANONICAL_MACHINE_TYPES,
@@ -42,6 +69,7 @@ from almdina_erp.almdina_erp.domain.whatsapp.message_templates import (
 )
 from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import (
     granted_capabilities,
+    require_doctype_capability,
 )
 from almdina_erp.almdina_erp.infrastructure.frappe.master_data_audit import (
     document_snapshot,
@@ -105,6 +133,46 @@ _PRINT_IDENTITY_READ_CAPABILITIES = frozenset(
         Capability.PRINT_CUTTING_PLAN,
     }
 )
+_CNC_PRESET_FIELDS = (
+    "cnc_default_preset_cut_path",
+    "cnc_default_preset_liner",
+    "cnc_default_preset_rear_groove",
+    "cnc_default_preset_handle_recess",
+)
+_CNC_MACHINE_FIELDS = (
+    "cnc_machine_tool_number",
+    "cnc_machine_spindle_speed_rpm",
+    "cnc_machine_cutting_feed_mm_min",
+    "cnc_machine_plunge_feed_mm_min",
+    "cnc_machine_retract_z_mm",
+    "cnc_machine_distance_mode",
+    "cnc_machine_work_offset",
+    "cnc_machine_example_depth_a_mm",
+    "cnc_machine_example_depth_b_mm",
+    "cnc_machine_profile_production_approved",
+    "cnc_machine_profile_source",
+)
+_CNC_TEXT_FIELDS = frozenset(
+    {
+        *_CNC_PRESET_FIELDS,
+        "cnc_machine_tool_number",
+        "cnc_machine_distance_mode",
+        "cnc_machine_work_offset",
+        "cnc_machine_profile_source",
+    }
+)
+_CNC_INTEGER_FIELDS = frozenset(
+    {
+        "cnc_machine_spindle_speed_rpm",
+        "cnc_machine_profile_production_approved",
+    }
+)
+_CNC_PRESET_MESSAGES = {
+    "preset_not_found": "The selected CNC tool preset does not exist.",
+    "preset_disabled": "The selected CNC tool preset is disabled.",
+    "tool_identity_conflict": "One board file must keep the same physical tool number.",
+    "mill_group_diameter_conflict": "The same milling group cannot use different tool diameters.",
+}
 _SETTINGS_FIELDS = (
     "default_kerf_mm",
     "default_deduct_edge_thickness",
@@ -131,6 +199,8 @@ _SETTINGS_FIELDS = (
     "default_production_routing",
     "allow_stage_override",
     "allow_unplaced_approval",
+    *_CNC_PRESET_FIELDS,
+    *_CNC_MACHINE_FIELDS,
     *_PRINT_IDENTITY_FIELDS,
     *_WHATSAPP_MESSAGE_FIELDS,
     _WHATSAPP_STAGE_MESSAGES_FIELD,
@@ -481,6 +551,97 @@ def _apply_values(settings: Any, payload: dict[str, Any]) -> None:
     ):
         _validate_backup_settings(settings)
 
+    _apply_cnc_values(settings, payload)
+
+
+def _apply_cnc_values(settings: Any, payload: dict[str, Any]) -> None:
+    """Validate factory CNC defaults without rewriting saved operational files."""
+
+    if set(payload).intersection(_CNC_PRESET_FIELDS):
+        selected = {
+            fieldname: str(
+                payload[fieldname] if fieldname in payload else settings.get(fieldname) or ""
+            ).strip()
+            for fieldname in _CNC_PRESET_FIELDS
+        }
+        known = _known_cnc_presets([name for name in selected.values() if name])
+        try:
+            resolve_selected_presets(list(selected.values()), known)
+        except ToolPresetError as exc:
+            frappe.throw(
+                _(_CNC_PRESET_MESSAGES.get(exc.code, "The CNC tool preset is not valid.")),
+                frappe.ValidationError,
+            )
+        for fieldname in _CNC_PRESET_FIELDS:
+            if fieldname in payload:
+                settings.set(fieldname, selected[fieldname])
+
+    if set(payload).intersection(_CNC_MACHINE_FIELDS):
+        merged = {
+            fieldname: payload[fieldname] if fieldname in payload else settings.get(fieldname)
+            for fieldname in _CNC_MACHINE_FIELDS
+        }
+        try:
+            profile = normalize_machine_profile(merged)
+        except MachineProfileError:
+            frappe.throw(_("The CNC machine profile sample is not valid."), frappe.ValidationError)
+        stored = {
+            "cnc_machine_tool_number": profile.tool_number,
+            "cnc_machine_spindle_speed_rpm": profile.spindle_speed_rpm,
+            "cnc_machine_cutting_feed_mm_min": profile.cutting_feed_mm_min,
+            "cnc_machine_plunge_feed_mm_min": profile.plunge_feed_mm_min,
+            "cnc_machine_retract_z_mm": profile.retract_z_mm,
+            "cnc_machine_distance_mode": profile.distance_mode,
+            "cnc_machine_work_offset": profile.work_offset,
+            "cnc_machine_example_depth_a_mm": profile.example_depth_a_mm,
+            "cnc_machine_example_depth_b_mm": profile.example_depth_b_mm,
+            "cnc_machine_profile_production_approved": 1 if profile.production_approved else 0,
+            "cnc_machine_profile_source": profile.source_note,
+        }
+        for fieldname in _CNC_MACHINE_FIELDS:
+            if fieldname in payload:
+                settings.set(fieldname, stored[fieldname])
+
+
+def _known_cnc_presets(names: list[str]) -> dict[str, dict[str, Any]]:
+    wanted = [name for name in names if name]
+    if not wanted:
+        return {}
+    rows = frappe.get_all(
+        "CNC Tool Preset",
+        filters={"name": ["in", wanted]},
+        fields=[
+            "name",
+            "tool_name",
+            "tool_number",
+            "tool_diameter_mm",
+            "spindle_speed_rpm",
+            "feed_rate_mm_sec",
+            "plunge_rate_mm_sec",
+            "stepdown_mm",
+            "enabled",
+        ],
+        limit_page_length=0,
+        ignore_permissions=True,
+    )
+    return {
+        str(row.name): {
+            "preset_name": row.tool_name,
+            "tool_name": row.tool_name,
+            "tool_number": row.tool_number,
+            "tool_diameter_mm": row.tool_diameter_mm,
+            "spindle_speed_rpm": row.spindle_speed_rpm,
+            "feed_rate_mm_sec": row.feed_rate_mm_sec,
+            "plunge_rate_mm_sec": row.plunge_rate_mm_sec,
+            "feed_rate_mm_min": mm_per_min_from_sec(row.feed_rate_mm_sec or 0),
+            "plunge_rate_mm_min": mm_per_min_from_sec(row.plunge_rate_mm_sec or 0),
+            "stepdown_mm": row.stepdown_mm,
+            "pass_depth_mm": row.stepdown_mm,
+            "enabled": bool(cint(row.enabled)),
+        }
+        for row in rows
+    }
+
 
 def _backup_time(value: Any, default: str) -> str:
     if hasattr(value, "total_seconds"):
@@ -721,6 +882,10 @@ def _settings_values(settings: Any, *, include_backups: bool = True) -> dict[str
             value = str(value or "")
         elif fieldname == "default_packing_mode":
             value = public_mode_value(value)
+        elif fieldname in _CNC_TEXT_FIELDS:
+            value = str(value or "")
+        elif fieldname in _CNC_INTEGER_FIELDS:
+            value = cint(value)
         elif fieldname not in {"default_cutting_machine_type", "default_production_routing"}:
             value = flt(value)
             if fieldname == "optimal_search_piece_limit":
@@ -791,6 +956,9 @@ def get_production_settings() -> dict[str, Any]:
         "machine_options": [item["id"] for item in machines],
         "routing_options": routing_options,
         "whatsapp_stage_message_rows": _whatsapp_stage_message_rows(settings),
+        "cnc_tool_presets": _cnc_tool_preset_catalog(),
+        "cnc_machines": _cnc_machine_catalog(),
+        "cnc_machining_profiles": machining_profile_catalog(),
     }
 
 
@@ -828,6 +996,509 @@ def update_production_settings(values: str | dict[str, Any]) -> dict[str, Any]:
     return get_production_settings()
 
 
+def _optional_pass_depth(value: Any) -> Any:
+    if value in (None, "", 0, 0.0):
+        return None
+    return value
+
+
+def _cnc_machine_catalog() -> list[dict[str, Any]]:
+    if not frappe.db.exists("DocType", "CNC Machine"):
+        return []
+    fields = [
+        "name",
+        "machine_name",
+        "width_cm",
+        "length_cm",
+        "enabled",
+        "work_zero_position",
+        "left_stop_cm",
+        "right_stop_cm",
+        "bottom_stop_cm",
+        "top_stop_cm",
+        "post_processor",
+    ]
+    if frappe.db.has_column("CNC Machine", "width_stop_side"):
+        fields[6:6] = ["width_stop_side", "length_stop_side"]
+    rows = frappe.get_all(
+        "CNC Machine",
+        fields=fields,
+        order_by="machine_name asc",
+        limit_page_length=0,
+    )
+    from almdina_erp.almdina_erp.domain.cnc.placement import public_cnc_machine
+
+    return [
+        public_cnc_machine(
+            {
+                "name": row.name,
+                "machine_name": row.machine_name,
+                "width_cm": row.width_cm,
+                "length_cm": row.length_cm,
+                "enabled": bool(cint(row.enabled)),
+                "work_zero_position": row.work_zero_position,
+                "width_stop_side": getattr(row, "width_stop_side", None),
+                "length_stop_side": getattr(row, "length_stop_side", None),
+                "left_stop_cm": row.left_stop_cm,
+                "right_stop_cm": row.right_stop_cm,
+                "bottom_stop_cm": row.bottom_stop_cm,
+                "top_stop_cm": row.top_stop_cm,
+                "post_processor": row.post_processor,
+            }
+        )
+        for row in rows
+    ]
+
+
+def _cnc_tool_preset_catalog() -> list[dict[str, Any]]:
+    rows = frappe.get_all(
+        "CNC Tool Preset",
+        fields=[
+            "name",
+            "tool_name",
+            "tool_number",
+            "tool_diameter_mm",
+            "spindle_speed_rpm",
+            "feed_rate_mm_sec",
+            "plunge_rate_mm_sec",
+            "stepdown_mm",
+            "enabled",
+            "tool_type",
+            "tool_units",
+            "rate_units",
+            "notes",
+            "final_tool_offset_mm",
+            "stepover_size_mm",
+            "stepover_percent",
+        ],
+        order_by="tool_name asc",
+        limit_page_length=0,
+    )
+    references = _tool_reference_index()
+    empty_uses = _empty_tool_uses()
+    return [
+        {
+            "name": row.name,
+            "preset_name": row.tool_name,
+            "tool_name": row.tool_name,
+            "tool_number": row.tool_number,
+            "tool_diameter_mm": row.tool_diameter_mm,
+            "spindle_speed_rpm": row.spindle_speed_rpm,
+            "feed_rate_mm_sec": row.feed_rate_mm_sec,
+            "plunge_rate_mm_sec": row.plunge_rate_mm_sec,
+            "feed_rate_mm_min": mm_per_min_from_sec(row.feed_rate_mm_sec or 0),
+            "plunge_rate_mm_min": mm_per_min_from_sec(row.plunge_rate_mm_sec or 0),
+            "stepdown_mm": row.stepdown_mm,
+            "pass_depth_mm": _optional_pass_depth(row.stepdown_mm),
+            "enabled": bool(cint(row.enabled)),
+            "tool_type": row.tool_type or "",
+            "tool_units": row.tool_units or "",
+            "rate_units": row.rate_units or "",
+            "notes": row.notes or "",
+            "description": row.tool_name or "",
+            "diameter_mm": row.tool_diameter_mm,
+            "final_tool_offset_mm": row.final_tool_offset_mm,
+            "stepover_size_mm": row.stepover_size_mm,
+            "stepover_percent": row.stepover_percent,
+            "delete_blockers": list(
+                tool_delete_blockers(
+                    operation_uses=references.get(str(row.name or ""), empty_uses)["operations"],
+                    path_uses=references.get(str(row.name or ""), empty_uses)["paths"],
+                    factory_uses=references.get(str(row.name or ""), empty_uses)["factory"],
+                    profile_uses=references.get(str(row.name or ""), empty_uses)["profiles"],
+                    association_uses=references.get(str(row.name or ""), empty_uses)["associations"],
+                    active_snapshot_uses=references.get(str(row.name or ""), empty_uses)["active_snapshots"],
+                )
+            ),
+        }
+        for row in rows
+    ]
+
+
+def _require_tool_preset_editor() -> None:
+    require_doctype_capability(
+        Capability.EDIT_FACTORY_CNC_DEFAULTS,
+        message=_("You do not have permission to edit CNC tool presets."),
+    )
+
+
+def _preset_message(code: str) -> str:
+    messages = {
+        "tool_name_required": "Tool Name is required.",
+        "tool_number_invalid": "Tool Number must be a positive whole number.",
+        "tool_diameter_invalid": "Tool Diameter (mm) must be a positive number within the supported range.",
+        "final_depth_invalid": "Final Depth (mm) must be a positive number within the supported range.",
+        "spindle_speed_invalid": "Spindle Speed (RPM) must be a positive whole number within the supported range.",
+        "feed_rate_invalid": "Feed Rate (mm/sec) must be a positive number within the supported range.",
+        "plunge_rate_invalid": "Plunge Rate (mm/sec) must be a positive number within the supported range.",
+        "pass_depth_invalid": "Stepdown must be a positive number of millimetres within the supported range.",
+        "pass_depth_exceeds_final_depth": "Stepdown cannot be deeper than Final Depth (mm).",
+        "preset_not_found": "The selected CNC tool preset does not exist.",
+    }
+    return messages.get(code, "The CNC tool preset is not valid.")
+
+
+def _apply_tool_preset(document: Any, preset: Any) -> None:
+    document.tool_name = preset.tool_name
+    document.tool_number = str(catalog_tool_number(preset.tool_number)[1])
+    document.tool_diameter_mm = preset.tool_diameter_mm
+    document.spindle_speed_rpm = preset.spindle_speed_rpm
+    document.feed_rate_mm_sec = mm_per_sec_from_min(preset.feed_rate_mm_min)
+    document.plunge_rate_mm_sec = mm_per_sec_from_min(preset.plunge_rate_mm_min)
+    document.stepdown_mm = preset.pass_depth_mm
+    document.tool_type = "Ball Nose"
+    document.tool_units = "mm"
+    document.rate_units = "mm/sec"
+    document.enabled = 1 if preset.enabled else 0
+
+
+def _empty_tool_uses() -> dict[str, int]:
+    return {
+        "operations": 0,
+        "paths": 0,
+        "factory": 0,
+        "profiles": 0,
+        "associations": 0,
+        "active_snapshots": 0,
+        "historical_snapshots": 0,
+    }
+
+
+def _count_bucket(index: dict[str, dict[str, int]], tool_name: Any) -> dict[str, int] | None:
+    token = str(tool_name or "").strip()
+    if not token:
+        return None
+    found = index.get(token)
+    if found is None:
+        found = _empty_tool_uses()
+        index[token] = found
+    return found
+
+
+def _add_link_counts(index: dict[str, dict[str, int]], doctype: str, key: str) -> None:
+    if not frappe.db.exists("DocType", doctype):
+        return
+    for tool_name in frappe.get_all(
+        doctype,
+        filters={"tool_preset": ["is", "set"]},
+        pluck="tool_preset",
+        limit_page_length=0,
+    ):
+        found = _count_bucket(index, tool_name)
+        if found is not None:
+            found[key] += 1
+
+
+def _tool_reference_index() -> dict[str, dict[str, int]]:
+    """Read every live tool reference once. Historical snapshots stay in their own count."""
+
+    index: dict[str, dict[str, int]] = {}
+    _add_link_counts(index, "CNC Operational Operation", "operations")
+    _add_link_counts(index, "CNC Operational Path", "paths")
+    _add_link_counts(index, "CNC Machining Profile", "profiles")
+    settings = frappe.get_single("Almdina ERP Settings")
+    for fieldname in _CNC_PRESET_FIELDS:
+        found = _count_bucket(index, settings.get(fieldname))
+        if found is not None:
+            found["factory"] += 1
+    if frappe.db.exists("DocType", "CNC Operational File"):
+        for row in frappe.get_all(
+            "CNC Operational File",
+            fields=["machining_profiles_json", "vector_associations_json", "toolpath_snapshots_json"],
+            limit_page_length=0,
+        ):
+            profiles = _json_rows(row.machining_profiles_json)
+            associations = _json_rows(row.vector_associations_json)
+            snapshots = _json_rows(row.toolpath_snapshots_json)
+            names: set[str] = set()
+            for profile in profiles:
+                if isinstance(profile, dict):
+                    names.add(str(profile.get("tool_preset") or "").strip())
+            for association in associations:
+                if not isinstance(association, dict):
+                    continue
+                local = association.get("local_values") if isinstance(association.get("local_values"), dict) else {}
+                tool_values = local.get("tool_values") if isinstance(local.get("tool_values"), dict) else {}
+                names.add(str(local.get("tool_preset") or "").strip())
+                names.add(str(tool_values.get("tool_preset") or "").strip())
+            for snapshot in snapshots:
+                if not isinstance(snapshot, dict):
+                    continue
+                local = snapshot.get("local_values") if isinstance(snapshot.get("local_values"), dict) else {}
+                tool_values = local.get("tool_values") if isinstance(local.get("tool_values"), dict) else {}
+                preset = snapshot.get("preset") if isinstance(snapshot.get("preset"), dict) else {}
+                names.add(str(local.get("tool_preset") or "").strip())
+                names.add(str(tool_values.get("tool_preset") or "").strip())
+                names.add(str(preset.get("preset_name") or "").strip())
+            names.discard("")
+            for tool_name in names:
+                uses = machining_tool_uses(
+                    tool_name,
+                    profiles=profiles,
+                    associations=associations,
+                    snapshots=snapshots,
+                )
+                found = _count_bucket(index, tool_name)
+                if found is None:
+                    continue
+                found["profiles"] += uses["profiles"]
+                found["associations"] += uses["associations"]
+                found["active_snapshots"] += uses["active_snapshots"]
+                found["historical_snapshots"] += uses["historical_snapshots"]
+    return index
+
+
+def _tool_preset_use_counts(name: str) -> dict[str, int]:
+    """Count live references separately from historical snapshot copies."""
+
+    if not name:
+        return _empty_tool_uses()
+    return _tool_reference_index().get(name, _empty_tool_uses())
+
+
+def _tool_delete_message(blockers: Sequence[str]) -> str:
+    return " ".join(
+        [_("This tool cannot be deleted."), *(_(tool_delete_reason(code)) for code in blockers)]
+    )
+
+
+def _tool_delete_blockers_for(name: str) -> tuple[str, ...]:
+    counts = _tool_preset_use_counts(name)
+    return tool_delete_blockers(
+        operation_uses=counts["operations"],
+        path_uses=counts["paths"],
+        factory_uses=counts["factory"],
+        profile_uses=counts["profiles"],
+        association_uses=counts["associations"],
+        active_snapshot_uses=counts["active_snapshots"],
+    )
+
+
+def assert_tool_preset_can_be_deleted(name: str) -> None:
+    """Server gate for Desk delete and the operational-files action."""
+
+    blockers = _tool_delete_blockers_for(name)
+    if blockers:
+        frappe.throw(_tool_delete_message(blockers), frappe.ValidationError)
+
+
+def _json_rows(raw: Any) -> list[Any]:
+    if not raw:
+        return []
+    parsed = json.loads(raw) if isinstance(raw, str) else raw
+    return list(parsed or []) if isinstance(parsed, list) else []
+
+
+def _artcam_message(code: str) -> str:
+    messages = {
+        "tool_type_unsupported": "Only a Ball Nose tool can be created here.",
+        "tool_units_invalid": "Tool units must be mm.",
+        "rate_units_invalid": "Rate units must be mm/sec.",
+        "description_required": "Enter the tool description.",
+        "tool_number_invalid": "Tool number must be a whole number such as 9.",
+        "tool_diameter_invalid": "Diameter must be a positive number of millimetres.",
+        "stepdown_invalid": "Stepdown must be a positive number of millimetres.",
+        "final_tool_offset_invalid": "Final tool offset must be zero or a positive number of millimetres.",
+        "stepover_invalid": "Stepover size must be positive and no greater than the tool diameter.",
+        "spindle_speed_invalid": "Spindle speed must be a positive whole number of RPM.",
+        "feed_rate_invalid": "Feed rate must be a positive number of millimetres per second.",
+        "plunge_rate_invalid": "Plunge rate must be a positive number of millimetres per second.",
+        "notes_invalid": "The tool notes are too long.",
+    }
+    return _(messages.get(code, "The CNC tool is not valid."))
+
+
+@frappe.whitelist()
+def save_artcam_tool(values: str | dict[str, Any]) -> dict[str, Any]:
+    """Create or update a Ball Nose tool. Profiles keep their own copies."""
+
+    _require_tool_preset_editor()
+    payload = _payload(values)
+    try:
+        tool = normalize_artcam_tool(payload)
+    except MachiningSetupError as exc:
+        frappe.throw(_artcam_message(exc.code), frappe.ValidationError)
+    updates = artcam_tool_storage(tool)
+    name = str(payload.get("name") or "").strip()
+    if name and frappe.db.exists("CNC Tool Preset", name):
+        document = frappe.get_doc("CNC Tool Preset", name)
+        document.check_permission("write")
+        for fieldname, value in updates.items():
+            document.set(fieldname, value)
+        document.save()
+    else:
+        if name and name != tool.description:
+            frappe.throw(_("The tool description cannot be changed."), frappe.ValidationError)
+        if frappe.db.exists("CNC Tool Preset", tool.description):
+            frappe.throw(_("A tool with this description already exists."), frappe.ValidationError)
+        document = frappe.new_doc("CNC Tool Preset")
+        document.check_permission("create")
+        document.tool_name = tool.description
+        document.enabled = 1
+        for fieldname, value in updates.items():
+            document.set(fieldname, value)
+        document.insert()
+    return get_production_settings()
+
+
+def _require_machining_profile_editor() -> None:
+    require_doctype_capability(
+        Capability.EDIT_FACTORY_CNC_DEFAULTS,
+        message=_("You do not have permission to edit ArtCAM machining profiles."),
+    )
+
+
+def _profile_message(code: str) -> str:
+    messages = {
+        "profile_name_required": "Enter a profile name.",
+        "profile_id_invalid": "The profile identity is not valid.",
+        "tool_preset_required": "Choose a tool for this profile.",
+        "preset_not_found": "The selected CNC tool preset does not exist.",
+        "preset_disabled": "The selected CNC tool preset is disabled.",
+        "safe_z_invalid": "Safe Z must be zero or a positive number of millimetres within the supported range.",
+        "home_x_invalid": "Home X must be a finite number of millimetres.",
+        "home_y_invalid": "Home Y must be a finite number of millimetres.",
+        "home_z_invalid": "Home Z must be zero or a positive number of millimetres within the supported range.",
+        "final_depth_invalid": "Final depth must be a positive number of millimetres within the supported range.",
+        "pass_depth_exceeds_final_depth": "Pass depth cannot be deeper than the final depth.",
+        "tool_property_locked": "The tool property {0} cannot be changed here. Choose another tool to replace the protected tool properties.",
+        "stepover_inconsistent": "Stepover size and stepover percent must describe the same fraction of the tool diameter.",
+    }
+    if code in messages:
+        return _(messages[code])
+    return _artcam_message(code)
+
+
+def _profile_failure(exc: MachiningSetupError) -> str:
+    template = _profile_message(exc.code)
+    detail = str(getattr(exc, "detail", "") or "")
+    if "{0}" in template:
+        return template.format(detail or "—")
+    return template
+
+
+@frappe.whitelist()
+def save_cnc_machining_profile(values: str | dict[str, Any]) -> dict[str, Any]:
+    """Create or update one ArtCAM profile. The tool and saved sheet copies stay unchanged."""
+
+    _require_machining_profile_editor()
+    payload = _payload(values)
+    profile_id = str(payload.get("profile_id") or "").strip()
+    existing_name = ""
+    stored_profile = None
+    if profile_id:
+        existing_name = str(
+            frappe.db.get_value("CNC Machining Profile", {"profile_id": profile_id}, "name") or ""
+        )
+        if not existing_name:
+            frappe.throw(_profile_message("profile_id_invalid"), frappe.ValidationError)
+        document = frappe.get_doc("CNC Machining Profile", existing_name)
+        document.check_permission("write")
+        stored_values = document.tool_values_json
+        if isinstance(stored_values, str) and stored_values.strip():
+            stored_values = json.loads(stored_values)
+        stored_profile = {
+            "profile_id": document.profile_id,
+            "tool_preset": document.tool_preset,
+            "tool_values": stored_values if isinstance(stored_values, dict) else {},
+        }
+    try:
+        profile = normalize_profile(
+            payload,
+            known_tools=known_tool_presets(),
+            profile_id=profile_id or new_machining_id("profile"),
+            stored_profile=stored_profile,
+        )
+    except MachiningSetupError as exc:
+        frappe.throw(_profile_failure(exc), frappe.ValidationError)
+    if not profile_id:
+        document = frappe.new_doc("CNC Machining Profile")
+        document.check_permission("create")
+        document.profile_id = profile["profile_id"]
+    document.profile_name = profile["name"]
+    document.tool_preset = profile["tool_preset"]
+    document.tool_values_json = profile["tool_values"]
+    document.final_depth_mm = profile["final_depth_mm"]
+    document.safe_z_mm = profile["safe_z_mm"]
+    document.home_x_mm = profile["home_x_mm"]
+    document.home_y_mm = profile["home_y_mm"]
+    document.home_z_mm = profile["home_z_mm"]
+    document.enabled = 1
+    if existing_name:
+        document.save()
+    else:
+        document.insert()
+    return get_production_settings()
+
+
+@frappe.whitelist()
+def save_cnc_tool_preset(values: str | dict[str, Any]) -> dict[str, Any]:
+    """Create or update one tool preset. The caller must manage factory CNC defaults."""
+
+    _require_tool_preset_editor()
+    payload = _payload(values)
+    try:
+        preset = normalize_tool_preset(payload)
+    except ToolPresetError as exc:
+        frappe.throw(_preset_message(exc.code), frappe.ValidationError)
+    name = str(payload.get("name") or "").strip()
+    if name and frappe.db.exists("CNC Tool Preset", name):
+        document = frappe.get_doc("CNC Tool Preset", name)
+        document.check_permission("write")
+        if preset.tool_name != str(document.tool_name or ""):
+            frappe.throw("Tool Name cannot be changed.", frappe.ValidationError)
+        _apply_tool_preset(document, preset)
+        document.save()
+    else:
+        if name and name != preset.tool_name:
+            frappe.throw("Tool Name cannot be changed.", frappe.ValidationError)
+        document = frappe.new_doc("CNC Tool Preset")
+        document.check_permission("create")
+        _apply_tool_preset(document, preset)
+        document.insert()
+    return get_production_settings()
+
+
+@frappe.whitelist()
+def set_cnc_tool_preset_enabled(name: str, enabled: int | str | bool = 0) -> dict[str, Any]:
+    """Disable or enable a preset without removing the sheets that already use it."""
+
+    _require_tool_preset_editor()
+    preset_name = str(name or "").strip()
+    if not preset_name or not frappe.db.exists("CNC Tool Preset", preset_name):
+        frappe.throw(_preset_message("preset_not_found"), frappe.ValidationError)
+    document = frappe.get_doc("CNC Tool Preset", preset_name)
+    document.check_permission("write")
+    turning_off = not cint(enabled)
+    if turning_off:
+        counts = _tool_preset_use_counts(preset_name)
+        live_uses = counts["profiles"] + counts["associations"]
+        _snapshot_uses = counts["active_snapshots"] + counts["historical_snapshots"]
+        if live_uses:
+            frappe.throw(
+                _("This tool is still selected by a profile or vector association. Calculated toolpaths keep their own copy, but those live selections must choose another tool before this one can be disabled."),
+                frappe.ValidationError,
+            )
+    document.enabled = 1 if cint(enabled) else 0
+    document.save()
+    return get_production_settings()
+
+
+@frappe.whitelist()
+def delete_cnc_tool_preset(name: str) -> dict[str, Any]:
+    """Delete a preset only when no sheet, path, or factory default still points at it."""
+
+    _require_tool_preset_editor()
+    preset_name = str(name or "").strip()
+    if not preset_name or not frappe.db.exists("CNC Tool Preset", preset_name):
+        frappe.throw(_preset_message("preset_not_found"), frappe.ValidationError)
+    assert_tool_preset_can_be_deleted(preset_name)
+    document = frappe.get_doc("CNC Tool Preset", preset_name)
+    document.check_permission("delete")
+    document.delete()
+    return get_production_settings()
+
+
 @frappe.whitelist()
 def get_factory_settings_audit(limit: int = 30) -> list[dict[str, Any]]:
     _require_view()
@@ -845,9 +1516,13 @@ __all__ = [
     "LEGACY_PRESERVED_FIELDS",
     "MACHINE_OPTIONS",
     "PRINT_IDENTITY_DEFAULTS",
+    "delete_cnc_tool_preset",
     "get_factory_settings_audit",
     "get_print_identity",
     "get_production_settings",
+    "save_cnc_machining_profile",
+    "save_cnc_tool_preset",
+    "set_cnc_tool_preset_enabled",
     "update_production_settings",
     "whatsapp_message_templates",
     "whatsapp_stage_message_template",

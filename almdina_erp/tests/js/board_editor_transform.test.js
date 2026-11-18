@@ -217,10 +217,10 @@ function nextAnglePairTarget(currentDeg, firstDeg, secondDeg) {
     assert.match(css, /\.abe-page-actions \.abe-tool-btn[\s\S]*border:\s*0/);
     assert.match(page, /transform_geometry\.js\?v=3/);
     assert.match(page, /position_geometry\.js\?v=4/);
-    assert.match(page, /controller\.js\?v=56/);
-    assert.match(page, /canvas_renderer\.js\?v=57/);
-    assert.match(page, /board_editor\.css\?v=52/);
-    assert.match(page, /move_geometry\.js\?v=21/);
+    assert.match(page, /controller\.js\?v=57/);
+    assert.match(page, /canvas_renderer\.js\?v=58/);
+    assert.match(page, /board_editor\.css\?v=53/);
+    assert.match(page, /move_geometry\.js\?v=24/);
     assert.match(canvas, /data-abe-angle-mirror/);
     assert.match(canvas, /abe-l-mirror-btn/);
     assert.match(arCsv, /Toggle rotation 0° ↔ 180°/);

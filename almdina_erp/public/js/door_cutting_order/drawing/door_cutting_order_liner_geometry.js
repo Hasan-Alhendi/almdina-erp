@@ -41,7 +41,7 @@
     function availableSides(pieceType) {
         if (pieceType === CLIPPED) return OUTER_SIDES.concat([SIDE_BREAK, SIDE_BREAK_ONLY]);
         if (pieceType === L_SHAPED) return OUTER_SIDES.concat([SIDE_BREAK]);
-        if (!pieceType || pieceType === "Regular") return OUTER_SIDES.slice();
+        if (!pieceType || pieceType === "Regular" || pieceType === "Glass") return OUTER_SIDES.slice();
         return [];
     }
 
@@ -105,6 +105,44 @@
             position: source.clipped_corner_position || "Top Right",
             cutWidthCm: num(source.clipped_corner_width_cm),
             cutLengthCm: num(source.clipped_corner_length_cm),
+            glassFrameMm: glassFrameMm(source, width, length),
+        };
+    }
+
+    function edgeSelected(value) {
+        if (typeof value === "string") {
+            return !["", "0", "false", "no", "off"].includes(value.trim().toLowerCase());
+        }
+        return Boolean(value);
+    }
+
+    function glassFrameMm(source, cutWidthCm, cutLengthCm) {
+        if (String(source.piece_type || "") !== "Glass") return null;
+        const individual = String(source.glass_margin_mode || "") === "Individual Sides";
+        let margins;
+        if (individual) {
+            margins = {
+                top: num(source.glass_margin_top_mm),
+                bottom: num(source.glass_margin_bottom_mm),
+                right: num(source.glass_margin_right_mm),
+                left: num(source.glass_margin_left_mm),
+            };
+        } else if (source.glass_margin_mm === null || source.glass_margin_mm === undefined || source.glass_margin_mm === "") {
+            return null;
+        } else {
+            const shared = num(source.glass_margin_mm);
+            margins = { top: shared, bottom: shared, right: shared, left: shared };
+        }
+        const removedWidth = (num(source.width_cm) - num(cutWidthCm)) * 10;
+        const removedLength = (num(source.length_cm) - num(cutLengthCm)) * 10;
+        const band = (flag, field, removed) => (
+            edgeSelected(source[flag]) && removed > 0.05 ? num(source[field]) : 0
+        );
+        return {
+            left: margins.left - band("edge_long_left", "edge_long_thickness_mm", removedWidth),
+            right: margins.right - band("edge_long_right", "edge_long_thickness_mm", removedWidth),
+            top: margins.top - band("edge_width_top", "edge_width_thickness_mm", removedLength),
+            bottom: margins.bottom - band("edge_width_bottom", "edge_width_thickness_mm", removedLength),
         };
     }
 
@@ -356,6 +394,22 @@
         const samples = offsetPolyline(reference, (offset + width) * 10, sign)
             .concat(offsetPolyline(reference, offset * 10, sign));
         if (samples.some(point => !pointInPolygon(point, polygon, TOLERANCE_MM))) return "strip_outside";
+        if (piece.pieceType === "Glass" && piece.glassFrameMm) {
+            const frames = piece.glassFrameMm;
+            if (Object.values(frames).some(value => num(value) > 0)) {
+                const key = {
+                    [SIDE_TOP]: "top",
+                    [SIDE_BOTTOM]: "bottom",
+                    [SIDE_LEFT]: "left",
+                    [SIDE_RIGHT]: "right",
+                }[side];
+                const frame = num(frames[key]);
+                const extent = (offset + width) * 10;
+                if (!(frame > TOLERANCE_MM) || extent > frame + TOLERANCE_MM) {
+                    return "liner_enters_glass_opening";
+                }
+            }
+        }
         return "";
     }
 
@@ -882,6 +936,37 @@
         };
     }
 
+    function spanCutterLines(clipped, options) {
+        const extendStart = Boolean(options.extendStart);
+        const extendEnd = Boolean(options.extendEnd);
+        const radius = num(options.radius);
+        const trimStart = extendStart ? 0 : radius;
+        const trimEnd = extendEnd ? 0 : radius;
+        if (polylineLength(clipped) + TOLERANCE_MM < trimStart + trimEnd) {
+            fail("liner_flat_end_unmachinable");
+        }
+        return options.centers.map(center => {
+            let line = offsetPolyline(clipped, num(options.offsetMm) + center, options.sign);
+            if (trimStart) line = subpolyline(line, trimStart, polylineLength(line));
+            if (trimEnd) line = subpolyline(line, 0, polylineLength(line) - trimEnd);
+            if (line.length < 2) fail("liner_flat_end_unmachinable");
+            if (extendStart || extendEnd) {
+                const obstacles = options.obstacles;
+                line = extendCenterline(line, radius, options.polygon, {
+                    start: extendStart,
+                    end: extendEnd,
+                    startExtension: extendStart && obstacles && obstacles.length
+                        ? safeLineExtension(line, options.polygon, radius, obstacles, true)
+                        : null,
+                    endExtension: extendEnd && obstacles && obstacles.length
+                        ? safeLineExtension(line, options.polygon, radius, obstacles, false)
+                        : null,
+                });
+            }
+            return line;
+        });
+    }
+
     function toolpathMm(piece, side, offsetCm, widthCm, cutterDiameterMm, startCm, lengthCm, ends) {
         const error = validationCode(piece, side, offsetCm, widthCm);
         if (error) fail(error);
@@ -896,30 +981,15 @@
         const extendEnd = prepared.boundaryEnd;
         const needsFlat = !startSawn || !endSawn;
         if (needsFlat && centers.length < 2) fail("liner_flat_end_unmachinable");
-        const trimStart = extendStart ? 0 : radius;
-        const trimEnd = extendEnd ? 0 : radius;
-        if (polylineLength(prepared.clipped) + TOLERANCE_MM < trimStart + trimEnd) {
-            fail("liner_flat_end_unmachinable");
-        }
-        const lines = centers.map(center => {
-            let line = offsetPolyline(prepared.clipped, (num(offsetCm) * 10) + center, sign);
-            if (trimStart) line = subpolyline(line, trimStart, polylineLength(line));
-            if (trimEnd) line = subpolyline(line, 0, polylineLength(line) - trimEnd);
-            if (line.length < 2) fail("liner_flat_end_unmachinable");
-            if (extendStart || extendEnd) {
-                const obstacles = ends && ends.obstacles;
-                line = extendCenterline(line, radius, polygon, {
-                    start: extendStart,
-                    end: extendEnd,
-                    startExtension: extendStart && obstacles && obstacles.length
-                        ? safeLineExtension(line, polygon, radius, obstacles, true)
-                        : null,
-                    endExtension: extendEnd && obstacles && obstacles.length
-                        ? safeLineExtension(line, polygon, radius, obstacles, false)
-                        : null,
-                });
-            }
-            return line;
+        const lines = spanCutterLines(prepared.clipped, {
+            sign,
+            polygon,
+            centers,
+            offsetMm: num(offsetCm) * 10,
+            radius,
+            extendStart,
+            extendEnd,
+            obstacles: ends && ends.obstacles,
         });
         let path = [];
         lines.forEach((line, index) => {
@@ -1379,6 +1449,11 @@
         return `${parsed.liners.length} · ${Math.round(num(parsed.widthCm) * 100) / 10} ${__("mm")}`;
     }
 
+    function linerFaceValue(value) {
+        const text = String(value == null ? "" : value).trim().toLowerCase();
+        return text === "front" || text === "back" ? text : null;
+    }
+
     function allocateLinerId(existing) {
         let used = 0;
         (existing || []).forEach(id => {
@@ -1404,16 +1479,17 @@
                 }));
                 if (enabled && liners.length) {
                     const widthCm = data.width_cm != null ? num(data.width_cm) : num(row && row.liner_width_cm);
-                    return { enabled: true, widthCm, liners };
+                    return { enabled: true, widthCm, liners, face: linerFaceValue(data.face) };
                 }
             } catch (error) {
                 /* fall through to scalar fields */
             }
         }
-        if (!enabled) return { enabled: false, widthCm: 0, liners: [] };
+        if (!enabled) return { enabled: false, widthCm: 0, liners: [], face: null };
         return {
             enabled: true,
             widthCm: num(row && row.liner_width_cm),
+            face: null,
             liners: [{
                 id: "liner_1",
                 side: String((row && row.liner_reference_side) || "").trim(),
@@ -1424,18 +1500,25 @@
         };
     }
 
+    function doorLinerFace(row) {
+        return linerFaceValue(parseDoorLiners(row).face);
+    }
+
     function serializeDoorLiners(payload) {
         if (!payload || !payload.enabled || !(payload.liners || []).length) return "";
-        return JSON.stringify({
+        const body = {
             width_cm: num(payload.widthCm),
-            liners: payload.liners.map(spec => ({
-                id: spec.id,
-                side: spec.side,
-                offset_cm: num(spec.offsetCm),
-                start_cm: num(spec.startCm),
-                length_cm: num(spec.lengthCm),
-            })),
-        });
+        };
+        const face = linerFaceValue(payload.face);
+        if (face) body.face = face;
+        body.liners = payload.liners.map(spec => ({
+            id: spec.id,
+            side: spec.side,
+            offset_cm: num(spec.offsetCm),
+            start_cm: num(spec.startCm),
+            length_cm: num(spec.lengthCm),
+        }));
+        return JSON.stringify(body);
     }
 
     function millRegionsConnected(first, second) {
@@ -1538,6 +1621,330 @@
         return path;
     }
 
+    function segmentDirection(start, end) {
+        const dx = end[0] - start[0];
+        const dy = end[1] - start[1];
+        const length = hypot(dx, dy);
+        if (length <= TOLERANCE_MM) return null;
+        return [dx / length, dy / length];
+    }
+
+    function segmentInwardSign(start, end, polygon) {
+        const normal = leftNormal(start, end);
+        const midpoint = [(start[0] + end[0]) / 2, (start[1] + end[1]) / 2];
+        const probe = [midpoint[0] + normal[0], midpoint[1] + normal[1]];
+        return pointInPolygon(probe, polygon) ? 1 : -1;
+    }
+
+    function reverseSpan(span) {
+        return {
+            start: span.end,
+            end: span.start,
+            startBoundary: span.endBoundary,
+            endBoundary: span.startBoundary,
+            startSawn: span.endSawn,
+            endSawn: span.startSawn,
+        };
+    }
+
+    function axisRectangle(points) {
+        const ring = (points || []).slice();
+        if (ring.length >= 2 && dist(ring[0], ring[ring.length - 1]) <= TOLERANCE_MM) ring.pop();
+        if (ring.length !== 4) return null;
+        const xs = ring.map(point => point[0]);
+        const ys = ring.map(point => point[1]);
+        const bounds = [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
+        if (bounds[2] - bounds[0] <= TOLERANCE_MM || bounds[3] - bounds[1] <= TOLERANCE_MM) return null;
+        for (let index = 0; index < ring.length; index += 1) {
+            const end = ring[(index + 1) % ring.length];
+            if (Math.abs(ring[index][0] - end[0]) > TOLERANCE_MM && Math.abs(ring[index][1] - end[1]) > TOLERANCE_MM) {
+                return null;
+            }
+        }
+        return bounds;
+    }
+
+    function bandProtrusions(bounds, overlap) {
+        const directions = [];
+        if (bounds[0] < overlap[0] - TOLERANCE_MM) directions.push("left");
+        if (bounds[2] > overlap[2] + TOLERANCE_MM) directions.push("right");
+        if (bounds[1] < overlap[1] - TOLERANCE_MM) directions.push("up");
+        if (bounds[3] > overlap[3] + TOLERANCE_MM) directions.push("down");
+        return directions;
+    }
+
+    function signToward(start, end, target) {
+        const normal = leftNormal(start, end);
+        const midpoint = [(start[0] + end[0]) / 2, (start[1] + end[1]) / 2];
+        const toward = [target[0] - midpoint[0], target[1] - midpoint[1]];
+        return (normal[0] * toward[0]) + (normal[1] * toward[1]) >= 0 ? 1 : -1;
+    }
+
+    function regionLCornerSpan(piece, items, indices, widthCm, endsByIndex) {
+        const bands = [];
+        const polygon = piecePolygonMm(piece);
+        for (let cursor = 0; cursor < indices.length; cursor += 1) {
+            const index = indices[cursor];
+            const spec = items[index];
+            const offset = num(spec.offsetCm != null ? spec.offsetCm : spec.offset_cm);
+            if (!Number.isFinite(offset)) return null;
+            let reference;
+            try {
+                reference = preparedReference(piece, spec.side, spec.startCm, spec.lengthCm);
+                if (!reference.clipped || reference.clipped.length !== 2) return null;
+                const edgeSign = inwardSign(reference.reference, polygon);
+                const near = offsetPolyline(reference.clipped, offset * 10, edgeSign);
+                const far = offsetPolyline(reference.clipped, (offset + num(widthCm)) * 10, edgeSign);
+                const region = near.concat(far.slice().reverse());
+                const bounds = axisRectangle(region);
+                if (!bounds || near.length !== 2 || far.length !== 2) return null;
+                const ends = endsByIndex && endsByIndex[index];
+                bands.push({
+                    near,
+                    bounds,
+                    startBoundary: reference.boundaryStart,
+                    endBoundary: reference.boundaryEnd,
+                    startSawn: ends ? ends.startSawn : null,
+                    endSawn: ends ? ends.endSawn : null,
+                });
+            } catch (error) {
+                return null;
+            }
+        }
+        const first = bands[0];
+        const second = bands[1];
+        const overlap = [
+            Math.max(first.bounds[0], second.bounds[0]),
+            Math.max(first.bounds[1], second.bounds[1]),
+            Math.min(first.bounds[2], second.bounds[2]),
+            Math.min(first.bounds[3], second.bounds[3]),
+        ];
+        if (overlap[2] - overlap[0] <= TOLERANCE_MM || overlap[3] - overlap[1] <= TOLERANCE_MM) return null;
+        const firstArms = bandProtrusions(first.bounds, overlap);
+        const secondArms = bandProtrusions(second.bounds, overlap);
+        if (firstArms.length !== 1 || secondArms.length !== 1) return null;
+        const horizontal = { left: true, right: true };
+        if (Boolean(horizontal[firstArms[0]]) === Boolean(horizontal[secondArms[0]])) return null;
+        const shared = [];
+        first.near.forEach((firstPoint, firstIndex) => {
+            second.near.forEach((secondPoint, secondIndex) => {
+                if (dist(firstPoint, secondPoint) <= TOLERANCE_MM) shared.push([firstIndex, secondIndex, firstPoint]);
+            });
+        });
+        if (shared.length !== 1) return null;
+        const firstCorner = shared[0][0];
+        const secondCorner = shared[0][1];
+        const corner = shared[0][2];
+        const arms = firstArms.concat(secondArms);
+        const armX = arms.includes("left") ? overlap[2] : overlap[0];
+        const armY = arms.includes("up") ? overlap[3] : overlap[1];
+        if (dist(corner, [armX, armY]) > TOLERANCE_MM) return null;
+
+        function oriented(band, cornerIndex) {
+            if (cornerIndex === 1) {
+                return {
+                    start: band.near[0],
+                    end: band.near[1],
+                    startBoundary: band.startBoundary,
+                    endBoundary: band.endBoundary,
+                    startSawn: band.startSawn,
+                    endSawn: band.endSawn,
+                };
+            }
+            return {
+                start: band.near[1],
+                end: band.near[0],
+                startBoundary: band.endBoundary,
+                endBoundary: band.startBoundary,
+                startSawn: band.endSawn,
+                endSawn: band.startSawn,
+            };
+        }
+
+        let lead = oriented(first, firstCorner);
+        let trail = reverseSpan(oriented(second, secondCorner));
+        let clipped = [lead.start, corner, trail.end];
+        if (clipped[2][0] < clipped[0][0] || (clipped[2][0] === clipped[0][0] && clipped[2][1] < clipped[0][1])) {
+            const swappedLead = reverseSpan(trail);
+            trail = reverseSpan(lead);
+            lead = swappedLead;
+            clipped = [lead.start, corner, trail.end];
+        }
+        const center = [(overlap[0] + overlap[2]) / 2, (overlap[1] + overlap[3]) / 2];
+        const sign = signToward(clipped[0], clipped[1], center);
+        if (signToward(clipped[1], clipped[2], center) !== sign) return null;
+        const firstDirection = segmentDirection(clipped[0], clipped[1]);
+        const secondDirection = segmentDirection(clipped[1], clipped[2]);
+        if (!firstDirection || !secondDirection) return null;
+        const dot = Math.abs((firstDirection[0] * secondDirection[0]) + (firstDirection[1] * secondDirection[1]));
+        if (dot > 1e-6) return null;
+        const obstacles = (endsByIndex || []).map(ends => ends && ends.obstacles).find(value => value && value.length) || null;
+        return {
+            clipped,
+            offsetCm: 0,
+            widthCm,
+            sign,
+            polygon,
+            boundaryStart: lead.startBoundary,
+            boundaryEnd: trail.endBoundary,
+            startSawn: lead.startSawn,
+            endSawn: trail.endSawn,
+            obstacles,
+        };
+    }
+
+    function lCornerSpan(piece, items, indices, widthCm, endsByIndex) {
+        const regionSpan = regionLCornerSpan(piece, items, indices, widthCm, endsByIndex);
+        if (regionSpan) return regionSpan;
+        const prepared = [];
+        const offsets = [];
+        for (let cursor = 0; cursor < indices.length; cursor += 1) {
+            const index = indices[cursor];
+            const spec = items[index];
+            const offset = num(spec.offsetCm);
+            if (!Number.isFinite(offset)) return null;
+            let reference;
+            try {
+                reference = preparedReference(piece, spec.side, spec.startCm, spec.lengthCm);
+            } catch (error) {
+                return null;
+            }
+            if (!reference.clipped || reference.clipped.length !== 2) return null;
+            const ends = endsByIndex && endsByIndex[index];
+            prepared.push({
+                start: reference.clipped[0],
+                end: reference.clipped[1],
+                startBoundary: reference.boundaryStart,
+                endBoundary: reference.boundaryEnd,
+                startSawn: ends ? ends.startSawn : null,
+                endSawn: ends ? ends.endSawn : null,
+            });
+            offsets.push(offset);
+        }
+        if (Math.abs(offsets[0] - offsets[1]) * 10 > TOLERANCE_MM) return null;
+        const joints = [[true, true], [true, false], [false, true], [false, false]];
+        const matches = [];
+        joints.forEach(joint => {
+            const firstPoint = joint[0] ? prepared[0].start : prepared[0].end;
+            const secondPoint = joint[1] ? prepared[1].start : prepared[1].end;
+            if (dist(firstPoint, secondPoint) <= TOLERANCE_MM) matches.push(joint);
+        });
+        if (matches.length !== 1) return null;
+        const firstAtStart = matches[0][0];
+        const secondAtStart = matches[0][1];
+        let lead = firstAtStart ? reverseSpan(prepared[0]) : prepared[0];
+        let trail = secondAtStart ? prepared[1] : reverseSpan(prepared[1]);
+        if (dist(lead.end, trail.start) > TOLERANCE_MM) return null;
+        let clipped = [lead.start, lead.end, trail.end];
+        if (clipped[2][0] < clipped[0][0] || (clipped[2][0] === clipped[0][0] && clipped[2][1] < clipped[0][1])) {
+            const reversedLead = reverseSpan(trail);
+            trail = reverseSpan(lead);
+            lead = reversedLead;
+            clipped = [lead.start, lead.end, trail.end];
+        }
+        const polygon = piecePolygonMm(piece);
+        const firstDirection = segmentDirection(clipped[0], clipped[1]);
+        const secondDirection = segmentDirection(clipped[1], clipped[2]);
+        if (!firstDirection || !secondDirection) return null;
+        const dot = Math.abs((firstDirection[0] * secondDirection[0]) + (firstDirection[1] * secondDirection[1]));
+        if (dot > 1e-6) return null;
+        const inward = segmentInwardSign(clipped[0], clipped[1], polygon);
+        if (segmentInwardSign(clipped[1], clipped[2], polygon) !== inward) return null;
+        const obstacles = (endsByIndex || []).map(ends => ends && ends.obstacles).find(value => value && value.length) || null;
+        return {
+            clipped,
+            offsetCm: offsets[0],
+            widthCm,
+            sign: inward,
+            polygon,
+            boundaryStart: lead.startBoundary,
+            boundaryEnd: trail.endBoundary,
+            startSawn: lead.startSawn,
+            endSawn: trail.endSawn,
+            obstacles,
+        };
+    }
+
+    function joinedLToolpathMm(piece, items, indices, widthCm, cutterDiameterMm, endsByIndex) {
+        const span = lCornerSpan(piece, items, indices, widthCm, endsByIndex);
+        if (!span) return null;
+        let centers;
+        try {
+            centers = cutterCenterOffsetsMm(num(widthCm) * 10, num(cutterDiameterMm));
+        } catch (error) {
+            return null;
+        }
+        const radius = num(cutterDiameterMm) / 2;
+        const sawStart = resolveSawn(span.startSawn, span.boundaryStart);
+        const sawEnd = resolveSawn(span.endSawn, span.boundaryEnd);
+        if ((!sawStart || !sawEnd) && centers.length < 2) return null;
+        let lines;
+        try {
+            lines = spanCutterLines(span.clipped, {
+                sign: span.sign,
+                polygon: span.polygon,
+                centers,
+                offsetMm: num(span.offsetCm) * 10,
+                radius,
+                extendStart: span.boundaryStart,
+                extendEnd: span.boundaryEnd,
+                obstacles: span.obstacles,
+            });
+        } catch (error) {
+            return null;
+        }
+        if (lines.some(line => line.length < 3)) return null;
+        let path = [];
+        lines.forEach((line, index) => {
+            const sequence = index % 2 ? line.slice().reverse() : line.slice();
+            if (path.length && dist(path[path.length - 1], sequence[0]) <= 1e-6) sequence.shift();
+            sequence.forEach(point => path.push(point));
+        });
+        if (!sawStart) path = prependClosure(path, lines.map(line => line[0]));
+        if (!sawEnd) path = appendClosure(path, lines.map(line => line[line.length - 1]), lines[lines.length - 1]);
+        return path.length >= 2 ? path : null;
+    }
+
+    function bandPolygon(reference, offsetMm, widthMm, sign) {
+        const near = offsetPolyline(reference, offsetMm, sign);
+        const far = offsetPolyline(reference, offsetMm + widthMm, sign);
+        return near.concat(far.slice().reverse());
+    }
+
+    function mergedRegionPolygonsMm(piece, specs, widthCm) {
+        const items = (specs || []).filter(Boolean).map(spec => ({
+            side: spec.side,
+            offsetCm: spec.offsetCm != null ? spec.offsetCm : spec.offset_cm,
+            startCm: spec.startCm != null ? spec.startCm : spec.start_cm,
+            lengthCm: spec.lengthCm != null ? spec.lengthCm : spec.length_cm,
+        }));
+        if (!items.length) return [];
+        const regions = items.map(spec => regionPolygonMm(
+            piece, spec.side, spec.offsetCm, widthCm, spec.startCm, spec.lengthCm
+        ));
+        if (items.length === 1) return regions;
+        const consumed = new Set();
+        const joined = new Map();
+        connectedLinerComponents(regions).forEach(component => {
+            if (component.length !== 2) return;
+            const span = lCornerSpan(piece, items, component, widthCm, null);
+            if (!span) return;
+            joined.set(component[0], span);
+            consumed.add(component[1]);
+        });
+        const polygons = [];
+        items.forEach((_spec, index) => {
+            if (consumed.has(index)) return;
+            const span = joined.get(index);
+            if (!span) {
+                polygons.push(regions[index]);
+                return;
+            }
+            polygons.push(bandPolygon(span.clipped, num(span.offsetCm) * 10, num(widthCm) * 10, span.sign));
+        });
+        return polygons;
+    }
+
     function mergedToolpathsMm(piece, specs, widthCm, cutterDiameterMm, endsByIndex) {
         const items = (specs || []).filter(Boolean);
         if (!items.length) return [];
@@ -1565,8 +1972,23 @@
             return regionPolygonMm(piece, item.side, item.offsetCm, widthCm, item.startCm, item.lengthCm);
         });
         const radius = num(cutterDiameterMm) / 2;
+        const normalized = items.map(read);
         const paths = [];
         connectedLinerComponents(regions).forEach(component => {
+            if (component.length === 2) {
+                const joined = joinedLToolpathMm(
+                    piece,
+                    normalized,
+                    component,
+                    widthCm,
+                    cutterDiameterMm,
+                    endsByIndex
+                );
+                if (joined) {
+                    paths.push(joined);
+                    return;
+                }
+            }
             const covered = [];
             component.forEach(index => {
                 const spec = read(items[index]);
@@ -1637,9 +2059,12 @@
         syntheticOverlay,
         summary,
         parseDoorLiners,
+        doorLinerFace,
+        linerFaceValue,
         serializeDoorLiners,
         allocateLinerId,
         mergedToolpathsMm,
+        mergedRegionPolygonsMm,
         sawnBoundaryEnds,
         placeLocalPath,
     });

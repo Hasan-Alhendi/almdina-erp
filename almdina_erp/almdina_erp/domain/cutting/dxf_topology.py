@@ -98,6 +98,11 @@ class ExpectedPieceEvidence:
     # Missing historical evidence keeps the current deduction. Explicit False
     # measures the opening from the finished edge of an undeducted blank.
     deduct_edge_thickness: bool = True
+    glass_margin_mode: str = ""
+    glass_margin_top_mm: float | None = None
+    glass_margin_bottom_mm: float | None = None
+    glass_margin_right_mm: float | None = None
+    glass_margin_left_mm: float | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -944,22 +949,35 @@ def _measured_axis_insets(
 
 
 def _expected_glass_insets(evidence: ExpectedPieceEvidence) -> dict[str, float] | None:
-    margin = evidence.glass_margin_mm
-    if margin is None:
-        return None
-    if evidence.deduct_edge_thickness:
-        left = float(evidence.long_left_mm or 0.0)
-        right = float(evidence.long_right_mm or 0.0)
-        bottom = float(evidence.width_bottom_mm or 0.0)
-        top = float(evidence.width_top_mm or 0.0)
+    if evidence.glass_margin_mode == "Individual Sides":
+        margins = {
+            "left": evidence.glass_margin_left_mm,
+            "right": evidence.glass_margin_right_mm,
+            "bottom": evidence.glass_margin_bottom_mm,
+            "top": evidence.glass_margin_top_mm,
+        }
+        if any(value is None for value in margins.values()):
+            return None
     else:
-        left = right = bottom = top = 0.0
-    return {
-        "left": float(margin) - left,
-        "right": float(margin) - right,
-        "bottom": float(margin) - bottom,
-        "top": float(margin) - top,
-    }
+        margin = evidence.glass_margin_mm
+        if margin is None:
+            return None
+        margins = {
+            "left": float(margin),
+            "right": float(margin),
+            "bottom": float(margin),
+            "top": float(margin),
+        }
+    if evidence.deduct_edge_thickness:
+        bands = {
+            "left": float(evidence.long_left_mm or 0.0),
+            "right": float(evidence.long_right_mm or 0.0),
+            "bottom": float(evidence.width_bottom_mm or 0.0),
+            "top": float(evidence.width_top_mm or 0.0),
+        }
+    else:
+        bands = {"left": 0.0, "right": 0.0, "bottom": 0.0, "top": 0.0}
+    return {side: float(margins[side]) - bands[side] for side in margins}
 
 
 def _proven_glass_opening_pair(

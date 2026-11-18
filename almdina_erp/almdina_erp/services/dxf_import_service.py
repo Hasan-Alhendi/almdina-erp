@@ -1441,6 +1441,15 @@ def _expected_order_pieces(order: Any) -> list[dict[str, Any]]:
                     ),
                     "glass_margin_mm": glass_margin_mm,
                     "margin_state": margin_state,
+                    "glass_margin_mode": str(getattr(row, "glass_margin_mode", "") or ""),
+                    "glass_margin_top_mm": _stored_margin_mm(getattr(row, "glass_margin_top_mm", None))
+                    if hasattr(row, "glass_margin_top_mm") else None,
+                    "glass_margin_bottom_mm": _stored_margin_mm(getattr(row, "glass_margin_bottom_mm", None))
+                    if hasattr(row, "glass_margin_bottom_mm") else None,
+                    "glass_margin_right_mm": _stored_margin_mm(getattr(row, "glass_margin_right_mm", None))
+                    if hasattr(row, "glass_margin_right_mm") else None,
+                    "glass_margin_left_mm": _stored_margin_mm(getattr(row, "glass_margin_left_mm", None))
+                    if hasattr(row, "glass_margin_left_mm") else None,
                     "edge_long_left": cint(getattr(row, "edge_long_left", 0)),
                     "edge_long_right": cint(getattr(row, "edge_long_right", 0)),
                     "edge_width_top": cint(getattr(row, "edge_width_top", 0)),
@@ -1479,6 +1488,11 @@ def _expected_topology_evidence(order: Any) -> tuple[ExpectedPieceEvidence, ...]
                 if piece.get("glass_margin_mm") in (None, "")
                 else _num(piece.get("glass_margin_mm"))
             ),
+            glass_margin_mode=str(piece.get("glass_margin_mode") or ""),
+            glass_margin_top_mm=piece.get("glass_margin_top_mm"),
+            glass_margin_bottom_mm=piece.get("glass_margin_bottom_mm"),
+            glass_margin_right_mm=piece.get("glass_margin_right_mm"),
+            glass_margin_left_mm=piece.get("glass_margin_left_mm"),
             long_left_mm=_side_band_mm(piece, "edge_long_left", "edge_long_thickness_mm"),
             long_right_mm=_side_band_mm(piece, "edge_long_right", "edge_long_thickness_mm"),
             width_bottom_mm=_side_band_mm(
@@ -1701,11 +1715,27 @@ def _glass_opening_issues(labeled: list[dict[str, Any]]) -> list[DxfValidationIs
         if piece.get("piece_type") != "Glass":
             continue
         spec = piece.get("_glass_spec") or {}
+        from almdina_erp.almdina_erp.domain.orders.glass_margins import (
+            MODE_INDIVIDUAL,
+            resolve_glass_side_margins,
+        )
+
+        side_margins = None
+        if spec.get("margin_mode") == MODE_INDIVIDUAL:
+            side_margins = resolve_glass_side_margins({
+                "piece_type": "Glass",
+                "glass_margin_mode": MODE_INDIVIDUAL,
+                "glass_margin_top_mm": spec.get("margin_top_mm"),
+                "glass_margin_bottom_mm": spec.get("margin_bottom_mm"),
+                "glass_margin_right_mm": spec.get("margin_right_mm"),
+                "glass_margin_left_mm": spec.get("margin_left_mm"),
+            })
         decision = validate_glass_dxf_opening(
             outer=piece.get("_outline_mm") or (),
             holes=piece.get("_holes_mm") or (),
             piece_type="Glass",
             margin_mm=spec.get("margin_mm"),
+            side_margins=side_margins,
             long_left_mm=spec.get("long_left_mm"),
             long_right_mm=spec.get("long_right_mm"),
             width_bottom_mm=spec.get("width_bottom_mm"),
@@ -1756,6 +1786,11 @@ def _apply_expected_identity(
     piece["_glass_spec"] = {
         "margin_mm": candidate.get("glass_margin_mm"),
         "margin_state": candidate.get("margin_state") or "",
+        "margin_mode": candidate.get("glass_margin_mode") or "",
+        "margin_top_mm": candidate.get("glass_margin_top_mm"),
+        "margin_bottom_mm": candidate.get("glass_margin_bottom_mm"),
+        "margin_right_mm": candidate.get("glass_margin_right_mm"),
+        "margin_left_mm": candidate.get("glass_margin_left_mm"),
         "long_left_mm": _side_band_mm(candidate, "edge_long_left", "edge_long_thickness_mm"),
         "long_right_mm": _side_band_mm(candidate, "edge_long_right", "edge_long_thickness_mm"),
         "width_bottom_mm": _side_band_mm(candidate, "edge_width_bottom", "edge_width_thickness_mm"),

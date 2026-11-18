@@ -29,9 +29,9 @@ function load(...relativePaths) {
 const { CanvasRenderer } = load("public/js/board_editor/canvas_renderer.js");
 const page = fs.readFileSync(path.join(root, "almdina_erp/page/board_editor/board_editor.js"), "utf8");
 
-assert.match(page, /canvas_renderer\.js\?v=57/);
-assert.match(page, /controller\.js\?v=56/);
-assert.match(page, /store\.js\?v=23/);
+assert.match(page, /canvas_renderer\.js\?v=58/);
+assert.match(page, /controller\.js\?v=57/);
+assert.match(page, /store\.js\?v=24/);
 
 function pointerDrift(camera, focal, world) {
     const screen = CanvasRenderer.worldToScreen(world.x, world.y, camera);

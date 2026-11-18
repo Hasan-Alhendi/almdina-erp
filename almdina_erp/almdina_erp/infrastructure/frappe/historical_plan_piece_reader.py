@@ -16,7 +16,6 @@ from almdina_erp.almdina_erp.domain.cutting.plan_fingerprint_contract import (
     PlanFingerprintContractError, freeze_geometry_piece,
 )
 from almdina_erp.almdina_erp.domain.orders.extra_addons import physical_cut_quantity
-from almdina_erp.almdina_erp.domain.orders.piece_policy import canonical_glass_margin_mm
 
 
 _ADDONS = (
@@ -95,9 +94,11 @@ def historical_geometry_piece(row: Any) -> dict[str, Any]:
         "edge_width_thickness_mm": flt(row.edge_width_thickness_mm),
         "liner_specs_json": getattr(row, "liner_specs_json", "") or "",
     }
-    margin = canonical_glass_margin_mm(getattr(row, "glass_margin_mm", None), row.piece_type or "Regular")
-    if margin is not None:
-        piece["glass_margin_mm"] = margin
+    from almdina_erp.almdina_erp.domain.orders.glass_margins import (
+        fingerprint_glass_fields,
+    )
+
+    piece.update(fingerprint_glass_fields(row))
     for enabled, prefix in _ADDONS:
         side = str(getattr(row, f"{prefix}_reference_side", "") or "")
         width = flt(getattr(row, f"{prefix}_width_cm", 0))

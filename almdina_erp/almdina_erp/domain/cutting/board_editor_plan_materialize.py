@@ -481,6 +481,17 @@ def _materialize_piece(
         "overlays": _overlays_from_machining(posed.get("machining_paths") or []),
         "piece_type": piece_type or source.get("piece_type") or "Regular",
     }
+    # Nesting's 90° swap is already in the posed outline. `rotated` stays as
+    # the dimension contract and apply_rotated_to_geometry stays false, so the
+    # outline is not spun again. Edge bands must not infer that same quarter
+    # turn from `rotated`: record it explicitly, and record 0 once the editor
+    # adds its own angle.
+    if (
+        bool(source.get("rotated"))
+        and not isinstance(piece.get("rotation_quarter_turns"), int)
+        and not isinstance(piece.get("corner_rotation_quarter_turns"), int)
+    ):
+        piece["rotation_quarter_turns"] = 0 if abs(num(posed.get("rotation_deg"))) > 1e-6 else 1
     classification = decision_from_values(
         posed.get("resource_kind") or source.get("resource_kind"),
         posed.get("offcut_source_party")

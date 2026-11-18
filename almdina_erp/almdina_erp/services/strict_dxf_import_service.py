@@ -11,6 +11,7 @@ from almdina_erp.almdina_erp.domain.cutting.corner_contour_rotation import (
     match_corner_contour,
     measure_corner_remainings_cm,
     measure_l_remainings_cm,
+    orientations_explaining_corner_contour,
 )
 from almdina_erp.almdina_erp.domain.cutting.liner_geometry import (
     LINER_SHAPE_MISMATCH as LINER_SHAPE_CODE,
@@ -33,6 +34,7 @@ from almdina_erp.almdina_erp.domain.cutting.machining_overlay import (
     machining_values,
 )
 from almdina_erp.almdina_erp.domain.cutting.regular_machining_orientation import (
+    match_corner_machining_orientation,
     match_regular_machining_orientation,
 )
 from almdina_erp.almdina_erp.domain.cutting.dxf_applied_trim import (
@@ -257,6 +259,11 @@ def _proxy_order(
         # stays missing so import can tell a dropped field from a blank value.
         for fieldname in (
             "glass_margin_mm",
+            "glass_margin_mode",
+            "glass_margin_top_mm",
+            "glass_margin_bottom_mm",
+            "glass_margin_right_mm",
+            "glass_margin_left_mm",
             "edge_long_left",
             "edge_long_right",
             "edge_width_top",
@@ -1048,6 +1055,10 @@ def _bind_corner_edge_rotation(
     candidate: dict[str, Any],
     *,
     allow_piece_mirroring: object = None,
+    order: Any | None = None,
+    sheet: dict[str, Any] | None = None,
+    cutter_diameter_mm: float | None = None,
+    cutter_diameters_mm: dict[str, float | None] | None = None,
 ) -> DxfValidationIssue | None:
     """Record the unique dihedral transform used to place corner edge bands.
 
@@ -1078,7 +1089,19 @@ def _bind_corner_edge_rotation(
         if outer is not None
         else None
     )
-    if match is None or match.quarter_turns is None:
+    proven = None
+    if match is not None and match.quarter_turns is None and match.reason == "ambiguous":
+        # A symmetric contour is not a license to guess. Toolpaths may select
+        # the one signature that places the ordered machining on the drawn edges.
+        proven = _proven_corner_orientation(
+            piece,
+            candidate,
+            order,
+            sheet=sheet,
+            cutter_diameter_mm=cutter_diameter_mm,
+            cutter_diameters_mm=cutter_diameters_mm,
+        )
+    if match is None or (match.quarter_turns is None and proven is None):
         if outer is not None:
             mismatch = _corner_dimensions_mismatch_issue(
                 piece,
@@ -1110,7 +1133,9 @@ def _bind_corner_edge_rotation(
             },
         )
 
-    if match.quarter_turns and not spec.allow_rotation:
+    quarter_turns = int(proven[0] if proven is not None else match.quarter_turns)
+    mirrored = bool(proven[1] if proven is not None else match.mirrored)
+    if quarter_turns and not spec.allow_rotation:
         actual_w, actual_h = _actual_dimensions(piece)
         return _dimension_issue(
             FORBIDDEN_ROTATION,
@@ -1119,7 +1144,7 @@ def _bind_corner_edge_rotation(
             actual_w=actual_w,
             actual_h=actual_h,
         )
-    if match.mirrored and not piece_mirroring_allowed(allow_piece_mirroring):
+    if mirrored and not piece_mirroring_allowed(allow_piece_mirroring):
         return issue(
             FORBIDDEN_MIRRORING,
             CATEGORY_DIMENSIONS,
@@ -1131,8 +1156,8 @@ def _bind_corner_edge_rotation(
             params={"piece_type": spec.piece_type},
         )
 
-    piece["corner_rotation_quarter_turns"] = int(match.quarter_turns)
-    piece["corner_mirrored"] = 1 if match.mirrored else 0
+    piece["corner_rotation_quarter_turns"] = quarter_turns
+    piece["corner_mirrored"] = 1 if mirrored else 0
     return None
 
 
@@ -1160,6 +1185,84 @@ def _shifted_board_mm(sheet: dict[str, Any] | None) -> tuple[float, float, float
     applied_w = max(0.0, (full_w - float(usable_w) * 10.0) / 2.0) if usable_w is not None else 0.0
     applied_l = max(0.0, (full_h - float(usable_h) * 10.0) / 2.0) if usable_h is not None else 0.0
     return (-applied_w, -applied_l, full_w - applied_w, full_h - applied_l)
+
+
+def _bind_corner_machining_orientation(
+    piece: dict[str, Any],
+    spec: OrderPieceCutSpec,
+    order: Any | None,
+    *,
+    cutter_diameter_mm: float | None,
+    cutter_diameters_mm: dict[str, float | None] | None,
+    sheet: dict[str, Any] | None,
+) -> DxfValidationIssue | None:
+    """Prove an unrecorded symmetric corner from its machining paths.
+
+    Edge-band binding may already have recorded the orientation. A door with
+    no edge markers still has to prove it here. A unique contour keeps the
+    existing per-addon check. An unproven symmetric contour is rejected once.
+    """
+
+    if not is_corner_cut(spec.piece_type) or order is None:
+        return None
+    if "corner_rotation_quarter_turns" in piece:
+        return None
+    row = _row_for_spec(order, spec)
+    settings = machining_values(row) if row is not None else {}
+    if not any(
+        liner_parameters_active(
+            enabled=bool(item.get("enabled")),
+            side=str(item.get("side") or ""),
+            offset_cm=float(item.get("offset_cm") or 0),
+            width_cm=float(item.get("width_cm") or 0),
+        )
+        for item in settings.values()
+    ):
+        return None
+    outer = _outer_ring_mm(piece)
+    notch_width_cm, notch_length_cm = _contour_notch_cm(spec)
+    match = (
+        match_corner_contour(
+            outer,
+            piece_type=spec.piece_type,
+            position=str(spec.clipped_corner_position or ""),
+            width_cm=float(spec.cut_width_cm),
+            length_cm=float(spec.cut_length_cm),
+            cut_width_cm=notch_width_cm,
+            cut_length_cm=notch_length_cm,
+        )
+        if outer is not None
+        else None
+    )
+    if match is not None and match.quarter_turns is not None:
+        return None
+    if match is None or match.reason != "ambiguous":
+        return liner_geometry_issue(
+            LinerMeasurement(False, LINER_SHAPE_CODE, "shape", "", "", "orientation_unresolved"),
+            source_piece_no=spec.row_index,
+            copy_no=int(piece.get("copy_no") or 1),
+            piece_type=spec.piece_type,
+            overlay_kind="liner",
+        )
+    proven = _proven_corner_orientation(
+        piece,
+        {"spec": spec, "copy_no": piece.get("copy_no"), "label": piece.get("label")},
+        order,
+        sheet=sheet,
+        cutter_diameter_mm=cutter_diameter_mm,
+        cutter_diameters_mm=cutter_diameters_mm,
+    )
+    if proven is None:
+        return liner_geometry_issue(
+            LinerMeasurement(False, LINER_SHAPE_CODE, "shape", "", "", "orientation_unresolved"),
+            source_piece_no=spec.row_index,
+            copy_no=int(piece.get("copy_no") or 1),
+            piece_type=spec.piece_type,
+            overlay_kind="liner",
+        )
+    piece["corner_rotation_quarter_turns"] = proven[0]
+    piece["corner_mirrored"] = 1 if proven[1] else 0
+    return None
 
 
 def _corner_liner_issue(
@@ -1340,6 +1443,87 @@ def _layer_cutter_diameter_mm(
     return diameter if diameter > 0 else None
 
 
+def _proven_corner_orientation(
+    piece: dict[str, Any],
+    candidate: dict[str, Any],
+    order: Any | None,
+    *,
+    sheet: dict[str, Any] | None,
+    cutter_diameter_mm: float | None,
+    cutter_diameters_mm: dict[str, float | None] | None,
+) -> tuple[int, bool] | None:
+    """Select the one contour transform whose machining paths match the order.
+
+    An imported file does not carry the generator's orientation record. A
+    symmetric outline alone is not proof. The paths are.
+    """
+
+    if order is None:
+        return None
+    spec: OrderPieceCutSpec = candidate["spec"]
+    row = _row_for_spec(order, spec)
+    if row is None or not is_corner_cut(spec.piece_type):
+        return None
+    geometry = piece.get("geometry") if isinstance(piece.get("geometry"), dict) else {}
+    outer = geometry.get("outer") or ()
+    if len(outer) < 3:
+        return None
+    contour = _outer_ring_mm(piece)
+    if contour is None:
+        return None
+    notch_width_cm, notch_length_cm = _contour_notch_cm(spec)
+    directed = piece.get("directed_contour_mm")
+    explaining = orientations_explaining_corner_contour(
+        contour,
+        piece_type=spec.piece_type,
+        position=str(spec.clipped_corner_position or ""),
+        width_cm=float(spec.cut_width_cm),
+        length_cm=float(spec.cut_length_cm),
+        cut_width_cm=notch_width_cm,
+        cut_length_cm=notch_length_cm,
+        edge_bands=_corner_band_tokens(spec) if _corner_edge_markers_selected(piece) else None,
+        directed_ring_mm=directed if isinstance(directed, list) else None,
+    )
+    grouped: dict[str, list] = {}
+    for overlay in piece.get("overlays") or []:
+        if not isinstance(overlay, dict):
+            continue
+        path = ((overlay.get("geometry") or {}).get("path") or ())
+        if len(path) >= 2:
+            grouped.setdefault(str(overlay.get("kind") or ""), []).append(
+                localize_path(path, outer)
+            )
+    if not grouped:
+        return None
+    paths = {
+        kind: items[0] if len(items) == 1 else items
+        for kind, items in grouped.items()
+    }
+    result = match_corner_machining_orientation(
+        piece=LinerPiece(
+            spec.piece_type,
+            float(spec.cut_width_cm),
+            float(spec.cut_length_cm),
+            str(spec.clipped_corner_position or ""),
+            notch_width_cm,
+            notch_length_cm,
+        ),
+        host=piece,
+        outer=outer,
+        sheet_pieces=(sheet or {}).get("pieces") or (),
+        overlay_paths=paths,
+        settings=machining_values(row),
+        candidates=explaining,
+        cutter_diameter_mm=cutter_diameter_mm,
+        cutter_diameters_mm=cutter_diameters_mm,
+        origin_mm=(float(piece.get("x") or 0.0) * 10.0, float(piece.get("y") or 0.0) * 10.0),
+        board_mm=_shifted_board_mm(sheet),
+    )
+    if result.reason != "unique" or result.quarter_turns is None:
+        return None
+    return (int(result.quarter_turns), bool(result.mirrored))
+
+
 def _corner_machining_issues(
     piece: dict[str, Any],
     spec: OrderPieceCutSpec,
@@ -1349,6 +1533,16 @@ def _corner_machining_issues(
     cutter_diameters_mm: dict[str, float | None] | None = None,
     sheet: dict[str, Any] | None = None,
 ):
+    unresolved = _bind_corner_machining_orientation(
+        piece,
+        spec,
+        order,
+        cutter_diameter_mm=cutter_diameter_mm,
+        cutter_diameters_mm=cutter_diameters_mm,
+        sheet=sheet,
+    )
+    if unresolved is not None:
+        return [unresolved]
     issues = []
     for addon in MACHINING_ADDONS:
         found = _corner_liner_issue(
@@ -1554,6 +1748,10 @@ def _apply_strict_dimension_contract(
                     allow_piece_mirroring=(
                         getattr(order, "allow_piece_mirroring", None) if order is not None else None
                     ),
+                    order=order,
+                    sheet=sheet,
+                    cutter_diameter_mm=cutter_diameter_mm,
+                    cutter_diameters_mm=cutter_diameters_mm,
                 )
                 if binding_error:
                     issues.append(binding_error)
@@ -1785,6 +1983,10 @@ def _apply_strict_dimension_contract(
                 allow_piece_mirroring=(
                     getattr(order, "allow_piece_mirroring", None) if order is not None else None
                 ),
+                order=order,
+                sheet=sheet,
+                cutter_diameter_mm=cutter_diameter_mm,
+                cutter_diameters_mm=cutter_diameters_mm,
             )
             if binding_error:
                 issues.append(binding_error)

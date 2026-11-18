@@ -34,6 +34,11 @@ from almdina_erp.almdina_erp.domain.security.authorization import (
     Capability,
     capability_definition,
 )
+from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_command_context import (
+    PLAN_COMMAND_CAPABILITIES,
+    PLAN_COMMAND_FLAG,
+    is_authorized_plan_command,
+)
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -161,6 +166,30 @@ class UseBoardEditorIndependenceTests(unittest.TestCase):
         self.assertTrue(view_only["read"])
         self.assertFalse(view_only["create"])
         self.assertFalse(view_only["write"])
+
+
+class _Flags(dict):
+    pass
+
+
+class _CommandDoc:
+    def __init__(self) -> None:
+        self.flags = _Flags()
+
+
+class UseBoardEditorCommandContextTests(unittest.TestCase):
+    def test_board_editor_command_flag_is_authorized_for_plan_persistence(self) -> None:
+        self.assertIn(Capability.USE_BOARD_EDITOR, PLAN_COMMAND_CAPABILITIES)
+        self.assertIn(Capability.EDIT_OPTIMIZER_SETTINGS, PLAN_COMMAND_CAPABILITIES)
+
+        doc = _CommandDoc()
+        self.assertFalse(is_authorized_plan_command(doc))
+        doc.flags[PLAN_COMMAND_FLAG] = Capability.USE_BOARD_EDITOR
+        self.assertTrue(is_authorized_plan_command(doc))
+        doc.flags[PLAN_COMMAND_FLAG] = Capability.EDIT_ORDER
+        self.assertFalse(is_authorized_plan_command(doc))
+        doc.flags[PLAN_COMMAND_FLAG] = "use_board_editor"
+        self.assertTrue(is_authorized_plan_command(doc))
 
 
 class UseBoardEditorGateTests(unittest.TestCase):

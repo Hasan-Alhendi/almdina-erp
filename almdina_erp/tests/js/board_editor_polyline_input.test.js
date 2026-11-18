@@ -1095,9 +1095,9 @@ function screenSide(rotation, x2, y2) {
     };
 }
 const turnedDown = screenSide(90, 0, 200);
-assert.equal(turnedDown.placed.side, "right");
+assert.equal(turnedDown.placed.side, "left");
 assert.equal(turnedDown.placed.above, true);
-assert.equal(turnedDown.placed.left, turnedDown.startScreen.x + hudGap);
+assert.equal(turnedDown.placed.left, turnedDown.startScreen.x - 180 - hudGap);
 assert.equal(turnedDown.placed.top, turnedDown.startScreen.y - 28 - hudGap);
 assert.notEqual(turnedDown.placed.left, turnedDown.endScreen.x + hudGap);
 const turnedRight = screenSide(180, 200, 0);

@@ -5,6 +5,7 @@
 
     const TAB_RULES = Object.freeze({
         results_tab: "view_cutting_plan",
+        operational_files_tab: "view_cnc_operational_files",
         cost_tab: "view_costs",
     });
 
@@ -103,6 +104,7 @@
     function visibilityState(frm) {
         return {
             results_tab: can(frm, TAB_RULES.results_tab),
+            operational_files_tab: can(frm, TAB_RULES.operational_files_tab),
             cost_tab: can(frm, TAB_RULES.cost_tab) || can(frm, "print_customer_invoice"),
         };
     }

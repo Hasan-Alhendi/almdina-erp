@@ -743,8 +743,12 @@
 
     function glassOpeningMissing(piece) {
         if (String((piece && piece.piece_type) || "") !== "Glass") return false;
-        const margin = Number(piece && piece.glass_margin_mm);
-        if (!(margin > 0)) return false;
+        const individual = String((piece && piece.glass_margin_mode) || "") === "Individual Sides";
+        const margin = individual
+            ? ["glass_margin_top_mm", "glass_margin_bottom_mm", "glass_margin_right_mm", "glass_margin_left_mm"]
+                .some((name) => Number(piece && piece[name]) > 0)
+            : Number(piece && piece.glass_margin_mm) > 0;
+        if (!margin) return false;
         const persisted = piece.geometry && Array.isArray(piece.geometry.holes)
             ? piece.geometry.holes
             : null;
@@ -852,6 +856,44 @@
             return [next[0] + originX, next[1] + originY];
         });
         return topologyDxfPoints(placed, placement);
+    }
+
+    function placeLinerLocalRing(piece, placement, local) {
+        const liner = window.AlmdinaLinerGeometry;
+        if (!liner || typeof liner.pieceFromRow !== "function" || typeof liner.transformPoint !== "function") return null;
+        if (!Array.isArray(local) || local.length < 3) return null;
+        const linerPiece = liner.pieceFromRow(piece);
+        const turns = Number.isInteger(piece.rotation_quarter_turns)
+            ? piece.rotation_quarter_turns
+            : (Number.isInteger(piece.corner_rotation_quarter_turns)
+                ? piece.corner_rotation_quarter_turns : (piece.rotated ? 1 : 0));
+        const mirrored = Boolean(piece.corner_mirrored);
+        const originX = num(piece.x) * 10;
+        const originY = num(piece.y) * 10;
+        const placed = local.map(point => {
+            const next = liner.transformPoint(point, mirrored, turns, linerPiece.widthCm * 10, linerPiece.lengthCm * 10);
+            return [next[0] + originX, next[1] + originY];
+        });
+        return topologyDxfPoints(placed, placement);
+    }
+
+    function linerRegionRings(piece, placement, specs) {
+        const liner = window.AlmdinaLinerGeometry;
+        if (
+            liner
+            && specs.length > 1
+            && typeof liner.mergedRegionPolygonsMm === "function"
+            && typeof liner.pieceFromRow === "function"
+        ) {
+            try {
+                const linerPiece = liner.pieceFromRow(piece);
+                const localRings = liner.mergedRegionPolygonsMm(linerPiece, specs, specs[0].widthCm);
+                return (localRings || []).map(local => placeLinerLocalRing(piece, placement, local)).filter(Boolean);
+            } catch (error) {
+                return specs.map(spec => linerRegionPoints(piece, placement, spec)).filter(Boolean);
+            }
+        }
+        return specs.map(spec => linerRegionPoints(piece, placement, spec)).filter(Boolean);
     }
 
     function buildDxf(plan, options) {
@@ -1046,8 +1088,10 @@
                         : [(regionEngine && typeof regionEngine.specFrom === "function"
                             ? regionEngine.specFrom(piece, addon.kind)
                             : null)].filter(Boolean);
-                    specs.forEach(spec => {
-                        const region = linerRegionPoints(piece, placement, spec);
+                    const regions = addon.kind === "liner"
+                        ? linerRegionRings(piece, placement, specs)
+                        : specs.map(spec => linerRegionPoints(piece, placement, spec)).filter(Boolean);
+                    regions.forEach(region => {
                         if (!region) return;
                         entities += lwpolyline(FINISHED_GEOMETRY_LAYER, region, true);
                         regionEmitted.add(addon.kind);
@@ -1098,6 +1142,9 @@
         let dxf = "";
         dxf += pair(0, "SECTION") + pair(2, "HEADER");
         dxf += pair(9, "$ACADVER") + pair(1, DXF_VERSION);
+        // Millimetre drawing units. CNC readers treat $INSUNITS 4 as mm and
+        // refuse 0 as unspecified.
+        dxf += pair(9, "$INSUNITS") + pair(70, 4);
         dxf += pair(9, "$EXTMIN") + pair(10, 0) + pair(20, 0) + pair(30, 0);
         dxf += pair(9, "$EXTMAX") + pair(10, dxfNumber(extmaxX)) + pair(20, dxfNumber(extmaxY)) + pair(30, 0);
         dxf += pair(0, "ENDSEC");
@@ -1233,6 +1280,7 @@
                     }
                 } else if (row) {
                     addons.forEach(addon => {
+                        if (addon.specs && row[addon.specs]) piece[addon.specs] = row[addon.specs];
                         if ((piece.overlays || []).some(item => item && item.kind === addon.kind)) return;
                         if (!num(row[addon.enabled])) return;
                         const side = String(row[addon.side] || "").trim();
@@ -1307,12 +1355,8 @@
     }
 
     function fetchValidatedPlan(args) {
-        return frappe.call({
-            method: VALIDATED_PLAN_METHOD,
-            args,
-            freeze: true,
-            freeze_message: __("Validating DXF geometry on server..."),
-        });
+
+
     }
 
     function fetchOriginalUploadedDxf(args) {
