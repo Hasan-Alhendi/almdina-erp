@@ -811,7 +811,6 @@ def _export_deduct_edge_thickness(value: object) -> int:
     return 1 if coerce_deduct_edge_thickness(value) else 0
 
 
-@frappe.whitelist()
 def _attach_plan_text_outlines(order: Any, plan: Any, snapshot: dict[str, Any]) -> dict[str, Any]:
     """Add approved text in sheet coordinates. The stored plan snapshot stays unchanged."""
 
@@ -829,6 +828,7 @@ def _attach_plan_text_outlines(order: Any, plan: Any, snapshot: dict[str, Any]) 
     return attach_approved_text_outlines(snapshot, rows)
 
 
+@frappe.whitelist()
 def get_validated_dxf_plan(
     order_name: str | None = None,
     doc: str | dict[str, Any] | None = None,
