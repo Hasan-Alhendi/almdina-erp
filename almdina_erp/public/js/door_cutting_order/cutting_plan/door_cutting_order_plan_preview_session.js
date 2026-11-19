@@ -283,7 +283,7 @@
         return String(message == null ? "" : message);
     }
 
-    async function preview(frm, settings) {
+    async function preview(frm, settings, diagnostics = {}) {
         if (!frm || !frm.doc || !frm.doc.name || isBusy(frm)) return false;
         const api = window.AlmdinaPlanWorkspaceAPI;
         if (!api || typeof api.preview !== "function") {
@@ -306,12 +306,13 @@
             && identity(frm) === requestIdentity
             && ownsVisit(frm, state.documentToken);
         state.status = "previewing";
+        frm.__almdinaSearchReport = null;
         state.previewId = null;
         state.payload = null;
         state.error = null;
         dispatch(frm);
         try {
-            const payload = await api.preview(orderName, { ...requested });
+            const payload = await api.preview(orderName, { ...requested }, diagnostics);
             if (!current()) return false;
             if (!payload || !payload.preview_id || !payload.plan
                 || payload.order_name !== orderName
@@ -327,6 +328,7 @@
             state.status = "ready";
             state.previewId = payload.preview_id;
             state.payload = payload;
+            frm.__almdinaSearchReport = payload.search_report ? { ...payload.search_report, orderName } : null;
             state.expiresAt = payload.expires_in_sec == null ? null : Date.now() + Number(payload.expires_in_sec) * 1000;
             armExpiry(frm, state);
             state.error = null;
@@ -431,6 +433,7 @@
                 if (!payload.preview_id || !validPortfolio(payload)) throw new Error("Invalid search response");
                 state.previewId = payload.preview_id;
                 state.payload = payload;
+                frm.__almdinaSearchReport = payload.search_report ? { ...payload.search_report, orderName: frm.doc.name } : null;
                 state.expiresAt = Date.now() + Number(payload.expires_in_sec || 0) * 1000;
                 armExpiry(frm, state);
             } else {

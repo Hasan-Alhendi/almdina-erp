@@ -1,0 +1,933 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+  <meta charset="utf-8" /><meta
+    name="viewport"
+    content="width=device-width, initial-scale=1"
+  />
+  <meta
+    http-equiv="Content-Security-Policy"
+    content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'"
+  />
+  <title>@@TITLE@@</title>
+  <style>
+    :root {
+      font:
+        16px/1.7 Tahoma,
+        Arial,
+        sans-serif;
+      color: #192c3c;
+      background: #f2f5f7;
+      color-scheme: light;
+    }
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      margin: 0;
+    }
+    header {
+      background: #102d38;
+      color: white;
+      padding: 28px max(4vw, 20px);
+    }
+    h1 {
+      font-size: 1.7rem;
+      margin: 0 0 8px;
+    }
+    h2 {
+      font-size: 1.25rem;
+      margin: 8px 0 20px;
+    }
+    p {
+      margin: 8px 0;
+    }
+    small {
+      font-size: 0.8rem;
+    }
+    code,
+    pre {
+      direction: ltr;
+      unicode-bidi: plaintext;
+      overflow-wrap: anywhere;
+      font-size: 0.8rem;
+    }
+    pre {
+      white-space: pre-wrap;
+      background: #eef3f6;
+      padding: 12px;
+      border-radius: 8px;
+    }
+    nav {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      padding: 16px 4vw;
+      background: white;
+      border-bottom: 1px solid #d9e2e8;
+      position: sticky;
+      top: 0;
+      z-index: 2;
+    }
+    button,
+    input,
+    select {
+      font: inherit;
+    }
+    button {
+      cursor: pointer;
+      border: 1px solid #c3d0d9;
+      background: white;
+      border-radius: 8px;
+      padding: 8px 14px;
+      color: inherit;
+    }
+    button:hover,
+    button:focus-visible {
+      border-color: #07877a;
+      background: #eefaf6;
+      outline: 2px solid #07877a;
+      outline-offset: 2px;
+    }
+    button[aria-current="page"] {
+      background: #086b64;
+      color: white;
+      border-color: #086b64;
+    }
+    main {
+      max-width: 1440px;
+      margin: auto;
+      padding: 24px 4vw;
+    }
+    section[hidden] {
+      display: none;
+    }
+    .notice {
+      background: #fff7db;
+      color: #735518;
+      border-inline-start: 4px solid #d8a62e;
+      padding: 14px;
+      border-radius: 8px;
+    }
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 14px;
+      margin: 20px 0;
+    }
+    .card,
+    details,
+    .panel {
+      background: white;
+      border: 1px solid #dae3e8;
+      border-radius: 12px;
+      padding: 16px;
+    }
+    .card b {
+      display: block;
+      font-size: 1.8rem;
+      color: #076e66;
+    }
+    .muted {
+      color: #5c6f7e;
+    }
+    .badge {
+      display: inline-block;
+      background: #fff2cf;
+      color: #694c0a;
+      border-radius: 30px;
+      padding: 3px 12px;
+    }
+    summary {
+      cursor: pointer;
+      overflow-wrap: anywhere;
+    }
+    details {
+      margin: 8px 0;
+    }
+    details details {
+      border-inline-start: 3px solid #b3d3d1;
+      margin-inline-start: 14px;
+    }
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      font-size: 0.88rem;
+      background: white;
+    }
+    td,
+    th {
+      text-align: start;
+      border-bottom: 1px solid #e3e9ed;
+      padding: 10px;
+      vertical-align: top;
+    }
+    th {
+      background: #e9f0f4;
+    }
+    td code {
+      font-size: 0.7rem;
+    }
+    .table-wrap {
+      overflow-x: auto;
+      border: 1px solid #dae3e8;
+      border-radius: 10px;
+    }
+    input[type="search"],
+    select {
+      padding: 9px;
+      border: 1px solid #b6c7d2;
+      border-radius: 8px;
+      max-width: 100%;
+      background: white;
+    }
+    .filters {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 16px;
+    }
+    .compare {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
+      gap: 16px;
+      margin: 20px 0;
+    }
+    .sheets {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 12px;
+    }
+    svg {
+      display: block;
+      width: 100%;
+      max-height: 420px;
+      background: #f9fcfd;
+      border: 1px solid #b9cbd6;
+      border-radius: 6px;
+    }
+    .piece {
+      stroke: #174c62;
+      stroke-width: 0.08;
+      fill: #9ccdbd;
+      fill-rule: evenodd;
+    }
+    .piece:nth-child(3n) {
+      fill: #bad2e7;
+    }
+    .piece:nth-child(3n + 1) {
+      fill: #edcd93;
+    }
+    .identity {
+      font-size: 0.72rem;
+      overflow-wrap: anywhere;
+    }
+    .event {
+      padding: 8px;
+      border-bottom: 1px solid #e7eef2;
+    }
+    .link {
+      border: 0;
+      background: none;
+      padding: 2px;
+      color: #006f87;
+      text-decoration: underline;
+    }
+    .keys {
+      max-height: 240px;
+      overflow: auto;
+    }
+    .page-title {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .round {
+      margin-top: 22px;
+    }
+    footer {
+      padding: 20px 4vw;
+      color: #5c6f7e;
+    }
+    .stats {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .technical {
+      margin-top: 24px;
+    }
+    #report-identity,
+    footer {
+      overflow-wrap: anywhere;
+    }
+    .panel,
+    .card,
+    .table-wrap {
+      min-width: 0;
+      max-width: 100%;
+    }
+    @media (max-width: 600px) {
+      header {
+        padding: 20px;
+      }
+      main {
+        padding: 16px;
+      }
+      nav {
+        position: static;
+        padding: 10px;
+      }
+      nav button {
+        flex: 1;
+        font-size: 0.85rem;
+        padding: 8px;
+      }
+      .cards {
+        grid-template-columns: 1fr 1fr;
+      }
+      .card {
+        padding: 10px;
+      }
+      .card b {
+        font-size: 1.4rem;
+      }
+      td,
+      th {
+        padding: 7px;
+      }
+      .compare {
+        grid-template-columns: 1fr;
+      }
+    }
+    @media print {
+      nav,
+      .filters,
+      button {
+        display: none;
+      }
+      section[hidden] {
+        display: block;
+      }
+      details {
+        break-inside: avoid;
+      }
+      header {
+        color: #102d38;
+        background: white;
+      }
+    }
+  </style>
+  <header>
+    <h1>@@TITLE@@</h1>
+    <p id="subtitle"></p>
+    <small id="report-identity"></small>
+  </header>
+  <div
+    id="rounds"
+    class="filters"
+    style="padding: 12px 4vw; background: white"
+  ></div>
+  <nav id="navigation" aria-label="@@TITLE@@"></nav>
+  <main>
+    <section id="summary"></section>
+    <section id="journey" hidden></section>
+    <section id="candidates" hidden></section>
+    <section id="selection" hidden></section>
+    <details class="technical">
+      <summary id="technical-title"></summary>
+      <div id="technical"></div>
+    </details>
+  </main>
+  <footer id="footer"></footer>
+  <script id="evidence" type="application/json">
+    @@DATA@@
+  </script>
+  <script>
+"use strict";
+const rootEvidence = JSON.parse(
+    document.getElementById("evidence").textContent,
+  ),
+  L = @@LABELS@@;
+let D = rootEvidence,
+  C = D.candidates,
+  G = D.geometries;
+const t = (k) => L[k] || k;
+const el = (tag, text, attributes = {}) => {
+  const n = document.createElement(tag);
+  if (text !== undefined && text !== null) n.textContent = String(text);
+  for (const [k, v] of Object.entries(attributes)) n.setAttribute(k, String(v));
+  return n;
+};
+const add = (host, ...nodes) => {
+  host.append(...nodes);
+  return host;
+};
+const byId = (id) => document.getElementById(id);
+const code = (value) =>
+  el("code", typeof value === "string" ? value : JSON.stringify(value));
+const panel = (title) =>
+  add(el("div", null, { class: "panel" }), el("h2", t(title)));
+const jsonBox = (value) => el("pre", JSON.stringify(value, null, 2));
+const ids = (host, values) => {
+  if (!values?.length) {
+    host.append(el("span", "—"));
+    return;
+  }
+  for (const id of values) {
+    const b = el("button", String(id).slice(0, 8), {
+      class: "link",
+      type: "button",
+    });
+    b.onclick = () => {
+      show("candidates");
+      drawComparison([id]);
+    };
+    host.append(b, " ");
+  }
+};
+const pages = [
+  ["summary", "Management summary"],
+  ["journey", "Actual search journey"],
+  ["candidates", "Recorded candidates"],
+  ["selection", "Why these five plans?"],
+];
+const visited = new Set();
+function show(id) {
+  for (const [key] of pages) {
+    byId(key).hidden = key !== id;
+    byId("nav-" + key).setAttribute(
+      "aria-current",
+      key === id ? "page" : "false",
+    );
+  }
+  if (!visited.has(id)) {
+    visited.add(id);
+    ({
+      summary: renderSummary,
+      journey: renderJourney,
+      candidates: renderCandidates,
+      selection: renderSelection,
+    })[id]();
+  }
+}
+for (const [id, label] of pages) {
+  const b = el("button", t(label), { id: "nav-" + id, type: "button" });
+  b.onclick = () => show(id);
+  byId("navigation").append(b);
+}
+byId("subtitle").textContent = t(
+  "Read-only diagnostic evidence. This report cannot be saved or approved as a cutting plan.",
+);
+byId("report-identity").textContent = D.report_id + " · " + D.run_id;
+byId("technical-title").textContent = t("Technical evidence");
+byId("footer").textContent = D.data_fingerprint;
+function paged(host, items, render, size = 80, controls = host) {
+  let offset = 0;
+  const more = el("button", t("Show more"), { type: "button" });
+  const next = () => {
+    more.remove();
+    for (const item of items.slice(offset, offset + size))
+      host.append(render(item));
+    offset += size;
+    if (offset < items.length) {
+      more.textContent =
+        t("Show more") +
+        " (" +
+        Math.min(offset, items.length) +
+        " / " +
+        items.length +
+        ")";
+      controls.append(more);
+    }
+  };
+  more.onclick = next;
+  if (items.length) next();
+  else controls.append(el("p", t("No recorded entries.")));
+}
+function renderSummary() {
+  const h = byId("summary"),
+    coverage = D.coverage_manifest;
+  add(
+    h,
+    el("h2", t("Management summary")),
+    el("div", t("Evidence status") + ": " + coverage.status, {
+      class: "notice",
+    }),
+  );
+  const all = Object.values(C);
+  const stats = [
+    [
+      "Boards in the first plan",
+      C[D.final_gallery[0]?.candidate_id]?.board_count || 0,
+    ],
+    ["Recorded attempts", D.attempts.length],
+    ["Completed arrangements", all.filter((c) => c.complete).length],
+    ["Incomplete arrangements", all.filter((c) => !c.complete).length],
+    ["Rejected candidates", all.filter((c) => c.status === "rejected").length],
+    [
+      "Duplicate candidates",
+      all.filter((c) => c.status === "duplicate").length,
+    ],
+    ["Selected plans", D.final_gallery.length],
+  ];
+  const cards = el("div", null, { class: "cards" });
+  for (const [label, n] of stats)
+    cards.append(
+      add(el("div", null, { class: "card" }), el("span", t(label)), el("b", n)),
+    );
+  h.append(cards);
+  const limitations = panel("Evidence limitations");
+  for (const item of coverage.limitations || [])
+    limitations.append(el("p", t(item)));
+  add(
+    limitations,
+    el("p", t("Dropped events") + ": " + coverage.dropped_events),
+    el("p", t("Omitted geometries") + ": " + coverage.omitted_geometries),
+  );
+  h.append(limitations);
+  const stops = {};
+  for (const s of D.spans)
+    if (s.kind === "stage")
+      stops[s.stop_reason] = (stops[s.stop_reason] || 0) + 1;
+  const stopPanel = panel("Stop reason");
+  for (const [reason, count] of Object.entries(stops))
+    stopPanel.append(el("p", t(reason) + " · " + count));
+  h.append(stopPanel);
+  if (D.previous_round) {
+    const p = panel("Previous round");
+    add(
+      p,
+      code(D.previous_round.report_id),
+      el(
+        "p",
+        t("Selected plans") + ": " + D.previous_round.final_gallery.length,
+      ),
+    );
+    h.append(p);
+  }
+}
+const children = new Map(),
+  spanEvents = new Map();
+function indexRound() {
+  children.clear();
+  spanEvents.clear();
+  for (const s of D.spans) {
+    const key = s.parent_span_id || "";
+    if (!children.has(key)) children.set(key, []);
+    children.get(key).push(s);
+  }
+  for (const e of D.events) {
+    if (!spanEvents.has(e.span_id)) spanEvents.set(e.span_id, []);
+    spanEvents.get(e.span_id).push(e);
+  }
+}
+function spanNode(s) {
+  const n = el("details"),
+    summary = el(
+      "summary",
+      t(s.name) +
+        " · " +
+        t(s.stop_reason || "Incomplete") +
+        " · " +
+        (s.elapsed_sec ?? "—") +
+        " s",
+    );
+  n.append(summary);
+  let built = false;
+  n.ontoggle = () => {
+    if (!n.open || built) return;
+    built = true;
+    add(n, el("h3", t("Inputs")), jsonBox(s.inputs));
+    ids(n, s.input_candidates);
+    n.append(el("h3", t("Outputs")));
+    ids(n, s.output_candidates);
+    n.append(el("h3", t("What happened")));
+    paged(
+      n,
+      (spanEvents.get(s.span_id) || []).filter(
+        (e) => !["span_start", "span_end"].includes(e.kind)
+          && (e.kind !== "result" || e.validation_result || Object.keys(e.diagnostics || {}).length),
+      ),
+      eventNode,
+    );
+    paged(n, children.get(s.span_id) || [], spanNode);
+  };
+  return n;
+}
+function eventNode(e) {
+  const n = el("div", null, { class: "event" });
+  add(
+    n,
+    code("#" + e.seq + " · " + e.kind),
+    el("p", t(e.reason || e.decisive_criterion || e.name || "")),
+  );
+  ids(n, e.candidate_ids || (e.candidate_id ? [e.candidate_id] : []));
+  if (e.keys || e.diagnostics || e.validation_result) {
+    const details = el("details");
+    add(details, el("summary", t("Technical evidence")), jsonBox(e));
+    n.append(details);
+  }
+  return n;
+}
+function renderJourney() {
+  const h = byId("journey");
+  h.append(el("h2", t("Actual search journey")));
+  paged(h, children.get("") || [], spanNode);
+  const unscoped = D.events.filter(
+    (e) => !e.span_id && !["span_start"].includes(e.kind),
+  );
+  if (unscoped.length) paged(h, unscoped, eventNode);
+}
+let comparisonHost,
+  selected = new Set();
+function drawing(id) {
+  const c = C[id],
+    host = panel("Candidate");
+  if (!c)
+    return add(
+      host,
+      code(id),
+      el("p", t("No recorded geometry is available.")),
+    );
+  add(
+    host,
+    code(id),
+    el("p", t("Source") + ": " + t(c.source || "—") + " · " + c.method_key),
+    el("p", t("Boards") + ": " + c.board_count),
+  );
+  const evidence = el("details");
+  add(evidence,el("summary",t("Technical evidence")+' · '+t("Reason")+' ('+(c.reasons||[]).length+')'),
+    jsonBox(c.industrial_rank));
+  for (const r of c.reasons || [])
+    evidence.append(el("p", "#" + r.seq + " · " + t(r.reason)));
+  host.append(evidence);
+  const geometry = G[c.geometry_fingerprint];
+  if (!geometry)
+    return add(host, el("p", t("No recorded geometry is available.")));
+  const sheets = el("div", null, { class: "sheets" });
+  for (const [index, sheet] of geometry.sheets.entries()) {
+    const box = el("div"),
+      ns = "http://www.w3.org/2000/svg",
+      svg = document.createElementNS(ns, "svg");
+    const w = Number(sheet.full_width_cm || sheet.w),
+      h = Number(sheet.full_length_cm || sheet.h);
+    if (!(w > 0 && h > 0 && Number.isFinite(w + h))) continue;
+    svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
+    svg.setAttribute("role", "img");
+    const title = document.createElementNS(ns, "title");
+    title.textContent =
+      t("Boards") + " " + (index + 1) + " · " + w + " × " + h + " cm";
+    svg.append(title);
+    const group = document.createElementNS(ns, "g");
+    let missing = false;
+    for (const piece of sheet.pieces) {
+      if (!piece.outline_cm) {
+        missing = true;
+        continue;
+      }
+      const path = document.createElementNS(ns, "path");
+      const rings = [piece.outline_cm, ...(piece.holes_cm || [])];
+      if (!rings.every((r) => r.every((p) => p.every(Number.isFinite)))) {
+        missing = true;
+        continue;
+      }
+      path.setAttribute(
+        "d",
+        rings
+          .map((r) => "M " + r.map((p) => p.join(" ")).join(" L ") + " Z")
+          .join(" "),
+      );
+      path.setAttribute("class", "piece");
+      const ptitle = document.createElementNS(ns, "title");
+      ptitle.textContent =
+        String(piece.piece_instance_id ?? piece.id) +
+        " · " +
+        (piece.piece_type || "Regular");
+      path.append(ptitle);
+      group.append(path);
+    }
+    svg.append(group);
+    add(box, el("small", title.textContent), svg);
+    if (missing)
+      box.append(
+        el(
+          "p",
+          t(
+            "An unproven contour is omitted. A bounding rectangle is not a substitute.",
+          ),
+        ),
+      );
+    sheets.append(box);
+  }
+  host.append(sheets);
+  return host;
+}
+function drawComparison(values) {
+  if (!comparisonHost) renderCandidates();
+  comparisonHost.replaceChildren(...values.slice(0, 2).map(drawing));
+  comparisonHost.scrollIntoView?.({ block: "nearest" });
+}
+function renderCandidates() {
+  const h = byId("candidates");
+  if (comparisonHost) return;
+  add(
+    h,
+    el("h2", t("Recorded candidates")),
+    el(
+      "p",
+      t("Select up to two candidates to compare their recorded geometry."),
+    ),
+  );
+  const filters = el("div", null, { class: "filters" }),
+    q = el("input", null, {
+      type: "search",
+      placeholder: t("Search candidates"),
+      "aria-label": t("Search candidates"),
+    }),
+    status = el("select", null, { "aria-label": t("Status") });
+  for (const [key, label] of [
+    ["", "All statuses"],
+    ["complete", "Complete"],
+    ["incomplete", "Incomplete"],
+    ["rejected", "Rejected"],
+    ["duplicate", "Duplicate"],
+    ["selected", "Selected"],
+  ])
+    status.append(el("option", t(label), { value: key }));
+  add(filters, q, status);
+  h.append(filters);
+  comparisonHost = el("div", null, { class: "compare" });
+  h.append(comparisonHost);
+  const wrap = el("div", null, { class: "table-wrap" });
+  h.append(wrap);
+  const finalIds = new Set(D.final_gallery.map((c) => c.candidate_id));
+  const render = () => {
+    wrap.replaceChildren();
+    const table = el("table"),
+      head = el("tr");
+    for (const label of [
+      "Compare two plans",
+      "Candidate",
+      "Source",
+      "Boards",
+      "Status",
+      "Reason",
+    ])
+      head.append(el("th", t(label)));
+    table.append(add(el("thead"), head));
+    const body = el("tbody");
+    table.append(body);
+    wrap.append(table);
+    let all = Object.values(C).filter(
+      (c) =>
+        (!q.value ||
+          JSON.stringify(c).toLowerCase().includes(q.value.toLowerCase())) &&
+        (!status.value ||
+          (status.value === "complete"
+            ? c.complete
+            : status.value === "incomplete"
+              ? !c.complete
+              : status.value === "selected"
+                ? finalIds.has(c.candidate_id)
+                : c.status === status.value)),
+    );
+    paged(
+      body,
+      all,
+      (c) => {
+        const row = el("tr"),
+          check = el("input", null, {
+            type: "checkbox",
+            "aria-label": c.candidate_id,
+          });
+        check.checked = selected.has(c.candidate_id);
+        check.onchange = () => {
+          if (check.checked && selected.size >= 2) {
+            check.checked = false;
+            return;
+          }
+          if (check.checked) selected.add(c.candidate_id);
+          else selected.delete(c.candidate_id);
+          drawComparison([...selected]);
+        };
+        row.append(add(el("td"), check));
+        const idCell = el("td");
+        ids(idCell, [c.candidate_id]);
+        row.append(idCell);
+        for (const value of [
+          t(c.source || "—") + " · " + c.method_key,
+          c.board_count,
+          finalIds.has(c.candidate_id) ? t("Selected") : t(c.status),
+          ...(c.reasons?.length
+            ? [(c.reasons || []).map((r) => t(r.reason)).join(" · ")]
+            : ["—"]),
+        ])
+          row.append(el("td", value));
+        return row;
+      },
+      80,
+      wrap,
+    );
+  };
+  q.oninput = render;
+  status.onchange = render;
+  render();
+}
+function renderSelection() {
+  const h = byId("selection");
+  add(
+    h,
+    el("h2", t("Why these five plans?")),
+    el(
+      "div",
+      t(
+        "The largest eligible remnant is a ranking measure; it does not prove the best industrial reuse.",
+      ),
+      { class: "notice" },
+    ),
+  );
+  const final = panel("Selected plans");
+  ids(
+    final,
+    D.final_gallery.map((c) => c.candidate_id),
+  );
+  h.append(final);
+  paged(h, D.gallery_history, (e) => {
+    const box = el("details");
+    box.append(el("summary", "#" + e.seq + " · " + t(e.reason)));
+    for (const [key, label] of [
+      ["before", "Before"],
+      ["after", "After"],
+      ["removed", "Removed"],
+    ]) {
+      box.append(el("h3", t(label)));
+      ids(box, e[key]);
+    }
+    if (e.comparison_seqs?.length)
+      add(
+        box,
+        el("h3", t("Recorded comparison events")),
+        code(e.comparison_seqs.map((n) => "#" + n).join(" · ")),
+      );
+    return box;
+  });
+  h.append(el("h2", t("Comparison rule")));
+  paged(h, D.decisions, (e) => {
+    const box = el("details");
+    box.append(
+      el(
+        "summary",
+        "#" +
+          e.seq +
+          " · " +
+          e.comparator +
+          " · " +
+          t(
+            e.decisive_criterion ||
+              (e.candidate_ids.length > 1
+                ? "Equal comparison keys"
+                : "No competing candidate"),
+          ),
+      ),
+    );
+    add(
+      box,
+      el(
+        "p",
+        t("Cutter center available") +
+          ": " +
+          t(e.cutter_center_available ? "Yes" : "No"),
+      ),
+    );
+    ids(box, e.ranked_candidate_ids);
+    const values = e.keys.map(key => key.flat(Infinity));
+    const table = el("table"), head = el("tr");
+    head.append(el("th", t("Comparison rule")));
+    for (const id of e.candidate_ids) head.append(el("th", id.slice(0, 8)));
+    table.append(add(el("thead"), head));
+    const body = el("tbody");
+    for (const [index, criterion] of (e.criteria || []).entries()) {
+      if (!values.some(key => index < key.length)) continue;
+      const row = el("tr");
+      row.append(el("th", t(criterion)));
+      for (const key of values) row.append(el("td", key[index] ?? "—"));
+      body.append(row);
+    }
+    table.append(body);
+    add(box, el("p", t("These are actual sort keys; lower values sort first.")),
+      add(el("div", null, {class:"table-wrap"}), table));
+    const technical = el("details");
+    add(technical, el("summary", t("Technical evidence")), jsonBox(e));
+    box.append(technical);
+    for (const pair of e.adjacent_comparisons || [])
+      box.append(
+        el(
+          "p",
+          pair.winner.slice(0, 8) +
+            " ← " +
+            pair.other.slice(0, 8) +
+            " · " +
+            t(pair.decisive_criterion || "Equal comparison keys"),
+        ),
+      );
+    return box;
+  });
+}
+function renderTechnical() {
+  byId("technical").replaceChildren(
+    jsonBox({
+      schema_version: D.schema_version,
+      engine_version: D.engine_version,
+      git_sha: D.git_sha,
+      report_id: D.report_id,
+      run_id: D.run_id,
+      round_id: D.round_id,
+      parent_run_id: D.parent_run_id,
+      preview_id: D.preview_id,
+      input_fingerprint: D.input_fingerprint,
+      settings_fingerprint: D.settings_fingerprint,
+      data_fingerprint: D.data_fingerprint,
+      preview_gallery: D.preview_gallery,
+      coverage_manifest: D.coverage_manifest,
+      input_specification: D.input_specification,
+      effective_settings: D.effective_settings,
+    }),
+  );
+}
+const rounds = [];
+for (let round = rootEvidence; round; round = round.previous_round)
+  rounds.push(round);
+const roundSelect = el("select", null, { "aria-label": t("Search round") });
+for (const [index, round] of rounds.entries())
+  roundSelect.append(
+    el(
+      "option",
+      t("Search round") +
+        " " +
+        round.round_id +
+        " · " +
+        round.report_id.slice(0, 8),
+      { value: index },
+    ),
+  );
+add(byId("rounds"), el("label", t("Search round")), roundSelect);
+function selectRound(index) {
+  D = rounds[index];
+  C = D.candidates;
+  G = D.geometries;
+  visited.clear();
+  selected.clear();
+  comparisonHost = null;
+  for (const [id] of pages) byId(id).replaceChildren();
+  byId("report-identity").textContent = D.report_id + " · " + D.run_id;
+  byId("footer").textContent = D.data_fingerprint;
+  indexRound();
+  renderTechnical();
+  show("summary");
+}
+roundSelect.onchange = () => selectRound(Number(roundSelect.value));
+selectRound(0);
+
+</script>
+</html>

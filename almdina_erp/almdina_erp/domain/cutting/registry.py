@@ -1,4 +1,5 @@
 from __future__ import annotations
+from .search_trace import traced, trace_event, trace_enabled
 
 from dataclasses import dataclass
 from typing import Any, Callable
@@ -223,6 +224,7 @@ def get_strategy(method_key: str) -> PackingStrategy:
     )
 
 
+@traced('run_single_method', kind='attempt')
 def run_single_method(
     pieces: list[dict[str, Any]],
     board_w_cm: float,

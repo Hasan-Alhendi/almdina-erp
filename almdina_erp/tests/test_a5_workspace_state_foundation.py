@@ -277,7 +277,11 @@ class TestA5WorkspaceStateFoundation(unittest.TestCase):
         self.assertIn("AlmdinaPlanWorkspaceAPI", source)
         self.assertIn("AlmdinaPlanPreviewSession", source)
         self.assertIn("activeSettings", source)
-        self.assertIn("previews.preview(frm, settings)", source)
+        self.assertIn("previews.preview(frm, settings, {", source)
+        self.assertIn(
+            "recordSearchDetails: traceOptions?.orderName === frm.doc.name && traceOptions.enabled === true",
+            source,
+        )
         self.assertNotIn("transport.recalculate(frm.doc.name, settings)", source)
         self.assertIn(
             "transport.approve(frm.doc.name, source, planName || null)",

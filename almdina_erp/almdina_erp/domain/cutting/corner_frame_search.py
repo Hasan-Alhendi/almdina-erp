@@ -7,6 +7,7 @@ import time
 from . import shape_aware_nesting as shape
 from .glass_opening_nesting import occupancy_outline_cm
 from .primitives import make_placed_piece
+from .search_trace import traced, trace_event, trace_enabled
 
 
 def _row_spots(void, width, height, hosts, kerf):
@@ -118,6 +119,7 @@ def guest_row_blocks(block, sources, kerf, width, height, *, deadline, limit=6):
     return proposals[:limit]
 
 
+@traced('corner_frames')
 def corner_frames(template, sources, width, height, kerf, *, deadline, mirroring_allowed, limit=12):
     """Fresh mixed-notch partitions, whole guest rows, then rigid seating."""
     from .system_layout_refinement import _body_rotations
@@ -228,6 +230,7 @@ def _contact_repair(trial,sources,ids,receivers,kerf,deadline,*,fixed_axes=False
     return True
 
 
+@traced('local_guest_exchanges')
 def local_guest_exchanges(plan,sources,width,height,kerf,*,deadline,machine_type,metric_kwargs):
     """Exchange a whole guest bundle while preserving the surrounding layout."""
     from .nesting_consolidation import extract_placement_groups
@@ -272,6 +275,7 @@ def local_guest_exchanges(plan,sources,width,height,kerf,*,deadline,machine_type
                         yield trial
 
 
+@traced('refine_corner_layout')
 def refine_corner_layout(incumbent,seeds,sources,width,height,kerf,*,deadline,
                          machine_type,mirroring_allowed,metric_kwargs,solver=None,
                          formation_seeds=(),row_solver=None):
@@ -300,18 +304,29 @@ def refine_corner_layout(incumbent,seeds,sources,width,height,kerf,*,deadline,
         if signature not in keys:
             keys[signature]=final_system_sort_keys([p])[0]
         return keys[signature]
+    @traced('refine_corner_layout.offer', kind='attempt')
     def offer(trial):
         nonlocal best
-        if trial is None or len(trial.get('sheets') or [])>len(incumbent['sheets']):return
+        if trial is None or len(trial.get('sheets') or [])>len(incumbent['sheets']):
+            trace_event('candidate',plan=trial,status='rejected',reason='no_result_or_extra_boards')
+            return
         checked=_valid(trial,sources,width,height,kerf,machine_type,metric_kwargs,deadline,mirroring_allowed)
-        if checked is None or material_signature(checked) in seen:return
+        if checked is None or material_signature(checked) in seen:
+            trace_event('candidate',plan=trial,status='not_selected',reason='validation_failed' if checked is None else 'duplicate_geometry')
+            return
         before,after=quality(incumbent),quality(checked)
+        if trace_enabled():
+            trace_event('comparison',plans=[incumbent,checked],keys=[before,after],
+                comparator='final_system_sort_keys',cutter_center_available=len(before)==3 and len(after)==3,
+                reason='corner_cached_keys')
         if after<before:
             seen.add(material_signature(checked))
             candidates.append(checked)
             trace['improvements']+=1
             a,b=quality(best),quality(checked)
             if b<a:best=checked
+        else:
+            trace_event('candidate',plan=checked,status='not_selected',reason='no_final_improvement')
     local_end=started+(deadline-started)*.20
     for trial in local_guest_exchanges(best,sources,width,height,kerf,deadline=local_end,
             machine_type=machine_type,metric_kwargs=metric_kwargs):

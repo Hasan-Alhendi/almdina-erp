@@ -5,6 +5,7 @@ no dummy piece or new stock exists. The optional mixed cohort pins protected
 pieces and their bounding-box nesting contacts; it never repacks their shapes.
 """
 from __future__ import annotations
+from .search_trace import traced, trace_event, trace_enabled
 
 from collections import Counter, deque
 from copy import deepcopy
@@ -455,6 +456,7 @@ def _owner_repack(plan, sources, kerf, region, policy, deadline):
             yield trial, dict(owner=owner, ordering=ordering, method=method)
 
 
+@traced('_valid', kind='attempt')
 def _valid(candidate, sources, width, height, kerf, machine, metrics, deadline, mirroring_allowed=False):
     if candidate.get("unplaced") or manufacturing_export_rejection(candidate):
         return None
@@ -490,6 +492,7 @@ def _movable_sources(plan, sources, kerf):
     return [p for p in sources if p["id"] in eligible]
 
 
+@traced('improve_fixed_board_layout')
 def improve_fixed_board_layout(plan, sources, width, height, kerf, *, deadline,
         policy=FixedBoardSearchPolicy(), machine_type="CNC Router", metric_kwargs=None,
         cancelled=lambda: False, mirroring_allowed=False):
@@ -550,7 +553,7 @@ def improve_fixed_board_layout(plan, sources, width, height, kerf, *, deadline,
             op = rng.choices(active, weights=[.2/len(active)+.8*weights[x]/total for x in active], k=1)[0]
         start = time.monotonic()
         try:
-            candidate, event = next(pending[op])
+            candidate, event = _next_operator(pending[op],op)
         except StopIteration:
             del pending[op]
             continue
@@ -584,6 +587,7 @@ def improve_fixed_board_layout(plan, sources, width, height, kerf, *, deadline,
                             machine_type=machine_type, mirroring_allowed=mirroring_allowed, metric_kwargs=metrics,
                             deadline_monotonic=min(deadline, time.monotonic()+policy.refine_seconds))
                 if ranked is None:
+                    trace_event('candidate',plan=candidate,status='rejected',reason='pre_refinement_validation',operator=op)
                     stat["rejects"]["pre_refinement_validation"] = stat["rejects"].get("pre_refinement_validation", 0)+1
                     stat["seconds"] += time.monotonic()-start
                     trace["events"].append(dict(operator=op, rejection="pre_refinement_validation", **event))
@@ -613,6 +617,8 @@ def improve_fixed_board_layout(plan, sources, width, height, kerf, *, deadline,
                         pending = streams()
         if reason:
             stat["rejects"][reason] = stat["rejects"].get(reason, 0)+1
+        trace_event('candidate',plan=candidate,status='rejected' if reason else 'improved',
+            reason=reason or 'accepted_final_improvement',operator=op,operator_details=event)
         stat["seconds"] += time.monotonic()-start
         trace["events"].append(dict(operator=op, rejection=reason, **event))
         if policy.adaptive and (iteration+1) % policy.segment == 0:
@@ -623,3 +629,8 @@ def improve_fixed_board_layout(plan, sources, width, height, kerf, *, deadline,
             uses.clear()
     trace["weights"] = weights
     return [deepcopy(plan), *[p for p in portfolio if material_signature(p) != material_signature(plan)][:4]], trace
+
+
+@traced('alns_operator', kind='attempt')
+def _next_operator(iterator, operator):
+    return next(iterator)

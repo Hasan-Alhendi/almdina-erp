@@ -4,6 +4,7 @@ Native geometry owns placements and validation. The optional integer backend
 sees counts and measured profiles only. No cross-order cache or designer poses.
 """
 from __future__ import annotations
+from .search_trace import traced, trace_event, trace_enabled
 
 from collections import Counter, defaultdict, deque
 from copy import deepcopy
@@ -55,6 +56,13 @@ class _Pattern:
     origin: str
 
 
+def _observe_pattern(sheet,origin,reason,*,status='rejected',**details):
+    if trace_enabled():
+        trace_event('candidate',plan=dict(sheets=[sheet],unplaced=[]),source='board_pattern',
+            reason=reason,status=status,origin=origin,**details)
+        trace_event('stage_stop',reason=reason)
+
+
 class PatternPool:
     def __init__(self,sources,width,height,kerf,machine,mirror,metrics,deadline,limit=192,sheet_context=None):
         self.sources=sources
@@ -69,13 +77,19 @@ class PatternPool:
         self.rejected=Counter()
         self.sheet_context={k:v for k,v in (sheet_context or {}).items() if k in _SHEET_CONTEXT}
 
+    @traced('PatternPool.add', kind='attempt')
     def add(self,sheet,origin,*,validated=False):
+        if trace_enabled():
+            trace_event('candidate',plan=dict(sheets=[sheet],unplaced=[]),source='board_pattern',
+                reason='partial_board_pattern_not_a_complete_order_plan')
         if time.monotonic() >= self.deadline:
+            _observe_pattern(sheet,origin,'deadline')
             return None
         sheet=dict(sheet,**self.sheet_context)
         if (not sheet.get('pieces') or len(sheet['pieces']) > 64
                 or abs(sheet['w']-self.width)>1e-7 or abs(sheet['h']-self.height)>1e-7
                 or (sheet.get('resource_kind') or 'FULL_BOARD')!='FULL_BOARD'):
+            _observe_pattern(sheet,origin,'pattern_guard')
             return None
         rings=[]
         counts=[0]*len(self.families)
@@ -83,9 +97,11 @@ class PatternPool:
         for placed in sheet['pieces']:
             source=self.lookup.get(placed.get('id'))
             if source is None or placed.get('glass_host_piece_id') or placed.get('placement_outline_cm'):
+                _observe_pattern(sheet,origin,'unsupported_pattern_source_or_nested_geometry')
                 return None
             ring=occupancy_outline_cm(placed)
             if ring is None:
+                _observe_pattern(sheet,origin,'unproven_contour')
                 return None
             family=self.family_by_id[source['id']]
             counts[family]+=1
@@ -93,6 +109,7 @@ class PatternPool:
             subset.append(source)
         signature=tuple(sorted(rings))
         if signature in self.seen:
+            _observe_pattern(sheet,origin,'duplicate_geometry',status='duplicate',pattern_index=self.seen[signature])
             return self.seen[signature]
         # Reuse only an immediate full-parent validation in this same source,
         # geometry and permission context. Never trust snapshot flags.
@@ -101,11 +118,13 @@ class PatternPool:
                 self.kerf,self.machine,self.metrics,self.deadline,self.mirror))
         if checked is None:
             self.rejected['validation']+=1
+            _observe_pattern(sheet,origin,'validation_failed')
             return None
         sheet=checked['sheets'][0]
         profile=sheet_cut_line_quality(sheet,self.kerf)
         if profile is None:
             self.rejected['unsupported_network']+=1
+            _observe_pattern(sheet,origin,'unproven_cutter_geometry')
             return None
         region=largest_remnant_region(checked,machine_type=self.machine,metric_kwargs=self.metrics)
         column=PatternColumn(tuple(counts),round((region.area_m2 if region else 0)*10**8),
@@ -121,19 +140,26 @@ class PatternPool:
             if existing.column.remnant_units>=column.remnant_units and quality(existing.column)<quality(column):
                 self.seen[signature]=index
                 self.rejected['dominated_pattern']+=1
+                _observe_pattern(sheet,origin,'dominated_pattern',pattern_index=index,
+                    candidate_key=quality(column),existing_key=quality(existing.column),
+                    candidate_remnant=column.remnant_units,existing_remnant=existing.column.remnant_units)
                 return index
             if (existing.origin!='family_grid' and column.remnant_units>=existing.column.remnant_units
                     and quality(column)<quality(existing.column)):
                 self.patterns[index]=_Pattern(sheet,column,signature,origin)
                 self.seen[signature]=index
+                _observe_pattern(sheet,origin,'pattern_replacement',status='improved',pattern_index=index)
                 return index
         if len(self.patterns)>=self.limit:
+            _observe_pattern(sheet,origin,'pattern_limit')
             return None
         index=len(self.patterns)
         self.seen[signature]=index
         self.patterns.append(_Pattern(sheet,column,signature,origin))
+        _observe_pattern(sheet,origin,'pattern_retained',status='reserved',pattern_index=index)
         return index
 
+    @traced('PatternPool.reconstruct', kind='attempt')
     def reconstruct(self,multiplicities,template):
         selection=PatternSelection(tuple(multiplicities))
         columns=tuple(p.column for p in self.patterns)
@@ -219,6 +245,7 @@ def _family_grids(pool,floor=0.):
                 yield index
 
 
+@traced('_native_owner_plan', kind='attempt')
 def _native_owner_plan(owner,template,pool,ordering,method,deadline):
     """Fill an owner strip, then repack the residual order natively, even >64.
 
@@ -316,6 +343,7 @@ def _positions(sheet,source,kerf,heuristic,deadline):
     return unique
 
 
+@traced('_beam_repair', kind='attempt')
 def _beam_repair(skeleton,remaining,pool,deadline,*,order,urgent=()):
     """Three legal states, bounded native placements; partial boards survive."""
     priority={g:i for i,g in enumerate(urgent)}
@@ -348,6 +376,7 @@ def _beam_repair(skeleton,remaining,pool,deadline,*,order,urgent=()):
     return states[0][1],[],probes
 
 
+@traced('refine_pattern_layout')
 def refine_pattern_layout(incumbent,seeds,sources,width,height,kerf,*,deadline,
                           machine_type,mirroring_allowed,metric_kwargs,solver=None,formation_seeds=(),row_solver=None):
     started=time.monotonic()
@@ -370,17 +399,21 @@ def refine_pattern_layout(incumbent,seeds,sources,width,height,kerf,*,deadline,
     candidates=[deepcopy(incumbent)]
     offered={material_signature(incumbent)}
 
+    @traced('refine_pattern_layout.offer', kind='attempt')
     def offer(trial,*,validated=False):
         nonlocal best
         if (trial is None or len(trial.get('sheets') or [])>len(best['sheets'])
                 or any(len(s['pieces'])>64 for s in trial['sheets'])):
+            trace_event('candidate',plan=trial,status='rejected',reason='no_result_extra_boards_or_sheet_piece_limit')
             return
         checked=(trial if validated else
             _valid(trial,sources,width,height,kerf,machine_type,metric_kwargs,deadline,mirroring_allowed))
         if checked is None:
+            trace_event('candidate',plan=trial,status='rejected',reason='validation_failed')
             return
         signature=material_signature(checked)
         if signature in offered:
+            trace_event('candidate',plan=checked,status='duplicate',reason='duplicate_geometry')
             return
         before,after=final_system_sort_keys([best,checked])
         if after<before:
@@ -388,6 +421,9 @@ def refine_pattern_layout(incumbent,seeds,sources,width,height,kerf,*,deadline,
             best=checked
             candidates.append(checked)
             trace['improvements']+=1
+            trace_event('gallery',before=[incumbent],after=candidates,reason='pattern_improvement')
+        else:
+            trace_event('candidate',plan=checked,status='not_selected',reason='no_final_improvement')
 
     parents=[]
     parent_signatures=set()

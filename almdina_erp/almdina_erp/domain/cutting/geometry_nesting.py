@@ -5,6 +5,7 @@ every completed plan pass the authoritative clearance/identity/permission gates.
 The legacy exact groups remain a fast source alongside non-identical contacts.
 """
 from __future__ import annotations
+from .search_trace import traced, trace_event, trace_enabled
 
 from collections import Counter
 from copy import deepcopy
@@ -303,6 +304,7 @@ def _pack(baseline, pieces, blocks, width,height,kerf,mirror,excluded,deadline):
     return plan
 
 
+@traced('geometry_first_candidates')
 def geometry_first_candidates(baseline,pieces,width,height,kerf,*,machine_type,
                               mirroring_allowed,deadline,metric_kwargs):
     """Discover formations before packing, then compare complete proven plans."""

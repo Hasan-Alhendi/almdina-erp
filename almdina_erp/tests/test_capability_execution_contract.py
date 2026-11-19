@@ -199,7 +199,11 @@ class TestCapabilityExecutionContract(unittest.TestCase):
         )
         self.assertIn("AlmdinaPlanWorkspaceAPI", controls)
         self.assertIn("AlmdinaPlanPreviewSession", controls)
-        self.assertIn("await previews.preview(frm, settings)", controls)
+        self.assertIn("await previews.preview(frm, settings, {", controls)
+        self.assertIn(
+            "recordSearchDetails: traceOptions?.orderName === frm.doc.name && traceOptions.enabled === true",
+            controls,
+        )
         self.assertNotIn("transport.recalculate(frm.doc.name, settings)", controls)
         self.assertNotIn("RECALCULATE_METHOD", controls)
         self.assertNotIn("order_plan_permission_service.recalculate_order", controls)

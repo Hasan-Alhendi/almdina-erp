@@ -16,6 +16,7 @@ four clipped corners.
 """
 
 from __future__ import annotations
+from .search_trace import traced, trace_event, trace_enabled
 
 import math
 import time
@@ -88,6 +89,7 @@ def non_quarter_rotation_is_admitted(
     )
 
 
+@traced('apply_shape_aware_nesting')
 def apply_shape_aware_nesting(
     plan: dict[str, Any],
     pieces: list[dict[str, Any]],
@@ -239,6 +241,7 @@ def _shape_block_score(blocks: Sequence[Mapping[str, Any]]) -> int:
     )
 
 
+@traced('_candidate_rejection', kind='attempt')
 def _candidate_rejection(
     plan: Mapping[str, Any],
     pieces: list[dict[str, Any]],
@@ -1510,6 +1513,7 @@ def _outline_inside_rect(
     )
 
 
+@traced('_compose_plan', kind='attempt')
 def _compose_plan(
     plan: Mapping[str, Any],
     pieces: Sequence[Mapping[str, Any]],

@@ -17,6 +17,7 @@ further piece, and no host chain may go deeper than that.
 """
 
 from __future__ import annotations
+from .search_trace import traced, trace_event, trace_enabled
 
 import json
 import time
@@ -312,6 +313,7 @@ def _without_guests(
     return copied
 
 
+@traced('nest_glass_openings')
 def nest_glass_openings(
     baseline: dict[str, Any],
     pieces: list[dict[str, Any]],
@@ -355,6 +357,7 @@ def nest_glass_openings(
     return best if best is not None else baseline
 
 
+@traced('glass_assignment',kind='attempt')
 def _nest_glass_openings(
     baseline: dict[str, Any],
     pieces: list[dict[str, Any]],
@@ -383,6 +386,8 @@ def _nest_glass_openings(
             "candidate_nested_count": int(diagnostics.get("candidate_nested_count") or 0),
             "validation_error_count": int(diagnostics.get("validation_error_count") or 0),
         }
+        trace_event('stage_stop',reason=plan['glass_nesting_diagnostics']['outcome'],
+            diagnostics=plan['glass_nesting_diagnostics'])
         return plan
 
     if machine_type == _PANEL_SAW_ID:
@@ -441,6 +446,7 @@ def _nest_glass_openings(
             )
         return _finish(baseline, outcome="budget", **context)
 
+    @traced('glass_prepare',kind='attempt')
     def _prepare(placed: dict[str, Any] | None) -> tuple[dict[str, Any] | None, str]:
         if placed is None:
             return None, "place_failed"

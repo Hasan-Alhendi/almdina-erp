@@ -19,6 +19,7 @@ const settings = mode => ({
 const response = (id, requested) => ({
     preview_id: id, order_name: "DCO-1", source_plan_name: "CP-1", source_plan_revision: 1,
     source_plan_modified: "before",
+    search_report: { report_id: "report-" + id },
     plan: { sheets: [{ id }], margin_policy: { notes: [id] }, method: id },
     summary: { settings: requested, validation: { status: "Valid", needs_recalculation: false } },
 });
@@ -49,7 +50,7 @@ async function run() {
         cur_frm: frm, dispatchEvent(event) { events.push(event); },
         AlmdinaDocumentContext: { formIdentity(form) { return `DCO::${form.doc.name}`; } },
         AlmdinaPlanWorkspaceAPI: {
-            preview(_name, requested) { const job = pending(); calls.push({ job, requested }); return job.promise; },
+            preview(_name, requested, diagnostics) { const job = pending(); calls.push({ job, requested, diagnostics }); return job.promise; },
             commitPreview(name, id) { calls.push({ commit: id }); return Promise.resolve({
                 exact_preview_commit: true, committed_preview_id: id, name,
                 cutting_plan: "CP-1", plan_revision: 1,
@@ -80,7 +81,9 @@ async function run() {
     await workspace.load(frm);
 
     const mutableA = settings("auto_pro");
-    const a = preview.preview(frm, mutableA);
+    const a = preview.preview(frm, mutableA, { recordSearchDetails: true });
+    assert.equal(calls[0].diagnostics.recordSearchDetails, true);
+    assert.equal(calls[0].requested.recordSearchDetails, undefined);
     mutableA.packing_mode = "optimal";
     assert.equal(calls[0].requested.packing_mode, "smart", "request settings must be copied before dispatch");
     preview.invalidate(frm);
@@ -90,6 +93,7 @@ async function run() {
     calls[0].job.resolve(response("A", calls[0].requested));
     assert.equal(await a, false);
     assert.equal(preview.snapshot(frm).previewId, "B");
+    assert.equal(frm.__almdinaSearchReport.report_id, "report-B", "an obsolete response cannot replace report ownership");
     assert.equal(preview.isCommittable(frm), true);
     assert.equal(workspace.displayedPlanForTab(frm, "System").snapshot_json.sheets[0].id, "B");
     assert.equal(workspace.planForTab(frm, "System").snapshot_json.sheets[0].id, "canonical");
@@ -177,6 +181,7 @@ async function run() {
     assert.equal(await d, true);
     assert.equal((await preview.commit(frm)).exact_preview_commit, true);
     assert.equal(calls.at(-1).commit, "D");
+    assert.equal(frm.__almdinaSearchReport.report_id, "report-D", "exact save keeps the independent report download");
     assert.equal(calls.filter(call => call.requested).length, 7);
 
     // Identity changes invalidate pending responses independently of reset.

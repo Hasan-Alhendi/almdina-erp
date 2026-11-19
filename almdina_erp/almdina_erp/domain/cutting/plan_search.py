@@ -10,6 +10,7 @@ grows. Fewer boards remain better than a larger remnant.
 """
 
 from __future__ import annotations
+from .search_trace import traced, trace_event, trace_enabled
 
 import time
 from copy import deepcopy
@@ -47,6 +48,7 @@ _PRESERVED_PLAN_KEYS = (
 )
 
 
+@traced('improve_plan_search')
 def improve_plan_search(
     plan: dict[str, Any],
     pieces: list[dict[str, Any]],
@@ -229,6 +231,7 @@ def _regular_layout_quality(plan, kerf_cm):
     return aligned, max(1, adjacent), sum(len(boards)-1 for boards in sizes.values())
 
 
+@traced('improve_same_count_layout')
 def improve_same_count_layout(plan, pieces, board_w_cm, board_h_cm, kerf_cm, *,
         machine_type, mirroring_allowed, metric_kwargs, deadline):
     """At most three dense regular-board pairs; no cancellation/shape policy change."""
@@ -280,6 +283,7 @@ def improve_same_count_layout(plan, pieces, board_w_cm, board_h_cm, kerf_cm, *,
     return best
 
 
+@traced('improve_board_regrouping')
 def improve_board_regrouping(plan, pieces, board_w_cm, board_h_cm, kerf_cm, *,
         machine_type, mirroring_allowed, metric_kwargs, deadline, candidate_callback=None):
     """Experimental final-tail regrouping of a validated incumbent.
@@ -383,6 +387,7 @@ def _regrouped_board_candidates(plan, pieces, board_w_cm, board_h_cm, kerf_cm, d
                 yield candidate
 
 
+@traced('_repacked_board_candidates')
 def _repacked_board_candidates(plan, pieces, board_w_cm, board_h_cm, kerf_cm, deadline):
     """Try cancelling a board by re-packing one receiving board with its pieces.
 
@@ -485,6 +490,7 @@ def _repacked_board_candidates(plan, pieces, board_w_cm, board_h_cm, kerf_cm, de
                 yield renumber(candidate)
 
 
+@traced('_compaction_candidates')
 def _compaction_candidates(plan, kerf_cm, board_w_cm, board_h_cm, deadline):
     from .nesting_consolidation import (
         STANDALONE, L_PAIR, CLIPPED_PAIR, SINGLE_CORNER,
@@ -529,6 +535,7 @@ def _compaction_candidates(plan, kerf_cm, board_w_cm, board_h_cm, deadline):
             yield copied
 
 
+@traced('_move_sheet_onto_others', kind='attempt')
 def _move_sheet_onto_others(
     plan: dict[str, Any],
     victim: dict[str, Any],
@@ -660,6 +667,7 @@ def _free_rectangles(sheet: dict[str, Any]) -> list[dict[str, float]]:
     return sorted(free, key=lambda rect: rect["w"] * rect["h"], reverse=True)
 
 
+@traced('_accept_candidate', kind='attempt')
 def _accept_candidate(
     candidate: dict[str, Any],
     best: dict[str, Any],
@@ -678,8 +686,10 @@ def _accept_candidate(
     deadline: float | None = None,
 ) -> dict[str, Any] | None:
     if len(candidate.get("sheets") or []) > len(best.get("sheets") or []):
+        trace_event('candidate',plan=candidate,status='rejected',reason='changed_board_count')
         return None
     if candidate.get("unplaced"):
+        trace_event('candidate',plan=candidate,status='rejected',reason='unplaced_pieces')
         return None
     used_area = sum(num(p.get("area_m2")) for p in pieces)
     total_area = len(candidate.get("sheets") or [])*board_w_cm*board_h_cm/10000
@@ -701,6 +711,7 @@ def _accept_candidate(
         **metric_kwargs,
     )
     if not is_better(enriched, baseline):
+        trace_event('candidate',plan=enriched,status='not_selected',reason='no_final_improvement')
         return None
     if validate_plan(
         enriched,
@@ -710,9 +721,12 @@ def _accept_candidate(
         kerf_cm=kerf_cm,
         deadline_monotonic=deadline,
     ):
+        trace_event('candidate',plan=enriched,status='rejected',reason='validation_failed')
         return None
     if permission_errors(enriched, pieces, mirroring_allowed=mirroring_allowed):
+        trace_event('candidate',plan=enriched,status='rejected',reason='validation_or_permission')
         return None
+    trace_event('candidate',plan=enriched,status='improved',reason='accepted_final_improvement')
     return enriched
 
 
@@ -814,6 +828,7 @@ def _rectangular_cleanup_geometry(plan, indices, kerf_cm):
     return area, length
 
 
+@traced('_improve_remnants')
 def _improve_remnants(
     plan: dict[str, Any],
     pieces: list[dict[str, Any]],

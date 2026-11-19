@@ -1,4 +1,5 @@
 from __future__ import annotations
+from .search_trace import traced, trace_event, trace_enabled
 
 import hashlib
 import json
@@ -119,6 +120,7 @@ def order_pieces(
     return items
 
 
+@traced('_run_preordered_method', kind='attempt')
 def _run_preordered_method(
     ordered_pieces: list[dict[str, Any]],
     original_pieces: list[dict[str, Any]],
@@ -355,10 +357,18 @@ def _candidate_is_better(
     best: dict[str, Any] | None,
 ) -> bool:
     if best is None:
+        if trace_enabled():
+            trace_event('comparison',plans=[candidate],keys=[tuple(candidate.get('industrial_rank') or ())],
+                comparator='industrial_rank',cutter_center_available=False,reason='first_candidate')
         return True
-    return tuple(candidate.get("industrial_rank") or ()) < tuple(
+    result = tuple(candidate.get("industrial_rank") or ()) < tuple(
         best.get("industrial_rank") or ()
     )
+    if trace_enabled():
+        trace_event('comparison',plans=[candidate,best],
+            keys=[tuple(candidate.get('industrial_rank') or ()),tuple(best.get('industrial_rank') or ())],
+            comparator='industrial_rank',cutter_center_available=False,chosen_candidate_index=0 if result else 1)
+    return result
 
 
 def _seed_for_problem(
@@ -473,6 +483,7 @@ def _local_sequences(
     return sequences
 
 
+@traced('auto_fast')
 def auto_fast(
     pieces: list[dict[str, Any]],
     board_w_cm: float,
@@ -518,6 +529,7 @@ def auto_fast(
     return best
 
 
+@traced('auto_pro')
 def auto_pro(
     pieces: list[dict[str, Any]],
     board_w_cm: float,
@@ -592,6 +604,7 @@ def auto_pro(
     return best
 
 
+@traced('deep_search')
 def deep_search(
     pieces: list[dict[str, Any]],
     board_w_cm: float,
@@ -690,6 +703,7 @@ def _cp_sat_available() -> bool:
         return False
 
 
+@traced('_solve_cp_sat', kind='attempt')
 def _solve_cp_sat(
     pieces: list[dict[str, Any]],
     board_w_cm: float,
@@ -915,6 +929,7 @@ def _solve_cp_sat(
     return plan
 
 
+@traced('optimal_search')
 def optimal_search(
     pieces: list[dict[str, Any]],
     board_w_cm: float,
@@ -1017,6 +1032,7 @@ def _layout_signature(plan: dict[str, Any]) -> str:
     return geometry_signature(plan)
 
 
+@traced('smart_search')
 def smart_search(
     pieces: list[dict[str, Any]], board_w_cm: float, board_h_cm: float,
     kerf_cm: float, machine_type: str = "Auto", time_limit_sec: float = 10.0,
@@ -1059,24 +1075,32 @@ def smart_search(
         from .plan_portfolio import manufacturing_export_rejection
         rejection = manufacturing_export_rejection(candidate)
         if rejection:
+            trace_event('candidate',plan=candidate,status='rejected',reason=rejection)
             rejected_finals[rejection] = rejected_finals.get(rejection,0)+1
             return
         if validate_plan(candidate,pieces,board_w_cm,board_h_cm,kerf_cm=kerf_cm) or placement_permission_errors(
             candidate,pieces,mirroring_allowed=mirroring_allowed):
             rejected_finals['validation_or_permission'] = rejected_finals.get('validation_or_permission',0)+1
+            trace_event('candidate',plan=candidate,status='rejected',reason='validation_or_permission')
             return
         if research is not None:
             research.observe_valid(candidate)
         signature = _layout_signature(candidate)
         rank=tuple(candidate['industrial_rank'])
         accepted_ranks[signature] = min(accepted_ranks.get(signature,rank),rank)
+        before = list(finals) if trace_enabled() else None
         existing = next((p for p in finals if _layout_signature(p)==signature),None)
         if existing is not None:
             if not _candidate_is_better(candidate,existing):
+                trace_event('candidate',plan=candidate,status='duplicate',reason='duplicate_geometry_not_better')
                 return
             finals.remove(existing)
+        proposal_event_seq = trace_event('candidate',plan=candidate,status='offered',reason='portfolio_offer')
         finals.append(candidate)
         finals[:] = retain_diverse_finals(finals)
+        if before is not None:
+            trace_event('gallery',before=before,after=finals,reason='industrial_rank_with_same_board_nesting_coverage',
+                proposal_event_seq=proposal_event_seq)
         if machine_type in {"Auto", "CNC Router"} and regular_board_floor_proven(
             finals[0], pieces, board_w_cm, board_h_cm
         ):
@@ -1102,6 +1126,7 @@ def smart_search(
                         deadline_monotonic=(deadline if research.policy.schedule or research.policy.templates else None))
                    if research is not None else {}), **capture, **metric_kwargs))
     completed, attempts, trials = 0, int(seed.get('attempts') or 0), 0
+    @traced('smart_search.finish', kind='attempt')
     def finish(raw, share):
         nonlocal completed
         end = min(deadline,time.monotonic()+max(0,share))
@@ -1154,19 +1179,26 @@ def smart_search(
             rng.shuffle(sequence)
             yield f'seeded_restart_{index}',sequence
     batch = []
+    @traced('smart_search.finish_batch')
     def finish_batch():
         nonlocal late_completions
         if not batch:
             return
         batch.sort(key=lambda p:tuple(p['industrial_rank']))
+        if trace_enabled():
+            trace_event('comparison',plans=batch,keys=[tuple(p['industrial_rank']) for p in batch],
+                comparator='industrial_rank',cutter_center_available=False,reason='batch_seed_ranking')
         # Retain diversity even when the second seed has a worse rectangle rank.
         choices = [batch[0]]
         if len(batch)>1:
             choices.append(batch[-1] if any(p.get('piece_type') in {'Glass','L-Shaped Corner','Clipped Corner'} for p in pieces)
                            else batch[min(1,len(batch)-1)])
-        for raw in choices:
+        for choice_index,raw in enumerate(choices):
             if completed>=8 or time.monotonic()>=deadline:
+                for pending in choices[choice_index:]:
+                    trace_event('candidate',plan=pending,status='not_promoted',reason='completion_limit' if completed>=8 else 'deadline')
                 break
+            trace_event('candidate',plan=raw,status='promoted',reason='batch_leader_or_diverse_second')
             finished = finish(raw,max(0,deadline-time.monotonic())/max(2,16-completed))
             coverage = nesting_coverage(finished)
             shape_signature = _layout_signature(finished)
@@ -1181,6 +1213,12 @@ def smart_search(
                 offer(enrich_plan_metrics(late,str(late.get('method_key') or ''),machine_type,**metric_kwargs))
                 completed_topologies.add(shape_signature)
                 late_completions+=1
+        if trace_enabled():
+            for raw in batch:
+                if all(raw is not choice for choice in choices):
+                    trace_event('candidate',plan=raw,status='not_promoted',reason='batch_shortlist_limit',
+                        selection_rule='industrial_leader_and_diverse_second',
+                        selected_geometry=[_layout_signature(p) for p in choices])
         batch.clear()
     for index,(name,sequence) in enumerate(sequences()):
         selected = [methods[0]] if name.startswith('dimension_cycle_') else list(dict.fromkeys(
@@ -1190,6 +1228,7 @@ def smart_search(
                 break
             signature = packing_signature(method,sequence)
             if signature in seen_orders:
+                trace_event('skipped_attempt',reason='duplicate_packing_order',method_key=method,ordering_strategy=name)
                 continue
             seen_orders.add(signature)
             raw = _run_preordered_method(sequence,pieces,board_w_cm,board_h_cm,kerf_cm,method,name,**capture)
@@ -1197,6 +1236,7 @@ def smart_search(
             attempts += 1
             signature = _layout_signature(raw)
             if signature in seen_layouts:
+                trace_event('candidate',plan=raw,status='duplicate',reason='duplicate_raw_geometry')
                 continue
             seen_layouts.add(signature)
             ranked_raw = enrich_plan_metrics(raw,method,machine_type,**metric_kwargs)
@@ -1280,6 +1320,9 @@ def smart_search(
             boards_before_after=[len(initial['sheets']), len(best['sheets'])])
         best['smart_search']['joint'] = joint_diagnostics
     best['smart_candidates'] = [dict(p) for p in finals]
+    trace_event('stage_stop',reason='deadline' if time.monotonic()>=overall_deadline else (
+        'completion_limit' if completed>=8 else 'search_limits_or_exhausted'),
+        completed=completed,packing_trials=trials,attempts=attempts)
     if research is not None:
         nominee = research.nominee(finals)
         best['smart_research_candidates'] = [nominee] if nominee is not None else []
@@ -1288,6 +1331,7 @@ def smart_search(
     return best
 
 
+@traced('optimize_plan')
 def optimize_plan(
     pieces: list[dict[str, Any]],
     board_w_cm: float,
@@ -1380,6 +1424,7 @@ def optimize_plan(
     )
 
 
+@traced('_finish_plan_search')
 def _finish_plan_search(
     baseline: dict[str, Any], pieces: list[dict[str, Any]],
     board_w_cm: float, board_h_cm: float, kerf_cm: float,
@@ -1469,7 +1514,9 @@ def _finish_plan_search(
         # inside Glass guests. Keep a proven earlier stage; legacy modes and
         # all export/import contracts remain intact.
         from .plan_portfolio import manufacturing_export_rejection
-        if require_importable_geometry and manufacturing_export_rejection(candidate):
+        rejection = manufacturing_export_rejection(candidate) if require_importable_geometry else None
+        if rejection:
+            trace_event('candidate',plan=candidate,status='rejected',reason=rejection)
             continue
         candidate = enrich_plan_metrics(
             candidate,
@@ -1503,6 +1550,7 @@ def _finish_plan_search(
         # Keep post-pass behavior on an exact industrial tie, never at a cost
         # in boards, reusable offcut, or manufacturing complexity.
         if best is not None and _candidate_is_better(best, candidate):
+            trace_event('candidate',plan=candidate,status='not_selected',reason='industrial_rank')
             continue
         # A no-op post-pass may change diagnostics but shares every input to
         # both validators with the already proven best layout.
@@ -1517,6 +1565,7 @@ def _finish_plan_search(
             pieces,
             mirroring_allowed=mirroring_allowed,
         )):
+            trace_event('candidate',plan=candidate,status='rejected',reason='validation_or_permission')
             continue
         best = candidate
     # Keep the original failure payload when no complete valid plan exists;

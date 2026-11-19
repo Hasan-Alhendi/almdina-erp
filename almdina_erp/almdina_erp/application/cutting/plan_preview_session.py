@@ -1,4 +1,5 @@
 from __future__ import annotations
+from almdina_erp.almdina_erp.domain.cutting.search_trace import traced, trace_event
 
 from dataclasses import asdict, dataclass, field
 from typing import Any, Mapping
@@ -68,6 +69,7 @@ class CuttingPlanPreviewSession:
     source_revision: int = 0
     expires_at: str = ""
     version: int = PREVIEW_SESSION_VERSION
+    search_report_id: str = ''
 
     def as_cache_value(self) -> dict[str, Any]:
         return asdict(self)
@@ -75,6 +77,7 @@ class CuttingPlanPreviewSession:
     @classmethod
     def from_cache_value(cls, value: Mapping[str, Any]) -> "CuttingPlanPreviewSession":
         return cls(
+            search_report_id=str(value.get('search_report_id') or ''),
             candidates=dict(value.get("candidates") or {}),
             search_seeds=tuple(value.get("search_seeds") or ()),
             search_round=int(value.get("search_round") or 0),
@@ -94,6 +97,7 @@ class CuttingPlanPreviewSession:
         )
 
 
+@traced('merge_preview_candidates')
 def merge_preview_candidates(current, previous, *, limit=5):
     """Keep the same final cutter contract when continuing a trusted preview."""
     from almdina_erp.almdina_erp.domain.cutting.optimizer import _candidate_is_better
@@ -108,6 +112,10 @@ def merge_preview_candidates(current, previous, *, limit=5):
     keys = final_system_sort_keys([c['snapshot'] for c in candidates])
     ranked = [candidate for _, candidate in
               sorted(zip(keys, candidates), key=lambda item: item[0])][:limit]
+    trace_event('gallery',before=[c['snapshot'] for c in previous.values()],
+        after=[c['snapshot'] for c in ranked],reason='continue_merge_final_sort_dedup_limit',
+        previous_preview_candidate_ids=list(previous),current_preview_candidate_ids=list(current),
+        selected_preview_candidate_ids=[c['candidate_id'] for c in ranked])
     return {c['candidate_id']:c for c in ranked}
 
 

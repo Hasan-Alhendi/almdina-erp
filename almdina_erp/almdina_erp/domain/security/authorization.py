@@ -39,6 +39,7 @@ class Capability:
     VIEW_UPLOADED_CUTTING_PLAN = "view_uploaded_cutting_plan"
     VIEW_APPROVED_CUTTING_PLAN = "view_approved_cutting_plan"
     RECALCULATE_PLAN = "recalculate_plan"
+    DOWNLOAD_CUTTING_SEARCH_REPORT = "download_cutting_search_report"
     EDIT_OPTIMIZER_SETTINGS = "edit_optimizer_settings"
     USE_BOARD_EDITOR = "use_board_editor"
     PRINT_CUTTING_PLAN = "print_cutting_plan"
@@ -186,6 +187,7 @@ _CAPABILITY_DEFINITIONS = (
         "cutting_plan",
     ),
     CapabilityDefinition(Capability.RECALCULATE_PLAN, Capability.RECALCULATE_PLAN, CUTTING_PLAN_DOCTYPE, "cutting_plan"),
+    CapabilityDefinition(Capability.DOWNLOAD_CUTTING_SEARCH_REPORT, Capability.DOWNLOAD_CUTTING_SEARCH_REPORT, CUTTING_PLAN_DOCTYPE, "cutting_plan"),
     CapabilityDefinition(Capability.EDIT_OPTIMIZER_SETTINGS, Capability.EDIT_OPTIMIZER_SETTINGS, CUTTING_PLAN_DOCTYPE, "cutting_plan"),
     CapabilityDefinition(Capability.USE_BOARD_EDITOR, Capability.USE_BOARD_EDITOR, CUTTING_PLAN_DOCTYPE, "cutting_plan"),
     CapabilityDefinition(Capability.PRINT_CUTTING_PLAN, Capability.PRINT_CUTTING_PLAN, CUTTING_PLAN_DOCTYPE, "cutting_plan"),
