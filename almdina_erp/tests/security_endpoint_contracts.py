@@ -51,6 +51,18 @@ _GROUPS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
     ("almdina_erp.almdina_erp.services.cutting_plan_workspace_query_service", C, ("get_plan_workspace_snapshot",)),
     ("almdina_erp.almdina_erp.services.board_editor_query_service", C, ("get_board_editor_projection",)),
     ("almdina_erp.almdina_erp.services.board_editor_draft_service", C, ("save_board_editor_draft", "begin_board_editor_draft_from_current_source")),
+    (
+        "almdina_erp.almdina_erp.services.board_editor_drawing_service",
+        C,
+        (
+            "get_board_editor_drawing",
+            "get_board_editor_drawing_archive",
+            "list_board_editor_drawings",
+            "save_board_editor_drawing",
+            "upload_board_editor_reference_image",
+            "get_board_editor_reference_image",
+        ),
+    ),
     ("almdina_erp.almdina_erp.services.board_editor_draft_review_service", C, ("validate_board_editor_draft",)),
     ("almdina_erp.almdina_erp.services.board_editor_plan_create_service", C, ("create_board_editor_plan_copy",)),
     ("almdina_erp.almdina_erp.services.cutting_plan_service", D, ("approve_order", "lock_cutting_plan", "reject_order", "send_order_to_production", "submit_order_for_review")),

@@ -298,6 +298,7 @@ def _assert_board_editor_manufacturing_ready(plan: Any) -> None:
     from almdina_erp.almdina_erp.domain.cutting.board_editor_manufacturing import (
         BoardEditorManufacturingError,
         assert_board_editor_manufacturing_ready,
+        format_missing_geometry_message,
     )
 
     snapshot = frappe.parse_json(plan.snapshot_json or "{}") or {}
@@ -308,11 +309,13 @@ def _assert_board_editor_manufacturing_ready(plan: Any) -> None:
             kerf_mm=flt(getattr(plan, "kerf_mm", 0)),
         )
     except BoardEditorManufacturingError as exc:
+        if exc.code == "missing_geometry":
+            frappe.throw(
+                format_missing_geometry_message(exc.detail, action="approve", translate=_),
+                frappe.ValidationError,
+            )
         messages = {
             "empty_plan": _("خطة محرر الألواح لا تحتوي قطعًا جاهزة للتصنيع."),
-            "missing_geometry": _(
-                "خطة محرر الألواح تفتقد هندسة نهائية لبعض القطع ولا يمكن اعتمادها."
-            ),
             "machine_rotation_forbidden": _(
                 "زاوية دوران قطعة أو أكثر غير مدعومة لنوع الماكينة المحدد في الخطة."
             ),
