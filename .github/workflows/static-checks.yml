@@ -274,6 +274,7 @@ jobs:
             almdina_erp/tests/test_almadina_137_plan_settings_contract.py \
             almdina_erp/tests/test_cutting_shape_search.py \
             almdina_erp/tests/test_cutting_industrial_gaps.py \
+            almdina_erp/tests/test_edge_protection.py \
             almdina_erp/tests/test_final_cut_line_alignment.py \
             almdina_erp/tests/test_liner_geometry.py \
             almdina_erp/tests/test_glass_opening_nesting.py \
@@ -301,6 +302,7 @@ jobs:
           python -m pytest -q almdina_erp/tests/test_error_diagnostics.py
           node almdina_erp/tests/js/frontend_foundation.test.js
           node almdina_erp/tests/js/almdina_locale.test.js
+          node almdina_erp/tests/js/factory_edge_protection.test.js
           node almdina_erp/tests/js/factory_workforce_languages.test.js
           node almdina_erp/tests/js/dco_form_sidebar_controller.test.js
           node almdina_erp/tests/js/dco_form_presentation_owner.test.js

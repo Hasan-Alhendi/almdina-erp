@@ -39,6 +39,7 @@ from almdina_erp.almdina_erp.domain.cutting.plan_settings import (
     DEFAULT_MACHINE_TYPE,
     DEFAULT_OPTIMIZATION_TIME_LIMIT_SEC,
     DEFAULT_PREFERRED_TRIM_MM,
+    EdgeProtectionPolicy,
     PlanSettings,
     PlanSettingsValidationError,
     normalize_plan_settings,
@@ -565,6 +566,7 @@ def calculate_system_plan(order: Any, plan: Any, *, seed_plans=(), search_round=
 
     width_mm, length_mm = _board_dimensions_mm(order)
     factory_settings = frappe.get_cached_doc("Almdina ERP Settings")
+    edge_protection = EdgeProtectionPolicy.from_settings(factory_settings)
     plan_settings = settings_for_system_search(_validated_plan_settings(plan))
     plan.optimization_mode = plan_settings.optimization_mode
     fingerprint = plan_input_fingerprint(order, plan)
@@ -581,6 +583,7 @@ def calculate_system_plan(order: Any, plan: Any, *, seed_plans=(), search_round=
                 kerf_cm=plan_settings.kerf_mm / 10,
             ),
             optimizer=OptimizerOptions(
+                edge_protection=edge_protection,
                 selected_mode=plan_settings.optimization_mode,
                 machine_type=plan_settings.machine_type,
                 time_limit_sec=plan_settings.optimization_time_limit_sec,

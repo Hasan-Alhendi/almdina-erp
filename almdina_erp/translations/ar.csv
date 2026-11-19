@@ -4378,3 +4378,8 @@ Top Side,أعلى
 "The operational file has been generated.",تم توليد الملف التشغيلي
 CNC machine bed,سطح الماكينة
 Full board,اللوح الكامل
+Horizontal edge protection (mm),هامش حماية أفقي (مم)
+Vertical edge protection (mm),هامش حماية عمودي (مم)
+"Minimum actual gap from original board edges when centering is not eligible. Trim already counts; zero disables this axis. Unsafe moves keep the existing plan.","المسافة الفعلية المستهدفة عن حواف اللوح الأصلية عند تعذر التوسيط. يُحتسب التشذيب ضمنها؛ الصفر يعطّل حماية هذا المحور. تُحفظ الخطة الحالية إذا تعذرت الحركة الآمنة."
+Edge protection margins must be finite non-negative numbers.,يجب أن تكون هوامش الحماية أرقامًا صالحة ومحدودة وغير سالبة.
+Edge protection settings changed. Recalculate the preview before saving.,تغيّرت إعدادات حماية الحواف. أعد حساب المعاينة قبل الحفظ.

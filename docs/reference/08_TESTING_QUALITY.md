@@ -148,6 +148,16 @@ Persona لا يملك `VIEW_COSTS` يجب ألا يحصل على Internal factor
 
 ## 11. Evidence-driven testing for optimization and safety
 
+`test_edge_protection.py` يغطي سياسة الحماية بعد المحاذاة: حدود التوسيط لكل
+محور، احتساب التشذيب مرة واحدة، النقل الصلب مع Kerf صفر/موجب، أهلية الفضلات،
+رفض الهندسة الخاصة وOFFCUT، التراجع الذري، جميع مرشحي المعرض، Continue Search،
+Snapshot والتصدير الفعلي وإعادة استيراد DXF الصارم، ورفض Preview القديمة أو
+المختلفة أثناء التوليد. `factory_edge_protection.test.js` يغطي حقول المعمل
+بالعربية والإنجليزية والقيم الحالية والصفر؛ اختبار Frappe في
+`test_factory_master_data_integration.py` يثبت التخزين والصلاحية والرفض الخلفي.
+يبقى install وmigrate مرتين ضمن بوابة Frappe v16 الحقيقية، وليس بديلًا عنها
+فحص metadata أو الاختبارات ذات Framework stub.
+
 ربط ALNS بزر إعادة الحساب محمي أيضًا بـ`test_alns_recalculation.py` و
 `test_compound_layout_refinement.py`: استدعاء Composition Root الفعلي مع
 حقل الانعكاس، الاحتفاظ بالـbaseline، رفض المرشح غير الصالح، ميزانية مشتركة

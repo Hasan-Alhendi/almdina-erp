@@ -10,12 +10,45 @@ trim. Doors keep their order, rotation, and kerf gaps. No board is added.
 from __future__ import annotations
 
 from copy import deepcopy
+from dataclasses import dataclass
 import math
 from typing import Any
 
 from almdina_erp.almdina_erp.domain.cutting.adaptive_trim import TRIM_PRECISION_CM
 from almdina_erp.almdina_erp.domain.cutting.dxf_geometry_snapshot import DxfGeometrySnapshotError
 from almdina_erp.almdina_erp.domain.cutting.primitives import num
+
+
+@dataclass(frozen=True, slots=True)
+class AxisPlacementDecision:
+    reason: str
+    delta_cm: float = 0.0
+
+
+def decide_axis_placement(
+    start_cm: float, end_cm: float, frame_cm: float, *,
+    trim_cm: float, max_centerable_edge_gap_cm: float, protection_mm: float = 0.0,
+) -> AxisPlacementDecision:
+    """Choose centering first, otherwise project zero onto the safe protection interval.
+
+    Coordinates are usable-frame cm. Trim contributes to the physical gap;
+    protection never changes it or reserves space in the packing algorithm.
+    Centering deliberately tests BOTH existing gaps, never their sum.
+    """
+    left = max(0.0, start_cm)
+    right = max(0.0, frame_cm - end_cm)
+    if max(left, right) <= max_centerable_edge_gap_cm + 1e-7:
+        return AxisPlacementDecision("CENTERED", (frame_cm - (end_cm - start_cm)) / 2 - start_cm)
+    if protection_mm <= 0:
+        return AxisPlacementDecision("REMNANT_PRESERVED")
+    target = max(0.0, protection_mm / 10 - trim_cm)
+    lower, upper = target - start_cm, frame_cm - target - end_cm
+    if lower > upper + 1e-7:
+        return AxisPlacementDecision("UNSAFE_MOVE")
+    delta = min(max(0.0, lower), upper)
+    if abs(delta) <= 1e-7:
+        return AxisPlacementDecision("ALREADY_PROTECTED")
+    return AxisPlacementDecision("EDGE_PROTECTED", delta)
 
 
 def realize_sheet_edge_trim(
@@ -245,12 +278,14 @@ def _realize_axis(
         span = end - start
         if span > frame + precision_cm:
             return
-        left_gap = max(0.0, start)
-        right_gap = max(0.0, frame - end)
-        if max(left_gap, right_gap) > max_centerable_edge_gap_cm + 1e-7:
+        decision = decide_axis_placement(
+            start, end, frame, trim_cm=target,
+            max_centerable_edge_gap_cm=max_centerable_edge_gap_cm,
+        )
+        if decision.reason != "CENTERED":
             continue
         # Keep the mandatory inset fixed and split only this row/column's slack.
-        delta = ((frame - span) / 2.0) - start
+        delta = decision.delta_cm
         if abs(delta) <= precision_cm / 10.0:
             continue
         if start + delta < -precision_cm or end + delta > frame + precision_cm:

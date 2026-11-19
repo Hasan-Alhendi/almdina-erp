@@ -19,6 +19,7 @@ from almdina_erp.almdina_erp.domain.cutting.sheet_edge_trim import (
     realize_sheet_edge_trim,
 )
 from almdina_erp.almdina_erp.domain.cutting.plan_settings import (
+    EdgeProtectionPolicy,
     PlanSettings,
     normalize_plan_settings,
 )
@@ -106,6 +107,7 @@ class OptimizerOptions:
     alns_search_budget_sec: float = 0.0
     pattern_search_budget_sec: float = 0.0
     corner_search_budget_sec: float = 0.0
+    edge_protection: EdgeProtectionPolicy = EdgeProtectionPolicy()
 
 
 @dataclass(frozen=True, slots=True)
@@ -560,6 +562,30 @@ def _snapshot_outcome(command, engine, plan, expanded, applied_trim, trim_decisi
         plan = _enrich_final_geometry_metrics(plan, metric_options)
         validation_errors = validate_snapshot_plan()
 
+    edge_decisions = []
+    if not validation_errors:
+        from almdina_erp.almdina_erp.domain.cutting.edge_protection import protect_plan_edges
+
+        # All geometry refinements are finished. Roll back to this validated
+        # aligned result if the final adapter gate rejects a protection move.
+        before_protection = plan
+        plan, edge_decisions = protect_plan_edges(
+            plan, expanded, usable_width_cm, usable_length_cm, board.kerf_cm,
+            policy=command.optimizer.edge_protection,
+            max_centerable_edge_gap_cm=command.optimizer.max_centerable_edge_gap_cm,
+            machine_type=machine_type,
+            mirroring_allowed=piece_mirroring_allowed(command.allow_piece_mirroring),
+            metric_options={key: value for key, value in metric_options.items() if key != "machine_type"},
+        )
+        if plan is not before_protection:
+            validation_errors = validate_snapshot_plan()
+            if validation_errors:
+                plan = before_protection
+                for decision in edge_decisions:
+                    if decision["reason"] == "EDGE_PROTECTED":
+                        decision.update(reason="UNSAFE_MOVE", shift_mm=0.0, detail="final_validation")
+                validation_errors = validate_snapshot_plan()
+
     metrics = dict(plan.get("industrial_metrics") or {})
     required_boards = len(plan.get("sheets") or [])
 
@@ -599,6 +625,8 @@ def _snapshot_outcome(command, engine, plan, expanded, applied_trim, trim_decisi
         "usable_board_length_cm": usable_length_cm,
         "kerf_cm": board.kerf_cm,
         "max_centerable_edge_gap_cm": command.optimizer.max_centerable_edge_gap_cm,
+        **command.optimizer.edge_protection.field_values(),
+        "edge_positioning": edge_decisions,
         "trim_cm": board.trim_cm,
         "allow_piece_mirroring": piece_mirroring_allowed(command.allow_piece_mirroring),
         "applied_trim_width_cm": applied_trim.width_trim_cm,
