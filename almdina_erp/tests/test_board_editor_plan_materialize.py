@@ -489,6 +489,40 @@ class BoardEditorMaterializeTests(unittest.TestCase):
             places=6,
         )
 
+    def test_optimizer_rotation_flag_survives_when_footprint_is_already_swapped(self):
+        pieces = [
+            projection_piece(
+                "A",
+                2,
+                0,
+                0,
+                980,
+                500,
+                original_w=50.0,
+                original_h=98.0,
+                piece_type="Clipped Corner",
+            )
+        ]
+        source = source_snapshot(pieces)
+        source["sheets"][0]["pieces"][0]["rotated"] = True
+        snapshot = materialize_plan_snapshot(
+            draft=draft_payload(layout_rows(pieces)),
+            projection=projection(pieces),
+            source_snapshot=source,
+            machine_type="CNC Router",
+            source_plan_name="PLAN-SRC",
+            expected_draft_version=1,
+            source_content_revision="rev-1",
+            source_input_fingerprint="fp-1",
+        )
+        piece = snapshot["sheets"][0]["pieces"][0]
+        self.assertAlmostEqual(piece["w"], 98.0)
+        self.assertAlmostEqual(piece["h"], 50.0)
+        self.assertAlmostEqual(piece["original_w"], 50.0)
+        self.assertAlmostEqual(piece["original_h"], 98.0)
+        self.assertTrue(piece["rotated"])
+        self.assertFalse(piece["apply_rotated_to_geometry"])
+
     def test_nesting_rotation_is_kept_for_edge_bands_without_spinning_geometry(self):
         pieces = [projection_piece("ROT", 2, 10, 20, 800, 400, original_w=40, original_h=80)]
         proj = projection(pieces)
@@ -505,7 +539,8 @@ class BoardEditorMaterializeTests(unittest.TestCase):
             source_input_fingerprint="fp-1",
         )
         piece = snapshot["sheets"][0]["pieces"][0]
-        self.assertFalse(piece["rotated"])
+        self.assertTrue(piece["rotated"])
+        self.assertFalse(piece["apply_rotated_to_geometry"])
         self.assertEqual(piece["rotation_quarter_turns"], 1)
 
         turned = materialize_plan_snapshot(
@@ -518,7 +553,9 @@ class BoardEditorMaterializeTests(unittest.TestCase):
             source_content_revision="rev-1",
             source_input_fingerprint="fp-1",
         )
-        self.assertNotIn("rotation_quarter_turns", turned["sheets"][0]["pieces"][0])
+        turned_piece = turned["sheets"][0]["pieces"][0]
+        self.assertTrue(turned_piece["rotated"])
+        self.assertEqual(turned_piece["rotation_quarter_turns"], 0)
 
     def test_manufacturing_actions_allowed_for_board_editor(self):
         self.assertTrue(manufacturing_actions_allowed(BOARD_EDITOR))
@@ -938,6 +975,167 @@ class BoardEditorPlanCreateApplicationTests(unittest.TestCase):
         self.assertTrue(again["ok"], again)
         self.assertEqual(again["plan_name"], "CP-BE-1")
         self.assertEqual(port.discarded, [])
+
+    def test_copy_keeps_source_edge_policy_and_local_cut_size(self):
+        cases = (
+            ("regular", "Regular", 978, 499, 98.0, 50.0),
+            ("l-shape", "L-Shaped Corner", 1110, 1898, 111.0, 190.0),
+            ("clipped", "Clipped Corner", 499, 978, 50.0, 98.0),
+            ("special", "Special", 660, 660, 66.0, 66.0),
+        )
+        pieces = []
+        for index, (instance, kind, width, length, original_w, original_h) in enumerate(cases):
+            pieces.append(
+                projection_piece(
+                    instance,
+                    index + 1,
+                    100 + (index % 2) * 2200,
+                    100 + (index // 2) * 2200,
+                    width,
+                    length,
+                    piece_type=kind,
+                    original_w=original_w,
+                    original_h=original_h,
+                )
+            )
+        board = {
+            1: {
+                "sheet_no": 1,
+                "resource_kind": "FULL_BOARD",
+                "usable_width_mm": 5000,
+                "usable_length_mm": 5000,
+            }
+        }
+        proj = projection(pieces, sheets=board)
+        source = source_snapshot(
+            pieces,
+            sheets={
+                1: {
+                    "sheet_no": 1,
+                    "resource_kind": "FULL_BOARD",
+                    "w": 500.0,
+                    "h": 500.0,
+                    "usable_width_cm": 500.0,
+                    "usable_length_cm": 500.0,
+                    "full_width_cm": 500.0,
+                    "full_length_cm": 500.0,
+                    "source_area_m2": 25.0,
+                }
+            },
+        )
+        layout = layout_rows(
+            pieces,
+            regular={"x": 180, "y": 160, "rotation": 90},
+            **{"l-shape": {"x": 2300, "y": 140}, "clipped": {"x": 160, "y": 2360}},
+        )
+        draft = draft_payload(layout)
+        snapshot = None
+        for _copy in range(3):
+            snapshot = materialize_plan_snapshot(
+                draft=draft,
+                projection=proj,
+                source_snapshot=source,
+                machine_type="CNC Router",
+                source_plan_name="PLAN-SRC",
+                expected_draft_version=1,
+                source_content_revision="rev-1",
+                source_input_fingerprint="fp-1",
+            )
+            by_label = {
+                piece["label"]: piece
+                for sheet in snapshot["sheets"]
+                for piece in sheet["pieces"]
+            }
+            for instance, _kind, width, length, original_w, original_h in cases:
+                piece = by_label[instance]
+                self.assertEqual(piece["w"], width / 10.0)
+                self.assertEqual(piece["h"], length / 10.0)
+                self.assertEqual(piece["original_w"], original_w)
+                self.assertEqual(piece["original_h"], original_h)
+                outer = piece["geometry"]["outer"]
+                span_w = max(point[0] for point in outer) - min(point[0] for point in outer)
+                span_h = max(point[1] for point in outer) - min(point[1] for point in outer)
+                if instance == "regular":
+                    self.assertAlmostEqual(span_w, length, places=3)
+                    self.assertAlmostEqual(span_h, width, places=3)
+                else:
+                    self.assertAlmostEqual(span_w, width, places=3)
+                    self.assertAlmostEqual(span_h, length, places=3)
+            source = snapshot
+
+        class PlanPort:
+            def __init__(self):
+                self.settings = None
+
+            def existing_revisions(self, order_name):
+                return [1]
+
+            def create_board_editor_draft(self, **kwargs):
+                self.settings = kwargs["settings"]
+                return {"name": "CP-NEW", "revision": 2, "status": "Draft"}
+
+            def apply_snapshot(self, **kwargs):
+                return {"name": "CP-NEW", "revision": 2, "status": "Draft"}
+
+            def discard_incomplete_plan(self, plan_name):
+                raise AssertionError(plan_name)
+
+            def load_source_plan(self, order_name, plan_name):
+                return {
+                    "name": plan_name,
+                    "order_name": order_name,
+                    "status": "Approved",
+                    "source_type": "System",
+                    "revision": 1,
+                    "optimization_mode": "auto_pro",
+                    "machine_type": "CNC Router",
+                    "optimization_time_limit_sec": 10,
+                    "kerf_mm": 4,
+                    "trim_margin_mm": 5,
+                    "deduct_edge_thickness": self.policy,
+                    "snapshot": source_snapshot(pieces),
+                }
+
+        store_row = {
+            "name": "DRAFT-1",
+            "draft_version": 1,
+            "source_content_revision": "rev-1",
+            "source_input_fingerprint": "fp-1",
+            "distribution_fingerprint": draft["distribution_fingerprint"],
+            "layout_json": layout,
+            "last_create_request_id": "",
+            "last_created_plan": "",
+            "last_created_draft_version": 0,
+        }
+
+        class DraftStore:
+            def lock_draft(self, order_name, plan_name):
+                return dict(store_row)
+
+            def record_create(self, **kwargs):
+                return None
+
+        for policy in (0, 1, False, True):
+            port = PlanPort()
+            port.policy = policy
+            result = execute_create(
+                CreateBoardEditorPlanCommand(
+                    order_name="ORD-1",
+                    source_plan_name="PLAN-SRC",
+                    expected_draft_version=1,
+                    source_content_revision="rev-1",
+                    source_input_fingerprint="fp-1",
+                    create_request_id=f"req-{policy}",
+                    draft_name="DRAFT-1",
+                ),
+                order_status="Draft",
+                projection=proj,
+                machine_type="CNC Router",
+                draft_store=DraftStore(),
+                plan_port=port,
+            )
+            self.assertTrue(result["ok"], result)
+            self.assertIs(port.settings["deduct_edge_thickness"], policy)
 
     def test_cutting_plan_validate_allows_board_editor_from_draft_source(self):
         source = (APP / "doctype" / "cutting_plan" / "cutting_plan.py").read_text(

@@ -14,7 +14,7 @@ import math
 import time
 
 from .cut_line_quality import final_system_sort_keys, sheet_cut_line_quality
-from .glass_opening_nesting import material_outline_cm
+from .glass_opening_nesting import occupancy_outline_cm
 from .pattern_master import PatternColumn, PatternSelection, valid_selection
 from .primitives import create_sheet, orientations_for
 from .regular_templates import _unprotected_regular
@@ -99,7 +99,7 @@ class PatternPool:
             if source is None or placed.get('glass_host_piece_id') or placed.get('placement_outline_cm'):
                 _observe_pattern(sheet,origin,'unsupported_pattern_source_or_nested_geometry')
                 return None
-            ring=material_outline_cm(placed)
+            ring=occupancy_outline_cm(placed)
             if ring is None:
                 _observe_pattern(sheet,origin,'unproven_contour')
                 return None
@@ -463,7 +463,7 @@ def refine_pattern_layout(incumbent,seeds,sources,width,height,kerf,*,deadline,
         for parent in parents:
             moving={p['id'] for p in _movable_sources(parent,sources,kerf)}
             fixed=[(i,p) for i,s in enumerate(parent['sheets']) for p in s['pieces'] if p['id'] not in moving]
-            key=tuple((i,pool.family_by_id[p['id']],tuple(material_outline_cm(p))) for i,p in fixed)
+            key=tuple((i,pool.family_by_id[p['id']],tuple(occupancy_outline_cm(p))) for i,p in fixed)
             if key not in unique_frames:
                 unique_frames[key]=(len({i for i,_ in fixed}),parent)
         frames=[p for _,p in sorted(unique_frames.values(),key=lambda v:v[0])[:2]]
@@ -491,7 +491,7 @@ def refine_pattern_layout(incumbent,seeds,sources,width,height,kerf,*,deadline,
     material=0.
     for sheet in incumbent['sheets']:
         for p in sheet['pieces']:
-            ring=material_outline_cm(p)
+            ring=occupancy_outline_cm(p)
             material+=abs(sum(a[0]*b[1]-b[0]*a[1] for a,b in zip(ring,ring[1:]+ring[:1])))/2
     owner_minimum=max(0.,material-(len(incumbent['sheets'])-1)*width*height)
     for index in _family_grids(pool,best['industrial_metrics']['largest_reusable_free_area_m2']):

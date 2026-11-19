@@ -32,6 +32,7 @@ LINER_LAYER = EXTRA_OVERLAY_LAYER_BY_KIND["liner"]
 REAR_GROOVE_LAYER = EXTRA_OVERLAY_LAYER_BY_KIND["back_groove"]
 HANDLE_RECESS_LAYER = EXTRA_OVERLAY_LAYER_BY_KIND["recessed_handle_cutout"]
 TEXT_LAYER_EXPORT_NAME = TEXT_LABEL_LAYER_KEY
+TEXT_OUTLINE_LAYER = "TEXT_OUTLINE"
 
 # Roles describe manufacturing/display duty. They are not UI visibility flags.
 LAYER_ROLE_SHEET_OUTLINE = "sheet_outline"
@@ -40,6 +41,7 @@ LAYER_ROLE_FINISHED_OUTLINE = "finished_outline"
 LAYER_ROLE_OFFCUT_CLASSIFICATION = "offcut_classification"
 LAYER_ROLE_ADDON_OVERLAY = "addon_overlay"
 LAYER_ROLE_TEXT_ANNOTATION = "text_annotation"
+LAYER_ROLE_TEXT_OUTLINE = "text_outline"
 LAYER_ROLE_DESIGNER_DEFAULT = "designer_default"
 LAYER_ROLE_REFERENCE = "reference"
 
@@ -123,6 +125,15 @@ _CANONICAL_LAYER_SPECS: tuple[dict[str, Any], ...] = (
         "default_linetype": "CONTINUOUS",
         "affiliation_policy": AFFILIATION_NEVER_INFER_FROM_LAYER,
         "legacy_original_names": (TEXT_LABEL_LAYER,),
+    },
+    {
+        # Approved letter outlines only. Not a door contour and not a saw path.
+        "original_name": TEXT_OUTLINE_LAYER,
+        "role": LAYER_ROLE_TEXT_OUTLINE,
+        "manufacturing": False,
+        "default_aci_color": 30,
+        "default_linetype": "CONTINUOUS",
+        "affiliation_policy": AFFILIATION_SINGLE_PIECE_WHEN_OWNED,
     },
 )
 
@@ -356,6 +367,7 @@ __all__ = [
     "LAYER_ROLE_SAW_CENTER",
     "LAYER_ROLE_SHEET_OUTLINE",
     "LAYER_ROLE_TEXT_ANNOTATION",
+    "LAYER_ROLE_TEXT_OUTLINE",
     "LINER_LAYER",
     "LINETYPE_SOURCE_BYENTITY",
     "LINETYPE_SOURCE_BYLAYER",
@@ -364,6 +376,7 @@ __all__ = [
     "REAR_GROOVE_LAYER",
     "SHEET_OUTLINE_LAYER",
     "TEXT_LAYER_EXPORT_NAME",
+    "TEXT_OUTLINE_LAYER",
     "build_layer_registry",
     "canonical_layer_match_keys",
     "canonical_layer_specs",

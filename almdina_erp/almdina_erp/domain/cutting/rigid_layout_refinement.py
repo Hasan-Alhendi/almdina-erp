@@ -8,7 +8,7 @@ from copy import deepcopy
 import time
 
 from .cut_line_quality import plan_cut_line_quality, final_system_sort_keys
-from .glass_opening_nesting import material_outline_cm
+from .glass_opening_nesting import occupancy_outline_cm
 from .nesting_consolidation import extract_placement_groups, STANDALONE
 from .same_count_layout_search import _cache, _valid, largest_remnant_region
 from .shape_aware_nesting import _translate_pieces, _clears, _inside_board
@@ -43,8 +43,8 @@ def improve_rigid_contacts(plan, sources, width, height, kerf, *, deadline,
             sheet = best['sheets'][index]
             others = [p for p in sheet['pieces'] if p['id'] not in members]
             moving = [p for p in sheet['pieces'] if p['id'] in members]
-            fixed_outlines = [material_outline_cm(p) for p in others]
-            body_outlines = [material_outline_cm(p) for p in moving]
+            fixed_outlines = [occupancy_outline_cm(p) for p in others]
+            body_outlines = [occupancy_outline_cm(p) for p in moving]
             if not others or any(p is None for p in fixed_outlines+body_outlines):
                 continue
             moves = []

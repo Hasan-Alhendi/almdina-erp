@@ -399,6 +399,7 @@ def _required_saved_plan(order: Any, plan_source: str | None = None) -> Any:
         from almdina_erp.almdina_erp.domain.cutting.board_editor_manufacturing import (
             BoardEditorManufacturingError,
             assert_board_editor_manufacturing_ready,
+            format_missing_geometry_message,
         )
 
         snapshot = frappe.parse_json(_plan_field(plan, "snapshot_json") or "{}") or {}
@@ -409,11 +410,13 @@ def _required_saved_plan(order: Any, plan_source: str | None = None) -> Any:
                 kerf_mm=flt(_plan_field(plan, "kerf_mm") or 0),
             )
         except BoardEditorManufacturingError as exc:
+            if exc.code == "missing_geometry":
+                frappe.throw(
+                    format_missing_geometry_message(exc.detail, action="export", translate=_),
+                    frappe.ValidationError,
+                )
             messages = {
                 "empty_plan": _("خطة محرر الألواح لا تحتوي قطعًا جاهزة للتصدير."),
-                "missing_geometry": _(
-                    "خطة محرر الألواح تفتقد هندسة نهائية لبعض القطع ولا يمكن تصديرها."
-                ),
                 "machine_rotation_forbidden": _(
                     "زاوية دوران قطعة أو أكثر غير مدعومة لنوع الماكينة المحدد في الخطة."
                 ),
@@ -808,6 +811,23 @@ def _export_deduct_edge_thickness(value: object) -> int:
     return 1 if coerce_deduct_edge_thickness(value) else 0
 
 
+def _attach_plan_text_outlines(order: Any, plan: Any, snapshot: dict[str, Any]) -> dict[str, Any]:
+    """Add approved text in sheet coordinates. The stored plan snapshot stays unchanged."""
+
+    from almdina_erp.almdina_erp.domain.cutting.board_editor_text import (
+        attach_approved_text_outlines,
+    )
+    from almdina_erp.almdina_erp.infrastructure.frappe.board_editor_drawing_store import (
+        FrappeBoardEditorDrawingStore,
+        drawing_storage_ready,
+    )
+
+    if not drawing_storage_ready():
+        return snapshot
+    rows = FrappeBoardEditorDrawingStore().read_for_plan(str(order.name), str(plan.name))
+    return attach_approved_text_outlines(snapshot, rows)
+
+
 @frappe.whitelist()
 def get_validated_dxf_plan(
     order_name: str | None = None,
@@ -846,6 +866,7 @@ def get_validated_dxf_plan(
         snapshot = apply_extra_double_text_flags_to_snapshot(snapshot, order.pieces)
         _assert_export_kerf(snapshot, fallback_kerf_mm=flt(plan.kerf_mm))
         snapshot = _with_tool_diameters(snapshot, plan)
+        snapshot = _attach_plan_text_outlines(order, plan, snapshot)
         include_saw_centers = _include_saw_centers_for_export(plan, plan_source, order)
         prefer_original = prefer_original_uploaded_download(order, plan)
         if not prefer_original:

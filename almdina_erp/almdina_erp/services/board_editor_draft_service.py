@@ -25,6 +25,9 @@ from almdina_erp.almdina_erp.infrastructure.frappe.board_editor_draft_store impo
     FrappeBoardEditorDraftStore,
     _archive_column_ready,
 )
+from almdina_erp.almdina_erp.services.board_editor_drawing_service import (
+    archive_drawings_after_source_begin,
+)
 from almdina_erp.almdina_erp.services.board_editor_query_service import (
     _authorized_order,
     _capabilities,
@@ -152,6 +155,16 @@ def begin_board_editor_draft_from_current_source(
         FrappeBoardEditorDraftStore(),
     )
     result.pop("layout", None)
+    if result.get("ok"):
+        archive = archive_drawings_after_source_begin(order, plan, order_status, payload)
+        if not archive.get("ok"):
+            return {
+                "ok": False,
+                "code": "drawing_archive_failed",
+                "reason": archive.get("code"),
+                "drawing_archive": archive,
+            }
+        result["drawing_archive"] = archive
     return result
 
 

@@ -215,6 +215,28 @@ assert.match(rendererSource, /fill-rule="evenodd"/);
 assert.match(rendererSource, /\.dco-shaped-piece-outline path \{ fill: #fff !important; stroke: #111 !important; \}/);
 assert.match(rendererSource, /buildPrintDocument/);
 
+const insetBlank = geometry.resolve(dxfPiece(
+    [[190.1, 101.09], [986.6, 101.09], [986.6, 627.81], [190.1, 627.81]],
+    [],
+    {
+        x: 0,
+        y: 0,
+        w: 115,
+        h: 70,
+        label: "4.1",
+        special_shape_geometry_json: JSON.stringify({ reservation: "blank", exact: true }),
+    }
+));
+assert.equal(insetBlank.vector, true);
+assert.equal(insetBlank.reservesBlank, true);
+assert.equal(insetBlank.placement.xCm, 0);
+assert.equal(insetBlank.placement.yCm, 0);
+assert.equal(insetBlank.placement.widthCm, 115);
+assert.equal(insetBlank.placement.heightCm, 70);
+assert.ok(insetBlank.geometry.outer[0][0] > 10);
+assert.ok(insetBlank.geometry.outer[0][1] > 10);
+assertLabelInside(insetBlank);
+
 const invalidDeclared = geometry.resolve(dxfPiece([[0, 0], [1, 1]]));
 assert.equal(invalidDeclared.source, "invalid-dxf");
 assert.equal(invalidDeclared.invalid, true);

@@ -14,7 +14,7 @@ import math
 import time
 
 from .dxf_geometry import polygon_area, polygon_distance, polygons_overlap
-from .glass_opening_nesting import material_outline_cm
+from .glass_opening_nesting import occupancy_outline_cm
 from .nesting_consolidation import best_rigid_translation
 from .plan_portfolio import geometry_signature, manufacturing_export_rejection
 from . import shape_aware_nesting as shape
@@ -42,8 +42,8 @@ def contact_formations(fixed, moving, width, height, kerf, *, deadline, counters
     outline is used. Edge normals also cover unequal clipped diagonal slopes.
     Search truncation is recorded separately from geometric incompatibility.
     """
-    left = [material_outline_cm(p) for p in fixed]
-    right = [material_outline_cm(p) for p in moving]
+    left = [occupancy_outline_cm(p) for p in fixed]
+    right = [occupancy_outline_cm(p) for p in moving]
     if any(p is None for p in left + right):
         counters['unknown_outline'] += 1
         return []
@@ -109,7 +109,7 @@ def _block(body,kerf):
     # These are search regions only. Real polygons prove every guest position.
     voids = []
     for p in body:
-        notch = shape._notch_bounds(material_outline_cm(p))
+        notch = shape._notch_bounds(occupancy_outline_cm(p))
         if notch:
             voids.append(dict(x=notch['x']+kerf,y=notch['y']+kerf,
                               w=notch['w']-2*kerf,h=notch['h']-2*kerf))
@@ -130,7 +130,7 @@ def _partitions(pieces,width,height,kerf,mirroring_allowed,deadline,diagnostic):
             return options[piece_id]
         placed=[shape._placed_corner(piece,x_cm=0,y_cm=0,mirrored=m,turns=t)
                 for m,t,*_ in shape._orientations(piece,mirroring_allowed)]
-        proven=[p for p in placed if material_outline_cm(p) is not None]
+        proven=[p for p in placed if occupancy_outline_cm(p) is not None]
         if len(proven)!=len(placed):
             counters['unknown_source_outline']+=1
         options[piece_id]=proven
@@ -177,7 +177,7 @@ def _partitions(pieces,width,height,kerf,mirroring_allowed,deadline,diagnostic):
         if not first or not second:
             counters['no_permitted_orientation'] += 1
             continue
-        if polygon_area(material_outline_cm(first[0]))+polygon_area(material_outline_cm(second[0])) > width*height+1e-6:
+        if polygon_area(occupancy_outline_cm(first[0]))+polygon_area(occupancy_outline_cm(second[0])) > width*height+1e-6:
             counters['material_area_exceeds_board'] += 1
             continue
         hits=[]

@@ -19,6 +19,9 @@ from almdina_erp.almdina_erp.domain.cutting.board_editor_hosting import (
     hosting_forest_for_pieces,
     piece_placement_id,
 )
+from almdina_erp.almdina_erp.domain.cutting.board_editor_drawing_copy import (
+    editable_outline_points_mm,
+)
 from almdina_erp.almdina_erp.domain.cutting.dxf_geometry_snapshot import (
     GEOMETRY_COORDINATE_SPACE,
     GEOMETRY_UNIT,
@@ -45,6 +48,7 @@ from almdina_erp.almdina_erp.domain.cutting.dxf_layer_catalog import (
 )
 from almdina_erp.almdina_erp.domain.cutting.dxf_topology import PartGeometry
 from almdina_erp.almdina_erp.domain.cutting.glass_opening_nesting import (
+    geometry_reserves_blank,
     material_outline_cm,
 )
 from almdina_erp.almdina_erp.domain.cutting.liner_geometry import (
@@ -334,6 +338,12 @@ def _finite_dim(value: Any) -> float | None:
     return number
 
 
+def _editable_outline_mm(piece: Mapping[str, Any]) -> list[list[float]] | None:
+    """Door-local polygon vertices for a missing drawing. Curves are not invented."""
+
+    return editable_outline_points_mm(piece.get("special_shape_geometry_json"))
+
+
 def _special_exact_geometry_mm(piece: Mapping[str, Any]) -> dict[str, Any] | None:
     """Exact Special contour from trusted special_shape_geometry_json (usable-sheet mm)."""
 
@@ -456,6 +466,13 @@ def _piece_identity(piece: Mapping[str, Any], *, sheet_no: int | None) -> dict[s
                 and geometry_source == GEOMETRY_SOURCE_SPECIAL_JSON
             )
         ),
+        "reserves_blank": geometry_reserves_blank(piece),
+        "blank_reservation_cm": (
+            deepcopy(piece.get("blank_reservation_cm"))
+            if geometry_reserves_blank(piece)
+            and isinstance(piece.get("blank_reservation_cm"), list)
+            else None
+        ),
         "special_representation": (
             "exact_geometry"
             if geometry_source in {"persisted_dxf", GEOMETRY_SOURCE_SPECIAL_JSON}
@@ -477,6 +494,7 @@ def _piece_identity(piece: Mapping[str, Any], *, sheet_no: int | None) -> dict[s
         "source_orientation_applied": True,
         "allow_rotation": allow is True,
         "allow_rotation_proven": allow is not None,
+        "editable_outline_mm": _editable_outline_mm(piece),
         # Trusted machining parameters for draft review. Layer visibility never
         # strips these; readiness must not depend on a drawn overlay alone.
         **machining_metadata(piece),

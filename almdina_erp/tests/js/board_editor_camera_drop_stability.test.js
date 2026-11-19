@@ -241,8 +241,8 @@ const editor = load();
 const { CanvasRenderer, SessionDocument, MoveGeometry, History, createStore } = editor;
 const page = fs.readFileSync(path.join(root, "almdina_erp/page/board_editor/board_editor.js"), "utf8");
 const controllerSource = fs.readFileSync(path.join(root, "public/js/board_editor/controller.js"), "utf8");
-assert.match(page, /canvas_renderer\.js\?v=45/);
-assert.match(page, /controller\.js\?v=45/);
+assert.match(page, /canvas_renderer\.js\?v=58/);
+assert.match(page, /controller\.js\?v=57/);
 assert.match(controllerSource, /cameraUnapplied/);
 
 function createRig(sheets, pieces, options) {

@@ -5,7 +5,7 @@ import math
 import time
 
 from . import shape_aware_nesting as shape
-from .glass_opening_nesting import material_outline_cm
+from .glass_opening_nesting import occupancy_outline_cm
 from .primitives import make_placed_piece
 from .search_trace import traced, trace_event, trace_enabled
 
@@ -20,7 +20,7 @@ def _row_spots(void, width, height, hosts, kerf):
     centre=(void['x']+void['w']/2,void['y']+void['h']/2)
     constraints=[(1.,0.,left),(-1.,0.,-right),(0.,1.,top),(0.,-1.,-bottom)]
     for host in hosts:
-        outline=material_outline_cm(host)
+        outline=occupancy_outline_cm(host)
         xs,ys=zip(*outline)
         for a,b in zip(outline,outline[1:]+outline[:1]):
             nx,ny=b[1]-a[1],a[0]-b[0]
@@ -98,7 +98,7 @@ def guest_row_blocks(block, sources, kerf, width, height, *, deadline, limit=6):
                                 next_copy[group]+=1
                                 placed=make_placed_piece(source,x+across,y+line*(row['height']+kerf),
                                     orientation['w'],orientation['h'],orientation['rotated'])
-                                outline=material_outline_cm(placed)
+                                outline=occupancy_outline_cm(placed)
                                 if (not shape._inside_board(outline,width,height)
                                         or not shape._clears(outline,[*hosts,*guests],kerf)):
                                     good=False

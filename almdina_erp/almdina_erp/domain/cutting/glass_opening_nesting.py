@@ -805,7 +805,7 @@ def _outline_in_hole(
     kerf_cm: float,
     tolerance: float,
 ) -> bool:
-    outer = material_outline_cm(guest)
+    outer = occupancy_outline_cm(guest)
     hole = _hole_polygon(host)
     if outer is None or hole is None:
         return False
@@ -920,6 +920,79 @@ def layout_pair_fault(
     return None
 
 
+def geometry_reserves_blank(piece: Mapping[str, Any]) -> bool:
+    """True when the stored contour is interior and the blank stays reserved."""
+
+    raw = piece.get("special_shape_geometry_json")
+    if isinstance(raw, str):
+        if not raw.strip():
+            return False
+        try:
+            payload = json.loads(raw)
+        except json.JSONDecodeError:
+            return False
+    elif isinstance(raw, Mapping):
+        payload = raw
+    else:
+        return False
+    return isinstance(payload, Mapping) and payload.get("reservation") == "blank"
+
+
+def occupancy_outline_cm(piece: Mapping[str, Any]) -> tuple[tuple[float, float], ...] | None:
+    """Area other pieces may not enter. Interior contours reserve the whole blank."""
+
+    if geometry_reserves_blank(piece):
+        stored = piece.get("blank_reservation_cm")
+        if isinstance(stored, (list, tuple)) and len(stored) >= 3:
+            points: list[tuple[float, float]] = []
+            for point in stored:
+                if not isinstance(point, (list, tuple)) or len(point) < 2:
+                    return None
+                points.append((float(point[0]), float(point[1])))
+            return tuple(points)
+        return _rectangle_outline(_as_placed_source(piece))
+    return material_outline_cm(piece)
+
+
+def _rings_match(
+    left: tuple[tuple[float, float], ...] | None,
+    right: tuple[tuple[float, float], ...] | None,
+    tolerance: float = 0.05,
+) -> bool:
+    if not left or not right or len(left) != len(right):
+        return False
+    count = len(left)
+
+    def aligned(shift: int, reverse: bool) -> bool:
+        for index, point in enumerate(left):
+            other_index = (shift - index) % count if reverse else (index + shift) % count
+            other = right[other_index]
+            if abs(point[0] - other[0]) > tolerance or abs(point[1] - other[1]) > tolerance:
+                return False
+        return True
+
+    return any(aligned(shift, reverse) for shift in range(count) for reverse in (False, True))
+
+
+def _baked_sheet_outline_cm(piece: Mapping[str, Any]) -> tuple[tuple[float, float], ...] | None:
+    """Posed usable-sheet contour already stored in millimetres."""
+
+    geometry = piece.get("geometry")
+    if not isinstance(geometry, Mapping):
+        return None
+    if str(geometry.get("unit") or "mm") != "mm":
+        return None
+    outer = geometry.get("outer")
+    if not isinstance(outer, (list, tuple)) or len(outer) < 3:
+        return None
+    points: list[tuple[float, float]] = []
+    for point in outer:
+        if not isinstance(point, (list, tuple)) or len(point) < 2:
+            return None
+        points.append((float(point[0]) / 10.0, float(point[1]) / 10.0))
+    return tuple(points)
+
+
 def material_outline_cm(piece: Mapping[str, Any]) -> tuple[tuple[float, float], ...] | None:
     """Board-centimetre cut outline. ``None`` means the shape is not proven."""
 
@@ -936,6 +1009,12 @@ def material_outline_cm(piece: Mapping[str, Any]) -> tuple[tuple[float, float], 
     if kind in _CORNER_TYPES:
         return _corner_outline(placed)
     if kind == "Special":
+        if geometry_reserves_blank(placed):
+            baked = _baked_sheet_outline_cm(placed)
+            # A stored stock rectangle is not the interior cut. The JSON contour
+            # keeps its door-local offset until a posed contour replaces it.
+            if baked is not None and not _rings_match(baked, _rectangle_outline(placed)):
+                return baked
         return _special_outline(placed)
     if kind == "Glass":
         if _glass_ring(placed) is None:
@@ -1052,7 +1131,7 @@ def _nesting_depth(
 
 
 def _part_geometry(piece: Mapping[str, Any]) -> PartGeometry | None:
-    outer = material_outline_cm(piece)
+    outer = occupancy_outline_cm(piece)
     if outer is None:
         return None
     return PartGeometry(outer=outer, holes=_glass_holes(piece))
@@ -1172,9 +1251,14 @@ def _special_outline(
         for point in points
     ):
         return None
+    reservation = str(payload.get("reservation") or "")
+    if reservation not in {"", "blank"}:
+        return None
     xs = [point[0] for point in points]
     ys = [point[1] for point in points]
-    if (
+    # Historical polygons must still span the blank. Interior drawing contours
+    # are marked reservation=blank and keep their stored offset.
+    if reservation != "blank" and (
         abs(min(xs)) > _SPECIAL_EPSILON_CM
         or abs(max(xs) - blank_w) > _SPECIAL_EPSILON_CM
         or abs(min(ys)) > _SPECIAL_EPSILON_CM

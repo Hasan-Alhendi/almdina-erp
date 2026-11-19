@@ -48,6 +48,9 @@
         RG.ensureBaseGeometry(piece);
         const centerX = Number(piece.pivot_mm.x || 0);
         piece.base_outline_mm = reflectHorizontal(piece.base_outline_mm, centerX);
+        if (Array.isArray(piece.base_reservation_mm)) {
+            piece.base_reservation_mm = reflectHorizontal(piece.base_reservation_mm, centerX);
+        }
         if (Array.isArray(piece.base_hole_mm)) {
             piece.base_hole_mm = reflectHorizontal(piece.base_hole_mm, centerX);
         }
@@ -61,6 +64,9 @@
         RG.ensureBaseGeometry(piece);
         const centerX = Number(piece.pivot_mm.x || 0);
         piece.base_outline_mm = reflectHorizontal(piece.base_outline_mm, centerX);
+        if (Array.isArray(piece.base_reservation_mm)) {
+            piece.base_reservation_mm = reflectHorizontal(piece.base_reservation_mm, centerX);
+        }
         if (Array.isArray(piece.base_hole_mm)) {
             piece.base_hole_mm = reflectHorizontal(piece.base_hole_mm, centerX);
         }
@@ -74,6 +80,9 @@
         RG.ensureBaseGeometry(piece);
         const centerY = Number(piece.pivot_mm.y || 0);
         piece.base_outline_mm = reflectVertical(piece.base_outline_mm, centerY);
+        if (Array.isArray(piece.base_reservation_mm)) {
+            piece.base_reservation_mm = reflectVertical(piece.base_reservation_mm, centerY);
+        }
         if (Array.isArray(piece.base_hole_mm)) {
             piece.base_hole_mm = reflectVertical(piece.base_hole_mm, centerY);
         }

@@ -195,6 +195,7 @@ def trusted_model_from_projection(
             "geometry_source": geometry_source,
             "exact_geometry": exact_geometry,
             "special_representation": special_representation,
+            "reserves_blank": piece.get("reserves_blank") is True,
             "clipped_corner_position": piece.get("clipped_corner_position"),
             "clipped_corner_width_cm": piece.get("clipped_corner_width_cm"),
             "clipped_corner_length_cm": piece.get("clipped_corner_length_cm"),
@@ -610,6 +611,7 @@ def _entry_piece(instance: str, info: Mapping[str, Any]) -> dict[str, Any]:
         "allow_rotation_proven": info.get("allow_rotation_proven") is True,
         "outline_mm": deepcopy(outline) if isinstance(outline, list) else None,
         "glass_hole_local_mm": deepcopy(hole) if isinstance(hole, list) else None,
+        "reserves_blank": info.get("reserves_blank") is True,
         "piece_type": info.get("piece_type") or "Regular",
         "placement_cm": {
             "x": local_x / 10.0,
@@ -619,6 +621,17 @@ def _entry_piece(instance: str, info: Mapping[str, Any]) -> dict[str, Any]:
         },
         "machining_paths": [],
     }
+    width = num(info.get("width_mm"))
+    length = num(info.get("length_mm"))
+    if info.get("reserves_blank") and width > 0 and length > 0:
+        reservation = [
+            [local_x, local_y],
+            [local_x + width, local_y],
+            [local_x + width, local_y + length],
+            [local_x, local_y + length],
+        ]
+        piece["reservation_mm"] = reservation
+        piece["base_reservation_mm"] = [list(point) for point in reservation]
     return piece
 
 

@@ -188,13 +188,13 @@ def manufacturing_export_rejection(plan):
             for s in plan.get('sheets') or [] for p in s.get('pieces') or []):
         return 'glass_guest_machining_identity'
     from .corner_contour_rotation import match_corner_contour
-    from .glass_opening_nesting import material_outline_cm
+    from .glass_opening_nesting import occupancy_outline_cm
     for sheet in plan.get('sheets') or []:
         for p in sheet.get('pieces') or []:
             if p.get('piece_type') not in {'L-Shaped Corner','Clipped Corner'} or not any(
                     p.get(key) for key in ('extra_liner','extra_back_groove','extra_recessed_handle_cutout')):
                 continue
-            outline=material_outline_cm(p)
+            outline=occupancy_outline_cm(p)
             if outline is None:
                 return 'corner_machining_unknown_outline'
             # Import binds corners with selected bands before checking machining.
