@@ -173,17 +173,18 @@ def test_attached_toolpaths_on_sheet_or_plan_are_not_left_at_old_coordinates(own
     assert all(d["reason"] == "UNSAFE_MOVE" for d in decisions)
 
 
-def test_centered_row_blocks_whole_sheet_shift_that_would_undo_its_centering():
+def test_industrial_alignment_can_replace_separate_centering_safely():
     plan, sources = _plan(w=96, h=20, qty=2)
     plan["sheets"][0]["pieces"][0]["x"] = 2
-    # A shorter unprotected row shares the same sheet but must not drag the
-    # valid centered row when the entire rigid collection is translated.
+    # Geometry-aware placement supersedes the whole-sheet-only refusal:
+    # aligned protected doors can be better than separate centering.
     plan["sheets"][0]["pieces"][1]["w"] = 75
     sources[1]["width_cm"] = 75
-    result, decisions = _protect(plan, sources, policy=EdgeProtectionPolicy(5, 0))
-    assert result == plan
-    assert decisions[0]["reason"] == "REMNANT_PRESERVED"
-    assert decisions[0]["detail"] == "centering_priority"
+    result, decisions = _protect(plan, sources, policy=EdgeProtectionPolicy(15, 0))
+    assert [p["x"] for p in result["sheets"][0]["pieces"]] == [1.5, 1.5]
+    assert decisions[0]["piece_shifts_mm"] == {1: -5, 2: 15}
+    assert sheet_cut_line_quality(result["sheets"][0], .5)[0] < sheet_cut_line_quality(plan["sheets"][0], .5)[0]
+    assert not validate_plan(result, sources, 100, 100, kerf_cm=.5)
 
 
 def test_impossible_target_and_failed_full_validation_leave_no_partial_mutations(monkeypatch):

@@ -397,32 +397,81 @@ def _translate_if_clear(
     plan: dict[str, Any], sheet_index: int, axis: str,
     ids: tuple[int, ...], delta: float, kerf_cm: float,
 ) -> dict[str, Any] | None:
-    """Use exact rectangular clearance only as a cheap precheck."""
+    """Use the shared atomic translator for one existing alignment proposal."""
+    return _translate_group_moves_if_clear(plan, sheet_index, ((axis, ids, delta),), kerf_cm)
+
+
+def _translate_group_moves_if_clear(
+    plan: dict[str, Any], sheet_index: int,
+    moves: tuple[tuple[str, tuple[int, ...], float], ...], kerf_cm: float,
+    *, check_swept: bool = False,
+) -> dict[str, Any] | None:
+    """Translate all proposed groups atomically; never validate an intermediate layout.
+
+    The existing aligner already restricts singles through _movement_range.
+    Coupled placement additionally checks relative swept clearance, so groups
+    cannot jump through one another when their final coordinates happen to fit.
+    This is a cheap rectangle precheck, not proof for protected special shapes.
+    """
     original = plan["sheets"][sheet_index]
     pieces = list(original.get("pieces") or [])
     width, height = num(original.get("w")), num(original.get("h"))
-    group = [p for p in pieces if int(p["id"]) in ids]
-    fixed = [p for p in pieces if int(p["id"]) not in ids]
-    for piece in group:
-        x = num(piece["x"]) + (delta if axis == "x" else 0.0)
-        y = num(piece["y"]) + (delta if axis == "y" else 0.0)
+    deltas: dict[int, dict[str, float]] = {}
+    for axis, ids, delta in moves:
+        for piece_id in ids:
+            member = deltas.setdefault(piece_id, {})
+            if axis in member:
+                return None  # overlapping groups must not double-translate an axis
+            member[axis] = delta
+    if not set(deltas).issubset({int(p["id"]) for p in pieces}):
+        return None
+    for piece in pieces:
+        motion = deltas.get(int(piece["id"]))
+        if motion is None:
+            continue
+        dx, dy = motion.get("x", 0.0), motion.get("y", 0.0)
+        x, y = num(piece["x"]) + dx, num(piece["y"]) + dy
         w, h = num(piece["w"]), num(piece["h"])
         if x < -_EPS or y < -_EPS or x + w > width + _EPS or y + h > height + _EPS:
             return None
-        for other in fixed:
-            ox, oy, ow, oh = (num(other[k]) for k in ("x", "y", "w", "h"))
-            dx = max(x - ox - ow, ox - x - w)
-            dy = max(y - oy - oh, oy - y - h)
-            if dx < kerf_cm - _EPS and dy < kerf_cm - _EPS:
+        for other in pieces:
+            other_motion = deltas.get(int(other["id"]), {})
+            odx, ody = other_motion.get("x", 0.0), other_motion.get("y", 0.0)
+            if (dx, dy) == (odx, ody):
+                continue  # internal relationships of a rigid group are unchanged
+            ox, oy = num(other["x"]) + odx, num(other["y"]) + ody
+            ow, oh = num(other["w"]), num(other["h"])
+            gap_x, gap_y = max(x-ox-ow, ox-x-w), max(y-oy-oh, oy-y-h)
+            if gap_x < kerf_cm - _EPS and gap_y < kerf_cm - _EPS:
+                return None
+            if check_swept and _swept_rectangles_conflict(piece, (dx, dy), other, (odx, ody), kerf_cm):
                 return None
     candidate = deepcopy(plan)
     sheet = candidate["sheets"][sheet_index]
     for piece in sheet["pieces"]:
-        if int(piece["id"]) in ids:
+        for axis, delta in deltas.get(int(piece["id"]), {}).items():
             piece[axis] = num(piece[axis]) + delta
     for cache in ("free_rects", "skyline", "shelves"):
         sheet.pop(cache, None)
     return candidate
+
+
+def _swept_rectangles_conflict(first, first_delta, second, second_delta, kerf_cm):
+    """Continuous relative-motion slab intersection, without millimetre scanning."""
+    entry, leave = 0.0, 1.0
+    for index, (axis, size) in enumerate((("x", "w"), ("y", "h"))):
+        lo, hi = -num(first[size])-kerf_cm+_EPS, num(second[size])+kerf_cm-_EPS
+        position = num(first[axis])-num(second[axis])
+        speed = first_delta[index]-second_delta[index]
+        if abs(speed) <= _EPS:
+            if not lo < position < hi:
+                return False
+            continue
+        start, end = sorted(((lo-position)/speed, (hi-position)/speed))
+        entry, leave = max(entry, start), min(leave, end)
+        if leave <= entry:
+            return False
+    return leave > entry
 
 
 def _translation_validation_scope(candidate, baseline, sources, sheet_index):

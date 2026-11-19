@@ -59,18 +59,13 @@ def _inside_length(
     return math.hypot(dx, dy) * (upper - lower)
 
 
-def sheet_cut_line_quality(
+def _sheet_cut_line_geometry(
     sheet: Mapping[str, Any],
     kerf_cm: float,
     *,
     piece_filter: Callable[[Mapping[str, Any]], bool] | None = None,
-) -> tuple[float, int, float] | None:
-    """(real mm, merged segments, longest internal straight center in mm).
-
-    A complete sheet is required for final ranking. A filter is only for
-    legacy/local bounded-search screening, never for authoritative comparison
-    against protected shape contours.
-    """
+):
+    """Use the export's canonical offset/union for all supported contours."""
     pieces = list(sheet.get("pieces") or ())
     if len(pieces) > _MAX_SHEET_PIECES:
         return None
@@ -86,7 +81,7 @@ def sheet_cut_line_quality(
                  for ring in part.holes]
         shapes.append((outer, holes))
     if not shapes:
-        return (0.0, 0, 0.0)
+        return [], 0.0, 0.0, 0.0, 0.0
     segments = cutter_center_segments(shapes, max(0.0, kerf_cm) * 5)
     try:
         trim_x = resolved_sheet_trim_cm(sheet, axis="x") * 10
@@ -99,6 +94,23 @@ def sheet_cut_line_quality(
          else num(sheet.get("h")) * 10 + 2 * trim_y)
     if w <= 0 or h <= 0 or not all(map(math.isfinite, (w, h, trim_x, trim_y))):
         return None
+    return segments, w, h, trim_x, trim_y
+
+
+def sheet_cut_line_quality(
+    sheet: Mapping[str, Any], kerf_cm: float, *,
+    piece_filter: Callable[[Mapping[str, Any]], bool] | None = None,
+) -> tuple[float, int, float] | None:
+    """(real mm, merged segments, longest internal straight center in mm).
+
+    A complete sheet is required for final ranking. A filter is only for
+    legacy/local bounded-search screening, never authoritative comparison
+    against protected shape contours.
+    """
+    geometry = _sheet_cut_line_geometry(sheet, kerf_cm, piece_filter=piece_filter)
+    if geometry is None:
+        return None
+    segments, w, h, trim_x, trim_y = geometry
     return (
         sum(math.dist(a, b) for a, b in segments),
         len(segments),
@@ -106,6 +118,24 @@ def sheet_cut_line_quality(
                            (b[0]+trim_x, b[1]+trim_y), w, h)
              for a, b in segments), default=0.0),
     )
+
+
+def sheet_cut_line_effect(sheet: Mapping[str, Any], kerf_cm: float) -> dict[str, float] | None:
+    """Explicit physical cut effect, using the same actual centers as export.
+
+    Boundary/external centers are kept by export. Their becoming internal after
+    an inset is not lost sharing. Coordinate-only alignment creates no segment.
+    This is geometric evidence, not NC/clamping or machine-time certification.
+    """
+    geometry = _sheet_cut_line_geometry(sheet, kerf_cm)
+    if geometry is None:
+        return None
+    segments, w, h, trim_x, trim_y = geometry
+    full = sum(math.dist(a, b) for a, b in segments)
+    internal = sum(_inside_length((a[0]+trim_x, a[1]+trim_y),
+                                 (b[0]+trim_x, b[1]+trim_y), w, h) for a, b in segments)
+    return dict(full_mm=round(full, 6), internal_mm=round(internal, 6),
+                boundary_or_external_mm=round(full-internal, 6))
 
 
 def plan_cut_line_quality(

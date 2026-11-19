@@ -489,6 +489,23 @@ def _snapshot_outcome(command, engine, plan, expanded, applied_trim, trim_decisi
         plan["sheets"] = original_sheets
         plan = _enrich_final_geometry_metrics(plan, metric_options)
 
+    protection_enabled = bool(command.optimizer.edge_protection.horizontal_mm
+                              or command.optimizer.edge_protection.vertical_mm)
+    configured = command.optimizer.alignment_search_budget_sec
+    allowed = (max(0.0, min(configured, command.optimizer.time_limit_sec))
+               if math.isfinite(configured) and configured >= 0 else 0.0)
+
+    def final_placement_deadline():
+        nonlocal alignment_budget
+        # Snapshot preparation does not consume the shared alignment tail.
+        if alignment_budget is None:
+            alignment_budget = {"deadline": None}
+        if alignment_budget["deadline"] is None:
+            alignment_budget["deadline"] = time.monotonic() + allowed
+        now = time.monotonic()
+        remaining = max(1, int(alignment_budget.get("remaining_candidates") or 1))
+        return now + max(0.0, alignment_budget["deadline"]-now)/remaining
+
     if plan_settings.optimization_mode == "smart":
         # An invalid centering proposal must not make alignment a no-op and
         # then be rolled back only *after* the refinement opportunity is gone.
@@ -496,9 +513,6 @@ def _snapshot_outcome(command, engine, plan, expanded, applied_trim, trim_decisi
         from almdina_erp.almdina_erp.domain.cutting.final_cut_line_alignment import (
             align_regular_cut_lines, validate_alignment_baseline, has_regular_alignment_candidates,
         )
-        configured = command.optimizer.alignment_search_budget_sec
-        allowed = (max(0.0, min(configured, command.optimizer.time_limit_sec))
-                   if math.isfinite(configured) and configured >= 0 else 0.0)
         baseline_proof = None
         if allowed > 0 and has_regular_alignment_candidates(plan, expanded, machine_type):
             baseline_proof = validate_alignment_baseline(plan, expanded, usable_width_cm, usable_length_cm,
@@ -513,29 +527,17 @@ def _snapshot_outcome(command, engine, plan, expanded, applied_trim, trim_decisi
             machine_type=machine_type,
             mirroring_allowed=piece_mirroring_allowed(command.allow_piece_mirroring),
             metric_kwargs={key: value for key, value in metric_options.items() if key != "machine_type"})
-        # Shared budget is not consumed by unrelated snapshot preparation.
-        if alignment_budget is None:
-            alignment_budget = {"deadline": None}
-        if alignment_budget["deadline"] is None:
-            # Invalid direct callers fail closed; authoritative factory
-            # settings already reject NaN/Infinity and negative values.
-            alignment_budget["deadline"] = time.monotonic() + allowed
-        # Every gallery candidate gets a bounded share of the *remaining*
-        # shared tail; unused capacity automatically returns to later plans.
-        # A lone fallback uses the full remaining allowance.
-        now = time.monotonic()
-        remaining = max(1, int(alignment_budget.get("remaining_candidates") or 1))
-        remaining_seconds = max(0.0, alignment_budget["deadline"] - now)
-        candidate_deadline = now + remaining_seconds / remaining
-        # Post-search placement refinement only; never import/approve uploaded DXF.
-        plan = align_regular_cut_lines(
-            plan, expanded, usable_width_cm, usable_length_cm, board.kerf_cm,
-            machine_type=machine_type,
-            mirroring_allowed=piece_mirroring_allowed(command.allow_piece_mirroring),
-            metric_kwargs={key: value for key, value in metric_options.items() if key != "machine_type"},
-            deadline_monotonic=candidate_deadline,
-            baseline_proof=baseline_proof,
-        )
+        if not protection_enabled:
+            # Preserve the established zero-policy path exactly. With positive
+            # protection, alignment and policy events share one coupled search.
+            plan = align_regular_cut_lines(
+                plan, expanded, usable_width_cm, usable_length_cm, board.kerf_cm,
+                machine_type=machine_type,
+                mirroring_allowed=piece_mirroring_allowed(command.allow_piece_mirroring),
+                metric_kwargs={key: value for key, value in metric_options.items() if key != "machine_type"},
+                deadline_monotonic=final_placement_deadline(),
+                baseline_proof=baseline_proof,
+            )
 
     def validate_snapshot_plan() -> list[str]:
         errors = list(
@@ -566,8 +568,9 @@ def _snapshot_outcome(command, engine, plan, expanded, applied_trim, trim_decisi
     if not validation_errors:
         from almdina_erp.almdina_erp.domain.cutting.edge_protection import protect_plan_edges
 
-        # All geometry refinements are finished. Roll back to this validated
-        # aligned result if the final adapter gate rejects a protection move.
+        # Final coupled search follows a valid baseline and receives the same
+        # shared tail as legacy alignment. A zero alignment budget still allows
+        # bounded policy events, as it did before this refinement.
         before_protection = plan
         plan, edge_decisions = protect_plan_edges(
             plan, expanded, usable_width_cm, usable_length_cm, board.kerf_cm,
@@ -576,14 +579,18 @@ def _snapshot_outcome(command, engine, plan, expanded, applied_trim, trim_decisi
             machine_type=machine_type,
             mirroring_allowed=piece_mirroring_allowed(command.allow_piece_mirroring),
             metric_options={key: value for key, value in metric_options.items() if key != "machine_type"},
+            deadline_monotonic=(final_placement_deadline() if protection_enabled
+                                and plan_settings.optimization_mode == "smart" and allowed > 0 else None),
+            align_cut_lines=plan_settings.optimization_mode == "smart" and allowed > 0,
         )
         if plan is not before_protection:
             validation_errors = validate_snapshot_plan()
             if validation_errors:
                 plan = before_protection
                 for decision in edge_decisions:
-                    if decision["reason"] == "EDGE_PROTECTED":
+                    if decision.get("piece_shifts_mm") or decision["shift_mm"]:
                         decision.update(reason="UNSAFE_MOVE", shift_mm=0.0, detail="final_validation")
+                        decision.pop("piece_shifts_mm", None)
                 validation_errors = validate_snapshot_plan()
 
     metrics = dict(plan.get("industrial_metrics") or {})

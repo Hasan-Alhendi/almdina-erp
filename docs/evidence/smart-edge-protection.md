@@ -1,5 +1,9 @@
 # Smart edge protection — verification
 
+Historical first iteration. Its whole-sheet movement policy is superseded by
+[geometry-aware coupled final placement](geometry-aware-final-placement.md).
+The results below describe the earlier implementation commits only.
+
 Base: `Develop` at `2367b8ff`. Branch: `feature/smart-edge-protection`.
 
 ## Change contract
