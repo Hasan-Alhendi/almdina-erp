@@ -10,6 +10,31 @@ permissions:
   contents: read
 
 jobs:
+  geometry-aware-final-placement:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install app test dependencies
+        run: python -m pip install '.[test]'
+      - name: Validate final placement and actual DXF round trips independently
+        run: |
+          python -m pytest -q \
+            almdina_erp/tests/test_dxf_import_service.py \
+            almdina_erp/tests/test_edge_protection.py \
+            almdina_erp/tests/test_geometry_aware_final_placement.py \
+            almdina_erp/tests/test_final_cut_line_alignment.py \
+            almdina_erp/tests/test_sheet_edge_trim.py \
+            almdina_erp/tests/test_cutter_center_paths.py
+          node almdina_erp/tests/js/board_editor_open.test.js
+          node almdina_erp/tests/js/plan_candidate_gallery.test.js
+          node almdina_erp/tests/js/factory_edge_protection.test.js
+
   static-validation:
     runs-on: ubuntu-latest
     steps:
