@@ -184,7 +184,9 @@ class FingerprintCompatibility:
 def freeze_geometry_piece(
     piece: Mapping[str, Any], *, version: int = FINGERPRINT_CONTRACT_VERSION,
 ) -> dict[str, Any]:
-    if version not in (FINGERPRINT_CONTRACT_VERSION, MANUFACTURING_BASELINE_VERSION):
+    # V2 shares V3's frozen piece representation; only its known historical
+    # omitted fields differ. The caller removes those fields after projection.
+    if version not in (2, FINGERPRINT_CONTRACT_VERSION, MANUFACTURING_BASELINE_VERSION):
         raise PlanFingerprintContractError('unsupported_fingerprint_schema')
     allowed_keys = (
         GEOMETRY_PIECE_KEYS | _V4_GLASS_KEYS
