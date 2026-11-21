@@ -261,14 +261,7 @@ def test_captured_final_snapshot_actual_dxf_strict_reimport(tmp_path,order):
     outcome=app._snapshot_outcome(command,DomainCuttingEngineAdapter(),plan,sources,trim,decision,
         app._canonical_trace_settings(command),final_positioning=True)
     data=order_data(order)
-    # This captured order includes identical 60×60 L-shaped and clipped-corner
-    # doors with no differentiating DXF evidence. Preserve fail-closed identity
-    # rather than guessing from contour order; still check actual exported cuts.
-    expected = "PIECE_IDENTITY_AMBIGUOUS" if order == "26-00346" else None
-    assert_snapshot_dxf_roundtrip(
-        tmp_path, outcome, rows=data["order_rows"],
-        edge_profiles=data["edge_profiles"], expected_import_error=expected,
-    )
+    assert_snapshot_dxf_roundtrip(tmp_path,outcome,rows=data["order_rows"],edge_profiles=data["edge_profiles"])
 
 
 @pytest.mark.parametrize("policy", [EdgeProtectionPolicy(),EdgeProtectionPolicy(15,20)])

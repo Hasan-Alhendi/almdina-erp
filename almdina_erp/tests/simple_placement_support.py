@@ -2,8 +2,7 @@
 from types import SimpleNamespace
 import pytest
 
-def assert_snapshot_dxf_roundtrip(tmp_path,outcome,*,rows=None,edge_profiles=None,
-                                  expected_import_error=None):
+def assert_snapshot_dxf_roundtrip(tmp_path,outcome,*,rows=None,edge_profiles=None):
     import json
     import os
     from pathlib import Path
@@ -76,28 +75,18 @@ def assert_snapshot_dxf_roundtrip(tmp_path,outcome,*,rows=None,edge_profiles=Non
     from almdina_erp.almdina_erp.services import piece_cut_dimension_service
     # The isolated fixture supplies the exact persisted band thicknesses; only
     # the database catalog port is replaced. Cut-dimension validation runs.
-    from almdina_erp.almdina_erp.services.dxf_import_service import DxfImportError
-    def import_exported():
-        if edge_profiles is None:
-            return _import(str(path),order,kerf_mm=kerf_mm,trim_mm=trim_mm)
-        with patch.object(piece_cut_dimension_service,"_default_profile_loader",lambda names: edge_profiles):
-            return _import(str(path),order,kerf_mm=kerf_mm,trim_mm=trim_mm)
-    if expected_import_error:
-        with pytest.raises(DxfImportError) as rejected:
-            import_exported()
-        assert rejected.value.codes == [expected_import_error]
-        imported = None
+    if edge_profiles is None:
+        imported = _import(str(path),order,kerf_mm=kerf_mm,trim_mm=trim_mm)
     else:
-        imported = import_exported()
+        with patch.object(piece_cut_dimension_service,"_default_profile_loader",lambda names: edge_profiles):
+            imported = _import(str(path),order,kerf_mm=kerf_mm,trim_mm=trim_mm)
     def geometry(plan):
         return sorted((s["sheet_no"],*(round(p[k],6) for k in ("x","y","w","h")))
                       for s in plan["sheets"] for p in s["pieces"])
     assert saved["validation"]["is_valid"]
-    assert geometry(saved) == geometry(rebuilt)
-    if imported is not None:
-        assert geometry(saved) == geometry(imported)
-        assert sorted(p["piece_instance_id"] for s in saved["sheets"] for p in s["pieces"]) == sorted(
-            p["piece_instance_id"] for s in imported["sheets"] for p in s["pieces"])
+    assert geometry(saved) == geometry(rebuilt) == geometry(imported)
+    assert sorted(p["piece_instance_id"] for s in saved["sheets"] for p in s["pieces"]) == sorted(
+        p["piece_instance_id"] for s in imported["sheets"] for p in s["pieces"])
     from almdina_erp.almdina_erp.domain.cutting.cut_line_quality import sheet_cut_line_quality
     import math
     import ezdxf
@@ -107,6 +96,5 @@ def assert_snapshot_dxf_roundtrip(tmp_path,outcome,*,rows=None,edge_profiles=Non
     # back into rectangles to make an unavailable imported score look exact.
     actual = sum(math.dist(*segment) for segment in _layer_segments(ezdxf.readfile(path),"CUT_PATH"))
     assert actual == pytest.approx(sum(sheet_cut_line_quality(s,kerf_mm/10)[0] for s in saved["sheets"]),abs=.05)
-    if imported is not None:
-        assert imported["saw_center_status"] == "Present"
-        assert len(imported["sheets"]) == count
+    assert imported["saw_center_status"] == "Present"
+    assert len(imported["sheets"]) == count
