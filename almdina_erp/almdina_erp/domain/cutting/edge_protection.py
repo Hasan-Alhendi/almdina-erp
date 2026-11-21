@@ -102,7 +102,13 @@ def _directional_contact_groups(pieces, axis, kerf):
     return groups
 
 
-def _placement_goals(sheet, eligible, policy, threshold, kerf):
+def _placement_goals(sheet, eligible, policy, threshold, kerf, *, candidate_groups=False, whole=False):
+    """Freeze eligibility on the post-compaction baseline, once per physical band.
+
+    Perpendicular physical bands partition pieces on each axis. Movement hints
+    may overlap, but never multiply a physical objective's weight. A goal is
+    not a rigid-body constraint: independently moving its members is allowed.
+    """
     goals = []
     for axis, protection in (("x", policy.horizontal_mm), ("y", policy.vertical_mm)):
         if not protection:
@@ -112,7 +118,15 @@ def _placement_goals(sheet, eligible, policy, threshold, kerf):
         full = num(sheet.get("full_width_cm" if axis == "x" else "full_length_cm"))
         if frame <= 0 or abs(full-2*trim-frame) > _EPS_CM:
             continue
-        for ids in _movement_groups(sheet, axis, eligible, kerf):
+        pieces = [p for p in sheet["pieces"] if int(p["id"]) in eligible]
+        cross = "y" if axis == "x" else "x"
+        groups = [tuple(sorted(int(p["id"]) for p in band))
+                  for band in _projection_groups(pieces,axis=cross)]
+        if candidate_groups:
+            groups = _movement_groups(sheet, axis, eligible, kerf)
+        elif whole:
+            groups = [tuple(sorted(eligible))]
+        for ids in groups:
             members = [p for p in sheet["pieces"] if int(p["id"]) in ids]
             start, end = _occupied_span(members, axis)
             slack = max(0.0, frame-(end-start))
@@ -148,6 +162,22 @@ def _move_deltas(moves):
                 return None
             result[piece_id, axis] = delta
     return result
+
+
+def _goal_report(sheet, goal, policy):
+    axis,ids,frame,target,centerable,baseline_center = goal
+    start,end = _occupied_span([p for p in sheet["pieces"] if int(p["id"]) in ids],axis)
+    trim = resolved_sheet_trim_cm(sheet,axis=axis)
+    gaps = (round((start+trim)*10,6),round((frame-end+trim)*10,6))
+    requested = policy.horizontal_mm if axis=="x" else policy.vertical_mm
+    center_error = abs(start-max(0,frame-(end-start))/2)*10
+    return dict(axis=axis,piece_ids=ids,centerable=centerable,baseline_slack_mm=round(baseline_center*20,6),
+        start_gap_mm=gaps[0],end_gap_mm=gaps[1],requested_protection_mm=requested,
+        request_shortfall_mm=round(sum(max(0,requested-gap) for gap in gaps),6),
+        attainable_debt_mm=round(sum(_placement_score(sheet,[goal])[0])*10,6),
+        centering_error_mm=round(center_error,6),
+        placement="CENTERED" if centerable and center_error<=_EPS_CM*10 else
+                  "PROTECTED" if min(gaps)>=requested-_EPS_CM*10 else "PARTIAL_PROTECTION")
 
 
 def _policy_events(sheet, goals, kerf, deadline):
@@ -188,11 +218,13 @@ def _policy_events(sheet, goals, kerf, deadline):
     return events
 
 
-def _proposals(plan, index, eligible, goals, kerf, deadline, align_cut_lines, anchor_positions, diagnostics=None):
+def _proposals(plan, index, eligible, goals, kerf, deadline, align_cut_lines, anchor_positions, diagnostics=None,
+               candidate_goals=None):
     sheet = plan["sheets"][index]
     by_id = {int(p["id"]): p for p in sheet["pieces"]}
-    events = (_timed(diagnostics,"policy_events",_policy_events,sheet,goals,kerf,deadline)
-              if diagnostics is not None else _policy_events(sheet,goals,kerf,deadline))
+    event_goals = candidate_goals if candidate_goals is not None else goals
+    events = (_timed(diagnostics,"policy_events",_policy_events,sheet,event_goals,kerf,deadline)
+              if diagnostics is not None else _policy_events(sheet,event_goals,kerf,deadline))
     if align_cut_lines and (deadline is None or time.monotonic() < deadline):
         generation_started = perf_counter()
         events.update((axis, ids, delta) for _, axis, ids, delta in
@@ -215,7 +247,7 @@ def _proposals(plan, index, eligible, goals, kerf, deadline, align_cut_lines, an
         debt, center = _placement_score(sheet, goals, deltas)
         motion = sum(abs(num(by_id[i][a])+deltas.get((i,a),0)-position)
                      for (a,i),position in anchor_positions.items())
-        return (round(sum(debt), 6), -sum(gains[m] for m in moves), round(motion,6), center,
+        return (round(sum(debt), 6), -sum(gains[m] for m in moves), center, round(motion,6),
                 -sum(len(m[1]) for m in moves), moves)
     sorting_started = perf_counter()
     def ranked(proposals):
@@ -255,6 +287,10 @@ def _expired(deadline):
     return deadline is not None and time.monotonic() >= deadline
 
 
+def _remaining(deadline):
+    return max(0.0,deadline-time.monotonic()) if deadline is not None else None
+
+
 class _SheetSearch:
     """One board's cached search state; safety gates are shared by both passes."""
 
@@ -264,22 +300,26 @@ class _SheetSearch:
         self.kerf, self.diag = kerf, diag
         self.before = None
         self.current_profile = None
+        self.candidate_goals = None
+        self.whole_goals = None
         self.time_limited = False
+        self.remnant_scores = {}
         self.seen, self.accepted_moves = set(), []
         self.axes = {axis: dict(attempted=0, rejected={}, accepted=0) for axis in ("x", "y")}
-        chains = {axis: set(_directional_contact_groups([self.placed[i] for i in eligible], axis, kerf))
-                  for axis in ("x", "y")}
-        centered = {(g[0], i) for g in goals if g[4] and g[1] in chains[g[0]] for i in g[1]}
         self.anchors = {(g[0], g[1][0]): num(self.placed[g[1][0]][g[0]])
-                        for g in goals if len(g[1]) == 1 and not g[4] and (g[0], g[1][0]) not in centered}
+                        for g in goals if len(g[1]) == 1 and not g[4]}
 
-    def key(self, plan, profile):
+    def key(self, plan, profile, options):
         sheet = plan["sheets"][self.index]
         debt, center = _placement_score(sheet, self.goals)
         current = {int(p["id"]): p for p in sheet["pieces"]}
         motion = sum(abs(num(current[i][a])-position) for (a,i),position in self.anchors.items())
-        return (round(sum(debt),6), final_cut_quality_key(profile),
-                -_axis_alignment_score(plan,self.kerf,{self.index:self.eligible}), round(motion,6),center)
+        geometry = tuple((p["id"],p["x"],p["y"]) for p in sheet["pieces"])
+        if geometry not in self.remnant_scores:
+            remnants = _timed(self.diag,"remnant_quality",_reusable_free_rectangles_for_sheet,sheet,**options)
+            self.remnant_scores[geometry] = tuple(sorted((-round(r["w"]*r["h"],6) for r in remnants)))
+        return (round(sum(debt),6), self.remnant_scores[geometry],final_cut_quality_key(profile),
+                -_axis_alignment_score(plan,self.kerf,{self.index:self.eligible}), center,round(motion,6))
 
     def reject(self, moves, reason):
         rejected = self.diag["rejected"]
@@ -289,7 +329,7 @@ class _SheetSearch:
             counts[reason] = counts.get(reason,0)+1
 
     def basic(self, plan, deadline):
-        events = _policy_events(plan["sheets"][self.index],self.goals,self.kerf,deadline)
+        events = _policy_events(plan["sheets"][self.index],self.goals+(self.whole_goals or []),self.kerf,deadline)
         def order(moves):
             deltas = _move_deltas(moves)
             sheet = plan["sheets"][self.index]
@@ -297,19 +337,55 @@ class _SheetSearch:
             debt,center = _placement_score(sheet,self.goals,deltas)
             motion = sum(abs(num(by_id[i][a])+deltas.get((i,a),0)-position)
                          for (a,i),position in self.anchors.items())
-            return (round(sum(debt),6),round(motion,6),center,-sum(len(m[1]) for m in moves),moves)
-        singles = sorted(((m,) for m in events),key=order)
+            return (round(sum(debt),6),center,round(motion,6),-sum(len(m[1]) for m in moves),moves)
+        scored = []
+        for event in sorted(events):
+            if _expired(deadline):
+                break
+            scored.append((order((event,)),(event,)))
+        singles = [moves for _,moves in sorted(scored)]
         first = {axis: next((m[0] for m in singles if m[0][0] == axis),None) for axis in ("x","y")}
         joint = tuple(m for m in first.values() if m is not None)
-        # Try one atomic X/Y protection event before arbitrary alignment or
-        # unequal-group combinations. Failed rectangle prechecks may fall back.
-        return (([joint] if len(joint)>1 else [])+singles)[:_MAX_TRIALS]
+        # Physical goals partition IDs per axis. Try their best endpoints
+        # together *before* an isolated easy improvement spends shared-cut
+        # quality needed by a neighboring centerable chain. Also keep whole
+        # translations as choices when equal offsets preserve shared cuts.
+        coordinated = tuple(next((m[0] for m in singles if m[0][:2]==g[:2]),None) for g in self.goals)
+        coordinated = tuple(m for m in coordinated if m is not None)
+        # Compare centering/minimum-inset singles, best X/Y and coordinated endpoints
+        # using the real network. Never measure all candidate combinations in
+        # the basic pass. The same sheet deadline bounds every measurement.
+        minimum_inset = min(scored,key=lambda item:(item[0][0],sum(abs(m[2])*len(m[1]) for m in item[1]),item[1]))[1] if scored else ()
+        finalists = set(([singles[0],minimum_inset] if singles else [])+[m for m in (joint,coordinated) if len(m)>1])
+        measured = []
+        measured_deltas = set()
+        sheet = plan["sheets"][self.index]
+        for moves in sorted(finalists):
+            if _expired(deadline):
+                break
+            deltas = _move_deltas(moves)
+            signature = tuple(sorted(deltas.items()))
+            if signature in measured_deltas:
+                continue
+            measured_deltas.add(signature)
+            hypothetical = {**sheet,"pieces":[{**p,**{a:num(p[a])+deltas.get((int(p["id"]),a),0)
+                                                          for a in ("x","y")}} for p in sheet["pieces"]]}
+            profile = _timed(self.diag,"basic_cutter",sheet_cut_line_quality,hypothetical,self.kerf)
+            if profile is not None:
+                key = order(moves)
+                alignment = _axis_alignment_score({"sheets":[hypothetical]},self.kerf,{0:self.eligible})
+                measured.append(((key[0],final_cut_quality_key(profile),-alignment,*key[1:]),moves))
+        ordered = [moves for _,moves in sorted(measured)]
+        return (ordered+[m for m in singles if m not in ordered])[:_MAX_TRIALS]
 
     def trial(self, best, moves, sources, width, height, options, mirroring):
         signature = (tuple((p["id"],p["x"],p["y"]) for p in best["sheets"][self.index]["pieces"]),moves)
         if signature in self.seen:
             return None
         self.seen.add(signature)
+        self.diag["attempted"] = self.diag.get("attempted",0)+1
+        entry = self.diag["sheets"][self.index]
+        entry["attempted"] = entry.get("attempted",0)+1
         for axis in {m[0] for m in moves}:
             self.axes[axis]["attempted"] += 1
         candidate = _timed(self.diag,"translation",_translate_group_moves_if_clear,
@@ -326,11 +402,14 @@ class _SheetSearch:
             self.reject(moves,"other_axis_protection")
             return None
         after = _timed(self.diag,"cutter",sheet_cut_line_quality,moved,self.kerf)
-        if (after is None or after[0]>self.before[0]+_NETWORK_TOL_MM
-                or (abs(after[0]-self.before[0])<=_NETWORK_TOL_MM and after[2]+_NETWORK_TOL_MM<self.before[2])):
+        current = self.current_profile
+        if (after is None or after[0]>current[0]+_NETWORK_TOL_MM
+                or (abs(after[0]-current[0])<=_NETWORK_TOL_MM
+                    and (after[2]+_NETWORK_TOL_MM<current[2] or after[1]>current[1]))):
             self.reject(moves,"shared_cutter_network")
             return None
-        if self.key(candidate,after)>=self.key(best,self.current_profile):
+        candidate_key,current_key = self.key(candidate,after,options),self.key(best,self.current_profile,options)
+        if candidate_key>=current_key:
             self.reject(moves,"no_improvement")
             return None
         allowances = {}
@@ -353,6 +432,12 @@ class _SheetSearch:
             self.reject(moves,"manufacturing_validation")
             return None
         self.accepted_moves.extend(moves)
+        improved = next(name for name,a,b in zip(
+            ("PROTECTION","QUALIFIED_REMNANT","CUTTER_CENTER","AXIS_ALIGNMENT","CENTERING","STABILITY"),
+            candidate_key,current_key) if a!=b)
+        self.diag["sheets"][self.index].setdefault("accepted_trials",[]).append(dict(
+            moves=moves,improved=improved,score_before=current_key,score_after=candidate_key,
+            cutter_before=self.current_profile,cutter_after=after))
         self.current_profile = after
         self.diag["accepted"] += 1
         self.diag["sheets"][self.index]["accepted"] += 1
@@ -379,7 +464,8 @@ def protect_plan_edges(
         return plan, []
     started = perf_counter()
     diag = diagnostics if diagnostics is not None else {}
-    diag.update(tested=0,accepted=0,rejected={},sheets=[],seconds={},calls={})
+    diag.update(tested=0,accepted=0,attempted=0,rejected={},sheets=[],seconds={},calls={})
+    diag["remaining_at_entry_sec"] = _remaining(deadline_monotonic)
     best, decisions, states = plan, [], []
     options = {**metric_options,"machine_type":machine_type}
     by_id,locked = {int(p["id"]):p for p in sources},_locked_piece_ids(plan)
@@ -390,7 +476,8 @@ def protect_plan_edges(
                    for a,p in (("x",policy.horizontal_mm),("y",policy.vertical_mm)) if p}
         records_by_sheet.append(records)
         decisions.extend(records.values())
-        diag["sheets"].append(dict(sheet_no=sheet.get("sheet_no",index+1),tested=0,accepted=0,seconds={}))
+        diag["sheets"].append(dict(sheet_no=sheet.get("sheet_no",index+1),tested=0,accepted=0,seconds={},
+                                   remaining_at_entry_sec=None,preparation_sec=0.0))
         placed = {int(p["id"]):p for p in sheet.get("pieces") or []}
         eligible = {i for i in _eligible_ids(sheet,by_id,locked)
                     if _is_movable_regular({**placed[i],**by_id[i]}) and not any(
@@ -426,18 +513,25 @@ def protect_plan_edges(
     # generator can run until the last board has had this first opportunity.
     basic_deadline = deadline_monotonic
     for position,(index,sheet,eligible) in enumerate(states):
+        entry = diag["sheets"][index]
+        entry["remaining_at_entry_sec"] = _remaining(basic_deadline)
         if _expired(basic_deadline) or diag["tested"]>=_MAX_TRIALS:
             continue
         local_deadline = (time.monotonic()+max(0,basic_deadline-time.monotonic())/(len(states)-position)
                           if basic_deadline is not None else None)
         diag["_active_sheet_index"] = index
+        preparation_started = perf_counter()
+        entry["basic_slice_sec"] = _remaining(local_deadline)
         goals = _timed(diag,"groups",_placement_goals,sheet,eligible,policy,max_centerable_edge_gap_cm,kerf_cm)
         if _expired(local_deadline):
+            entry["preparation_sec"] = perf_counter()-preparation_started
             continue
         search = _SheetSearch(index,sheet,eligible,goals,kerf_cm,diag)
+        search.whole_goals = _placement_goals(sheet,eligible,policy,max_centerable_edge_gap_cm,kerf_cm,whole=True)
         searches.append(search)
         search.before = _timed(diag,"cutter",sheet_cut_line_quality,sheet,kerf_cm)
         search.current_profile = search.before
+        entry["preparation_sec"] = perf_counter()-preparation_started
         if search.before is None or not goals:
             for record in records_by_sheet[index].values():
                 record.update(reason="GEOMETRY_REJECTED",detail="cut_line_quality" if search.before is None else "physical_frame")
@@ -462,8 +556,11 @@ def protect_plan_edges(
             local_deadline = (time.monotonic()+max(0,deadline_monotonic-time.monotonic())/(len(active)-position)
                               if deadline_monotonic is not None else None)
             diag["_active_sheet_index"] = search.index
+            if search.candidate_goals is None:
+                search.candidate_goals = _timed(diag,"candidate_groups",_placement_goals,search.original,
+                    search.eligible,policy,max_centerable_edge_gap_cm,kerf_cm,candidate_groups=True)
             pools = _timed(diag,"generation_sort",_proposals,best,search.index,search.eligible,search.goals,
-                           kerf_cm,local_deadline,align_cut_lines,search.anchors,diag)
+                           kerf_cm,local_deadline,align_cut_lines,search.anchors,diag,search.candidate_goals)
             count_before = diag["tested"]
             # Alternate single/compound first, retaining both search directions.
             for pool in (pools if sweep%2 else reversed(pools)):
@@ -507,6 +604,10 @@ def protect_plan_edges(
             debt,center = _placement_score(best["sheets"][search.index],axis_goals)
             if axis_goals and sum(debt)<=_EPS_CM:
                 record["reason"] = "CENTERED" if any(g[4] for g in axis_goals) and center<=_EPS_CM else "ALREADY_PROTECTED"
+            elif record["search_status"] != "COMPLETE":
+                # A rejected event is evidence about that event only. Keep
+                # its rejection counts without certifying all untried moves.
+                record["reason"] = record["search_status"]
             elif counts["attempted"]:
                 if "useful_remnant" in counts["rejected"]:
                     record.update(reason="REMNANT_PRESERVED",detail="useful_remnant")
@@ -523,6 +624,8 @@ def protect_plan_edges(
                     record["detail"] = "protection_interval"
         diag["sheets"][search.index]["before"] = search.before
         diag["sheets"][search.index]["after"] = search.current_profile
+        sheet = best["sheets"][search.index]
+        diag["sheets"][search.index]["goals"] = [_goal_report(sheet,goal,policy) for goal in search.goals]
     for records in records_by_sheet:
         for record in records.values():
             if record["reason"]=="NOT_EVALUATED_TIME_BUDGET" and diag["tested"]>=_MAX_TRIALS:
@@ -531,5 +634,11 @@ def protect_plan_edges(
     diag["trials_rejected"] = diag["tested"]-diag["accepted"]
     diag["sheets_reached"] = sum(s["tested"]>0 for s in diag["sheets"])
     for index,entry in enumerate(diag["sheets"]):
+        entry["trials_rejected"] = entry["tested"]-entry["accepted"]
+        entry["precheck_rejected"] = entry.get("attempted",0)-entry["tested"]
         entry["margins_mm"] = physical_edge_margins_mm(best["sheets"][index])
+        records = records_by_sheet[index]
+        entry["rejected"] = {axis:record.get("rejected",{}) for axis,record in records.items()}
+        entry["search_status"] = next((r.get("search_status",r["reason"]) for r in records.values()),"COMPLETE")
+    diag["precheck_rejected"] = diag["attempted"]-diag["tested"]
     return best,decisions

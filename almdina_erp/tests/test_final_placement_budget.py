@@ -136,7 +136,7 @@ def gallery_witness_outcome(count, *, dense=False, seconds=30, application=None)
     app = application or current
     raw,sources = multi_board_witness(count,dense=dense)
     rows = tuple(dict(width_cm=s["width_cm"],length_cm=s["length_cm"],qty=1,allow_rotation=False,
-                      piece_instance_id=s["piece_instance_id"]) for s in sources)
+                      piece_instance_id=s["piece_instance_id"].rsplit(":",1)[0]) for s in sources)
     class GalleryPacking(DomainCuttingEngineAdapter):
         def optimize(self,*args,**kwargs):
             alternatives = []
@@ -157,11 +157,12 @@ def gallery_witness_outcome(count, *, dense=False, seconds=30, application=None)
 
 def test_five_17_board_candidates_share_time_including_finalization(monkeypatch):
     from almdina_erp.almdina_erp.application.cutting import optimize_order_plan as app
+    from almdina_erp.almdina_erp.domain.cutting import final_cut_line_alignment as alignment
     clock,deadlines,diagnostics = [0.0],[],[]
-    center,protect = app.realize_sheet_edge_trim,edge.protect_plan_edges
+    baseline,protect = alignment.validate_alignment_baseline,edge.protect_plan_edges
     def preparation(*args,**kwargs):
         clock[0] += 1
-        return center(*args,**kwargs)
+        return baseline(*args,**kwargs)
     def search(*args,**kwargs):
         deadlines.append(kwargs["deadline_monotonic"])
         result = protect(*args,**kwargs)
@@ -169,7 +170,7 @@ def test_five_17_board_candidates_share_time_including_finalization(monkeypatch)
         return result
     monkeypatch.setattr(app,"time",SimpleNamespace(monotonic=lambda:clock[0]))
     monkeypatch.setattr(edge,"time",SimpleNamespace(monotonic=lambda:clock[0]))
-    monkeypatch.setattr(app,"realize_sheet_edge_trim",preparation)
+    monkeypatch.setattr(alignment,"validate_alignment_baseline",preparation)
     monkeypatch.setattr(edge,"protect_plan_edges",search)
     outcome = gallery_witness_outcome(17)
     assert len(diagnostics) == len(deadlines) == 5
@@ -182,19 +183,20 @@ def test_five_17_board_candidates_share_time_including_finalization(monkeypatch)
 
 def test_expiry_during_candidate_finalization_is_explicit_and_later_candidates_get_remaining_time(monkeypatch):
     from almdina_erp.almdina_erp.application.cutting import optimize_order_plan as app
+    from almdina_erp.almdina_erp.domain.cutting import final_cut_line_alignment as alignment
     clock,calls,diagnostics = [0.0],[0],[]
-    center,protect = app.realize_sheet_edge_trim,edge.protect_plan_edges
+    baseline,protect = alignment.validate_alignment_baseline,edge.protect_plan_edges
     def preparation(*args,**kwargs):
         calls[0] += 1
         clock[0] += 7 if calls[0]==1 else .1
-        return center(*args,**kwargs)
+        return baseline(*args,**kwargs)
     def search(*args,**kwargs):
         result = protect(*args,**kwargs)
         diagnostics.append((deepcopy(kwargs["diagnostics"]),deepcopy(result[1])))
         return result
     monkeypatch.setattr(app,"time",SimpleNamespace(monotonic=lambda:clock[0]))
     monkeypatch.setattr(edge,"time",SimpleNamespace(monotonic=lambda:clock[0]))
-    monkeypatch.setattr(app,"realize_sheet_edge_trim",preparation)
+    monkeypatch.setattr(alignment,"validate_alignment_baseline",preparation)
     monkeypatch.setattr(edge,"protect_plan_edges",search)
     gallery_witness_outcome(17)
     assert diagnostics[0][0]["tested"] == 0
@@ -222,6 +224,12 @@ def test_application_reuses_exact_baseline_check_but_keeps_independent_final_ada
 
 @pytest.mark.parametrize("count", [1,2,8,17])
 def test_multi_board_snapshot_actual_dxf_and_strict_reimport_preserve_protected_geometry(tmp_path,count):
+    outcome = gallery_witness_outcome(count)
+    assert_snapshot_dxf_roundtrip(tmp_path,outcome)
+    assert outcome.snapshot["final_placement_diagnostics"]["sheets_reached"] == count
+
+
+def assert_snapshot_dxf_roundtrip(tmp_path,outcome,*,rows=None,edge_profiles=None):
     import json
     import os
     from pathlib import Path
@@ -234,10 +242,18 @@ def test_multi_board_snapshot_actual_dxf_and_strict_reimport_preserve_protected_
     from almdina_erp.almdina_erp.services.export_validation_service import _plan_to_export_snapshot
     from almdina_erp.almdina_erp.services.dxf_export_service import _kerf_errors
     from almdina_erp.almdina_erp.services.dxf_autocad_normalization import rebuild_autocad_dxf
-    outcome = gallery_witness_outcome(count)
+    count = len(outcome.snapshot["sheets"])
     saved = sanitize_plan_snapshot(json.loads(json.dumps(outcome.snapshot)))
+    placed_rows = []
+    for sheet in saved["sheets"]:
+        for piece in sheet["pieces"]:
+            row = _lifecycle_placed_row(piece,sheet["sheet_no"])
+            for key,value in piece.items():
+                if hasattr(row,key) or key=="liner_specs_json":
+                    setattr(row,key,value)
+            placed_rows.append(row)
     cutting_plan = SimpleNamespace(snapshot_json=json.dumps(saved),
-        placed_pieces=[_lifecycle_placed_row(p,s["sheet_no"]) for s in saved["sheets"] for p in s["pieces"]],
+        placed_pieces=placed_rows,
         sources=[SimpleNamespace(sheet_no=s["sheet_no"],source_type="Full Board",remnant=None,
             board_item=None,material="",color="",thickness_mm=18,full_width_mm=1220,
             full_length_mm=2440,usable_width_mm=1220,usable_length_mm=2440,source_area_m2=2.9768)
@@ -247,6 +263,9 @@ def test_multi_board_snapshot_actual_dxf_and_strict_reimport_preserve_protected_
         kerf_mm=5,trim_margin_mm=0,used_area_m2=saved["used_area_m2"],total_source_area_m2=saved["total_board_area_m2"],
         waste_area_m2=saved["waste_area_m2"],required_boards=count)
     rebuilt = _plan_to_export_snapshot(cutting_plan)
+    from almdina_erp.almdina_erp.domain.cutting.machining_overlay import machining_metadata
+    assert [machining_metadata(p) for s in saved["sheets"] for p in s["pieces"]] == [
+        machining_metadata(p) for s in rebuilt["sheets"] for p in s["pieces"]]
     assert not _kerf_errors(rebuilt)
     cases = tmp_path/"multi.json"
     cases.write_text(json.dumps([rebuilt]))
@@ -255,14 +274,36 @@ def test_multi_board_snapshot_actual_dxf_and_strict_reimport_preserve_protected_
         env=dict(os.environ,PERIMETER_CASES=str(cases),PERIMETER_OUTPUT_DIR=str(tmp_path)))
     path = tmp_path/"0.dxf"
     path.write_bytes(rebuild_autocad_dxf(path.read_bytes()))
-    order = _order([_piece(width_cm=75,length_cm=75,cut_width_cm=75,cut_length_cm=75,qty=1,
-                           piece_instance_id=s["piece_instance_id"]) for s in outcome.expanded_pieces])
-    imported = _import(str(path),order,kerf_mm=5,trim_mm=0)
+    order_rows = rows or [dict(s,qty=1,piece_instance_id=s["piece_instance_id"].rsplit(":",1)[0])
+                          for s in outcome.expanded_pieces]
+    order = _order([_piece(**dict(s,cut_width_cm=s.get("cut_width_cm",s["width_cm"]),
+                                cut_length_cm=s.get("cut_length_cm",s["length_cm"])))
+                    for s in order_rows])
+    order.kerf_mm = 5
+    from unittest.mock import patch
+    from almdina_erp.almdina_erp.services import piece_cut_dimension_service
+    # The isolated fixture supplies the exact persisted band thicknesses; only
+    # the database catalog port is replaced. Cut-dimension validation runs.
+    if edge_profiles is None:
+        imported = _import(str(path),order,kerf_mm=5,trim_mm=0)
+    else:
+        with patch.object(piece_cut_dimension_service,"_default_profile_loader",lambda names: edge_profiles):
+            imported = _import(str(path),order,kerf_mm=5,trim_mm=0)
     def geometry(plan):
         return sorted((s["sheet_no"],*(round(p[k],6) for k in ("x","y","w","h")))
                       for s in plan["sheets"] for p in s["pieces"])
     assert saved["validation"]["is_valid"]
     assert geometry(saved) == geometry(rebuilt) == geometry(imported)
+    assert sorted(p["piece_instance_id"] for s in saved["sheets"] for p in s["pieces"]) == sorted(
+        p["piece_instance_id"] for s in imported["sheets"] for p in s["pieces"])
+    from almdina_erp.almdina_erp.domain.cutting.cut_line_quality import sheet_cut_line_quality
+    import math
+    import ezdxf
+    from almdina_erp.tests.test_cutter_center_paths import _layer_segments
+    # Imported protected contours remain conservative/unsupported for System
+    # ranking. Measure the actual emitted CUT_PATH, rather than coercing them
+    # back into rectangles to make an unavailable imported score look exact.
+    actual = sum(math.dist(*segment) for segment in _layer_segments(ezdxf.readfile(path),"CUT_PATH"))
+    assert actual == pytest.approx(sum(sheet_cut_line_quality(s,.5)[0] for s in saved["sheets"]),abs=.05)
     assert imported["saw_center_status"] == "Present"
     assert len(imported["sheets"]) == count
-    assert saved["final_placement_diagnostics"]["sheets_reached"] == count

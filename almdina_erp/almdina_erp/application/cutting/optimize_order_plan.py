@@ -182,7 +182,7 @@ def optimize_order_plan(
         raw_candidates = [*raw_candidates, *research_candidates[:1]]
     # A shared, finite allowance across the gallery; never extend native search.
     # Begin the shared tail allowance when the first alignment actually starts.
-    alignment_budget = {"deadline": None}
+    alignment_budget = {"deadline": None,"source":"native_gallery"}
     raw_seeds = []
     outcome = None
     snapshots = []
@@ -350,6 +350,8 @@ def _refine_smart_gallery(command, engine, expanded, raw, incumbent, applied_tri
     # Completed Domain improvements remain available at expiry: validation is
     # atomic and may finish after the cooperative deadline, as in native search.
     additions = []
+    placement_history = []
+    placement_budget = None
     for index, proposal in enumerate(proposals[1:]):
         if index and time.monotonic() >= deadline:
             break
@@ -358,10 +360,10 @@ def _refine_smart_gallery(command, engine, expanded, raw, incumbent, applied_tri
         configured_alignment = command.optimizer.alignment_search_budget_sec
         alignment_share = (min(.15, configured_alignment) if math.isfinite(configured_alignment)
                            and configured_alignment > 0 else 0.0)
+        placement_budget = _projection_placement_budget(command,deadline,alignment_share,
+            len(proposals)-1-index,"alns_projection",placement_history,placement_budget)
         result = _snapshot_outcome(command, engine, deepcopy(proposal), expanded,
-            applied_trim, trim_decision, plan_settings,
-            alignment_budget={"deadline": min(deadline,time.monotonic()+alignment_share),
-                              "remaining_candidates": 1})
+            applied_trim, trim_decision, plan_settings,alignment_budget=placement_budget)
         if result.snapshot['validation']['is_valid']:
             before, after = final_system_sort_keys([incumbent, result.snapshot])
             if after < before:
@@ -413,15 +415,18 @@ def _refine_pattern_gallery(command,engine,expanded,seeds,incumbent,applied_trim
         return [],dict(stop='refinement_error',error_type=type(error).__name__,budget_sec=seconds,
             elapsed_sec=round(time.monotonic()-started,3),additional_to_completed_alns=True)
     additions = []
+    placement_history = []
+    placement_budget = None
     for index,proposal in enumerate(proposals[1:]):
         if index and time.monotonic()>=deadline:
             break
         configured = command.optimizer.alignment_search_budget_sec
         share = min(.15,configured) if math.isfinite(configured) and configured>0 else 0.
         try:
+            placement_budget = _projection_placement_budget(command,deadline,share,len(proposals)-1-index,
+                "corner_projection" if corner_only else "pattern_projection",placement_history,placement_budget)
             result = _snapshot_outcome(command,engine,deepcopy(proposal),expanded,applied_trim,
-                trim_decision,plan_settings,alignment_budget=dict(deadline=min(deadline,time.monotonic()+share),
-                                                               remaining_candidates=1))
+                trim_decision,plan_settings,alignment_budget=placement_budget)
         except Exception as error:
             trace.setdefault('projection_errors',[]).append(type(error).__name__)
             continue
@@ -434,6 +439,23 @@ def _refine_pattern_gallery(command,engine,expanded,seeds,incumbent,applied_trim
     if corner_only:
         trace['additional_to_completed_patterns']=True
     return additions,trace
+
+
+def _projection_placement_budget(command, deadline, legacy_share, remaining, source, history=None, previous=None):
+    """Positive placement shares the existing stage tail, including preparation.
+
+    The legacy 150ms projection cap cannot fund a multi-sheet basic pass after
+    snapshot validation. Removing that cap creates no time: the stage's same
+    absolute deadline and configured alignment limit still bound every share.
+    """
+    policy = command.optimizer.edge_protection
+    positive = bool(policy.horizontal_mm or policy.vertical_mm)
+    configured = command.optimizer.alignment_search_budget_sec
+    share = max(0.0,configured) if positive and math.isfinite(configured) else legacy_share
+    shared_deadline = previous["deadline"] if positive and previous is not None else min(deadline,time.monotonic()+share)
+    return dict(deadline=shared_deadline,
+                remaining_candidates=max(1,remaining) if positive else 1,source=source,
+                completed_candidates=history if history is not None else [])
 
 
 def _snapshot_outcome(command, engine, plan, expanded, applied_trim, trim_decision, plan_settings, *,
@@ -462,6 +484,14 @@ def _snapshot_outcome(command, engine, plan, expanded, applied_trim, trim_decisi
     baseline_proof = None
     candidate_deadline = (final_placement_deadline() if protection_enabled
                           and plan_settings.optimization_mode == "smart" and allowed > 0 else None)
+    candidate_entry = time.monotonic() if protection_enabled else None
+    budget_trace = {}
+    if protection_enabled:
+        budget_trace = dict(budget_source=(alignment_budget or {}).get("source","standalone"),
+            allocated_slice_sec=max(0.0,candidate_deadline-candidate_entry) if candidate_deadline is not None else None,
+            shared_remaining_at_entry_sec=max(0.0,alignment_budget["deadline"]-candidate_entry)
+                if alignment_budget and alignment_budget.get("deadline") is not None else None,
+            prior_candidates=list((alignment_budget or {}).get("completed_candidates",[])))
 
     board = command.board
     plan["kerf_cm"] = board.kerf_cm
@@ -491,22 +521,26 @@ def _snapshot_outcome(command, engine, plan, expanded, applied_trim, trim_decisi
         "min_remnant_area_m2": command.optimizer.min_remnant_area_m2,
     }
     original_sheets = deepcopy(sheets)
-    original_metrics = _enrich_final_geometry_metrics(
+    original_metrics = None if protection_enabled else _enrich_final_geometry_metrics(
         {**plan, "sheets": original_sheets}, metric_options
     )
-    realize_sheet_edge_trim(
-        sheets,
-        full_width_cm=board.full_width_cm,
-        full_length_cm=board.full_length_cm,
-        preferred_width_trim_cm=trim_decision.preferred.width_trim_cm,
-        preferred_length_trim_cm=trim_decision.preferred.length_trim_cm,
-        balance_existing_applied=True,
-        max_centerable_edge_gap_cm=command.optimizer.max_centerable_edge_gap_cm,
-        **metric_options,
-    )
+    # Mandatory trim is already established by packing and the physical frame.
+    # Positive policy owns centering in final placement after compaction; keep
+    # the zero-policy centering/rollback path byte-for-byte in its old order.
+    if not protection_enabled:
+        realize_sheet_edge_trim(
+            sheets,
+            full_width_cm=board.full_width_cm,
+            full_length_cm=board.full_length_cm,
+            preferred_width_trim_cm=trim_decision.preferred.width_trim_cm,
+            preferred_length_trim_cm=trim_decision.preferred.length_trim_cm,
+            balance_existing_applied=True,
+            max_centerable_edge_gap_cm=command.optimizer.max_centerable_edge_gap_cm,
+            **metric_options,
+        )
     plan["sheets"] = sheets
     plan = _enrich_final_geometry_metrics(plan, metric_options)
-    if _centering_worsens_industrial_quality(
+    if not protection_enabled and _centering_worsens_industrial_quality(
         original_metrics.get("industrial_rank") or (),
         plan.get("industrial_rank") or (),
         machine_type=machine_type,
@@ -693,12 +727,17 @@ def _snapshot_outcome(command, engine, plan, expanded, applied_trim, trim_decisi
     }
 
     if placement_diagnostics is not None:
-        placement_diagnostics.update(preparation_sec=preparation_sec,
+        placement_diagnostics.update(**budget_trace,preparation_sec=preparation_sec,
             finalization_sec=perf_counter()-finalization_started,
             snapshot_validation_sec=snapshot_validation_sec,
             candidate_deadline_remaining_sec=(max(0.0,candidate_deadline-time.monotonic())
                                              if candidate_deadline is not None else None))
         snapshot["final_placement_diagnostics"] = placement_diagnostics
+        if alignment_budget is not None:
+            alignment_budget.setdefault("completed_candidates",[]).append(dict(
+                finalization_sec=placement_diagnostics["finalization_sec"],preparation_sec=preparation_sec,
+                search_sec=placement_diagnostics.get("elapsed_sec",0),
+                tested=placement_diagnostics.get("tested",0),accepted=placement_diagnostics.get("accepted",0)))
 
     return OptimizationOutcome(
         snapshot=snapshot,

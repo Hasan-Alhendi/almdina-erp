@@ -134,11 +134,13 @@ def test_kerf_contacts_are_choices_not_a_board_wide_rigid_constraint():
 
 
 @pytest.mark.parametrize("second", [False, True])
-def test_standalone_centers_but_disjoint_unequal_bands_can_align_at_minimum_protection(second):
+def test_centering_wins_when_disjoint_bands_keep_equal_cut_quality_alignment_and_qualified_remnants(second):
     placements = [(0, 0, 96, 20)] + ([(0, 50, 75, 20)] if second else [])
     plan, sources = witness(placements, width=100, height=100)
     result, _ = finish(plan, sources, policy=EdgeProtectionPolicy(15, 0))
-    assert [p["x"] for p in result["sheets"][0]["pieces"]] == pytest.approx([1.5, 1.5] if second else [2])
+    # Both aligned offsets have identical cutter and factory-qualified remnant
+    # quality. The unified contract puts eligible centering before displacement.
+    assert [p["x"] for p in result["sheets"][0]["pieces"]] == pytest.approx([2, 2] if second else [2])
 
 
 def test_original_edge_to_internal_cut_can_increase_internal_length_safely():
@@ -207,9 +209,9 @@ def test_expired_budget_skips_and_expiry_after_acceptance_retains_best_proven(mo
     diagnostics = {}
     result, _ = finish(plan, sources, policy=EdgeProtectionPolicy(15, 0),
                        deadline_monotonic=10, diagnostics=diagnostics)
-    # The early pass proves 15.5/15.5 mm before the later 15/16 mm alignment
-    # alternative. Expiry must retain that exact completed basic candidate.
-    assert positions(result)[2][0] == pytest.approx(1.55)
+    # The unified basic pass already sees the 15/16 mm alignment. Expiry must
+    # retain this completed candidate, including its unchanged upper anchor.
+    assert positions(result)[2][0] == pytest.approx(1.5)
     assert positions(result)[1][0] == 1.5
     assert diagnostics["accepted"] == 1
     assert not validate_plan(result, sources, 122, 244, kerf_cm=.5)
