@@ -223,6 +223,12 @@
             worldDx,
             worldDy
         );
+        ["opening_rings_mm", "base_opening_rings_mm"].forEach((field) => {
+            if (!Array.isArray(piece[field])) return;
+            piece[field] = piece[field].map((ring) => (
+                reframePoints(ring, boards, fromSheet, toSheet, worldDx, worldDy)
+            ));
+        });
         if (piece.pivot_mm && typeof piece.pivot_mm === "object") {
             const from = sheetOriginMm(boards, fromSheet);
             const to = sheetOriginMm(boards, toSheet);

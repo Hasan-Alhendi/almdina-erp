@@ -2371,6 +2371,16 @@
                 return;
             }
 
+            function sessionOpeningRings(piece) {
+                if (Array.isArray(piece.opening_rings_mm) && piece.opening_rings_mm.length) {
+                    return piece.opening_rings_mm.filter((ring) => Array.isArray(ring) && ring.length >= 3);
+                }
+                if (Array.isArray(piece.glass_hole_local_mm) && piece.glass_hole_local_mm.length >= 3) {
+                    return [piece.glass_hole_local_mm];
+                }
+                return [];
+            }
+
             let geometry = element.geometry;
             if (
                 sessionPiece
@@ -2381,20 +2391,22 @@
                 // Authoritative session outline already carries pose; lift to world once.
                 geometry = {
                     outer: sessionPointsToWorld(sessionPiece.outline_mm, sessionPiece, boards),
-                    holes: Array.isArray(sessionPiece.glass_hole_local_mm)
-                        ? [sessionPointsToWorld(sessionPiece.glass_hole_local_mm, sessionPiece, boards)]
-                        : [],
+                    holes: sessionOpeningRings(sessionPiece).map((ring) => (
+                        sessionPointsToWorld(ring, sessionPiece, boards)
+                    )),
                 };
-            } else if (
-                sessionPiece
-                && element.kind === "hole"
-                && Array.isArray(sessionPiece.glass_hole_local_mm)
-                && sessionPiece.glass_hole_local_mm.length >= 3
-            ) {
-                geometry = {
-                    outer: sessionPointsToWorld(sessionPiece.glass_hole_local_mm, sessionPiece, boards),
-                    holes: [],
-                };
+            } else if (sessionPiece && element.kind === "hole") {
+                const rings = sessionOpeningRings(sessionPiece);
+                const holeIndex = element.payload && Number.isInteger(element.payload.hole_index)
+                    ? element.payload.hole_index
+                    : 0;
+                const ring = rings[holeIndex] || (holeIndex === 0 ? rings[0] : null);
+                if (Array.isArray(ring) && ring.length >= 3) {
+                    geometry = {
+                        outer: sessionPointsToWorld(ring, sessionPiece, boards),
+                        holes: [],
+                    };
+                }
             } else if (sessionPiece && geometry && Array.isArray(geometry.outer)) {
                 geometry = {
                     outer: geometry.outer.map((point) => entryPointToWorld(point, sessionPiece, boards)),

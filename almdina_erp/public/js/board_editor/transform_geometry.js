@@ -30,6 +30,15 @@
         return points.map((point) => [Number(point[0] || 0), (2 * centerY) - Number(point[1] || 0)]);
     }
 
+    function reflectOpeningRings(piece, axis) {
+        if (!Array.isArray(piece.base_opening_rings_mm)) return;
+        const centerX = Number((piece.pivot_mm && piece.pivot_mm.x) || 0);
+        const centerY = Number((piece.pivot_mm && piece.pivot_mm.y) || 0);
+        piece.base_opening_rings_mm = piece.base_opening_rings_mm.map((ring) => (
+            axis === "v" ? reflectVertical(ring, centerY) : reflectHorizontal(ring, centerX)
+        ));
+    }
+
     function reflectMachiningPaths(piece, axis) {
         if (!Array.isArray(piece.machining_paths)) return;
         const centerX = Number((piece.pivot_mm && piece.pivot_mm.x) || 0);
@@ -54,6 +63,7 @@
         if (Array.isArray(piece.base_hole_mm)) {
             piece.base_hole_mm = reflectHorizontal(piece.base_hole_mm, centerX);
         }
+        reflectOpeningRings(piece, "h");
         reflectMachiningPaths(piece, "h");
         piece.mirrored = !truthy(piece.mirrored);
         RG.rederiveOutline(piece);
@@ -70,6 +80,7 @@
         if (Array.isArray(piece.base_hole_mm)) {
             piece.base_hole_mm = reflectHorizontal(piece.base_hole_mm, centerX);
         }
+        reflectOpeningRings(piece, "h");
         reflectMachiningPaths(piece, "h");
         piece.flip_h = !truthy(piece.flip_h);
         RG.rederiveOutline(piece);
@@ -86,6 +97,7 @@
         if (Array.isArray(piece.base_hole_mm)) {
             piece.base_hole_mm = reflectVertical(piece.base_hole_mm, centerY);
         }
+        reflectOpeningRings(piece, "v");
         reflectMachiningPaths(piece, "v");
         piece.flip_v = !truthy(piece.flip_v);
         RG.rederiveOutline(piece);
