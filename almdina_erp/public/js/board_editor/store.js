@@ -33,6 +33,8 @@
             sidebarSplit: 0.45,
             magnetEnabled: true,
             measureToolActive: false,
+            editorMode: "board",
+            drawingView: null,
             // Visual-only edge-band preference for this open editor session.
             // Never enters History / draft fingerprint / manufacturing data.
             showEdgeBands: false,
@@ -91,6 +93,9 @@
                 sidebarSplit: state.sidebarSplit,
                 magnetEnabled: state.magnetEnabled !== false,
                 measureToolActive: state.measureToolActive === true,
+                editorMode: state.editorMode === "drawing" ? "drawing" : "board",
+                drawingTarget: drawingTargetFor(state),
+                drawingView: state.drawingView,
                 showEdgeBands: state.showEdgeBands === true,
                 pieceEdgeBandOverrides: { ...state.pieceEdgeBandOverrides },
                 session: state.session,
@@ -175,6 +180,38 @@
             // Transient UI mode only — never enters History or draft layout.
             state.measureToolActive = Boolean(enabled);
             emit();
+        }
+
+        function drawingTargetFor(current) {
+            const EditorMode = window.AlmdinaBoardEditor && window.AlmdinaBoardEditor.EditorMode;
+            if (!EditorMode || typeof EditorMode.resolveDrawingTarget !== "function") return null;
+            return EditorMode.resolveDrawingTarget({
+                mode: current.editorMode,
+                session: current.session,
+                projection: (current.payload && current.payload.projection) || {},
+                selectedPieceKeys: current.selectedPieceKeys,
+                canEditLayout: current.canSaveLayout === true && current.sourceOnly !== true,
+            });
+        }
+
+        function setDrawingView(view) {
+            const next = view || null;
+            if (JSON.stringify(state.drawingView) === JSON.stringify(next)) return snapshot();
+            state.drawingView = next;
+            emit();
+            return snapshot();
+        }
+
+        function setEditorMode(mode) {
+            // View state only. It must not enter History, layout JSON, or fingerprints.
+            const EditorMode = window.AlmdinaBoardEditor && window.AlmdinaBoardEditor.EditorMode;
+            const next = EditorMode && typeof EditorMode.normalize === "function"
+                ? EditorMode.normalize(mode)
+                : (mode === "drawing" ? "drawing" : "board");
+            if (next === state.editorMode) return snapshot();
+            state.editorMode = next;
+            emit();
+            return snapshot();
         }
 
         function toggleMeasureTool() {
@@ -584,6 +621,8 @@
             toggleMagnet,
             setMeasureToolActive,
             toggleMeasureTool,
+            setEditorMode,
+            setDrawingView,
             setShowEdgeBands,
             setPieceEdgeBandVisible,
             isPieceEdgeBandVisible,

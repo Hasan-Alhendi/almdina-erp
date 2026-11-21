@@ -41,6 +41,15 @@
         let gestureToken = 0;
         let windowBound = false;
 
+        function distributionGesturesAllowed() {
+            const snap = store && store.snapshot ? store.snapshot() : null;
+            const EditorMode = window.AlmdinaBoardEditor && window.AlmdinaBoardEditor.EditorMode;
+            if (EditorMode && typeof EditorMode.distributionGesturesAllowed === "function") {
+                return EditorMode.distributionGesturesAllowed(snap);
+            }
+            return !snap || snap.editorMode !== "drawing";
+        }
+
         function onWindowPointerMove(event) {
             onPointerMove(event);
         }
@@ -284,6 +293,7 @@
                 const row = snap.session.pieces[key];
                 return row && row.editable;
             });
+            const dragAllowed = distributionGesturesAllowed();
             return beginGesture({
                 kind: "piece",
                 pieceKey,
@@ -294,7 +304,7 @@
                 roots: plan.roots,
                 blockReason: blocked ? "A selected piece cannot be moved." : null,
                 shiftKey: Boolean(event && event.shiftKey),
-                canDrag: blocked || (plan.roots.length > 0 && rootsEditable),
+                canDrag: dragAllowed && (blocked || (plan.roots.length > 0 && rootsEditable)),
                 canSelect: true,
             }, event);
         }
@@ -305,7 +315,7 @@
             return beginGesture({
                 kind: "board",
                 sheetNo,
-                canDrag: true,
+                canDrag: distributionGesturesAllowed(),
                 canSelect: true,
             }, event);
         }
@@ -441,6 +451,10 @@
             }
 
             if (gesture.phase !== "dragging") return;
+            if (!distributionGesturesAllowed()) {
+                cancel();
+                return;
+            }
             const world = clientToWorld(event.clientX, event.clientY);
             if (!world) return;
             const dx = world.x - gesture.startWorldX;

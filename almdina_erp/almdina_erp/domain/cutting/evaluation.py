@@ -107,7 +107,7 @@ def _void_rotation_matches_piece(
         _rotated_rectangle, non_quarter_rotation_is_admitted,
     )
     from .dxf_geometry import point_in_polygon
-    from .glass_opening_nesting import material_outline_cm
+    from .glass_opening_nesting import occupancy_outline_cm
 
     cx = sum(point[0] for point in points) / 4
     cy = sum(point[1] for point in points) / 4
@@ -124,7 +124,7 @@ def _void_rotation_matches_piece(
             mirrored=bool(other.get("corner_mirrored")),
             turns=int(other.get("corner_rotation_quarter_turns") or (1 if other.get("rotated") else 0)),
         )
-        ring = material_outline_cm(canonical)
+        ring = occupancy_outline_cm(canonical)
         notch = _notch_bounds(ring)
         if ring is None or notch is None:
             continue

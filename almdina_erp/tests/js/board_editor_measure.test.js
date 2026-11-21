@@ -437,7 +437,7 @@ function sessionWith(pieces, boardOverrides = {}) {
     assert.match(controller, /refreshAltInspection/);
     assert.match(controller, /clearAltOverlay/);
     assert.match(page, /measure_geometry\.js\?v=6/);
-    assert.match(page, /measure_interaction\.js\?v=8/);
+    assert.match(page, /measure_interaction\.js\?v=9/);
     assert.match(controller, /isDragActive/);
     assert.match(controller, /wasAltHeld/);
     assert.doesNotMatch(sessionDoc, /measureToolActive|measure_lines|abe-measure/);

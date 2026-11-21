@@ -48,6 +48,8 @@ from almdina_erp.almdina_erp.domain.cutting.plan_settings import (
     DEFAULT_OPTIMIZATION_TIME_LIMIT_SEC,
     DEFAULT_PREFERRED_TRIM_MM,
     PlanSettingsValidationError,
+    EdgeProtectionPolicy,
+    EDGE_PROTECTION_FIELDS,
     normalize_plan_settings,
 )
 from almdina_erp.almdina_erp.domain.security.authorization import Capability
@@ -185,6 +187,7 @@ _SETTINGS_FIELDS = (
     "default_optimization_time_limit_sec",
     "optimal_search_piece_limit",
     "max_centerable_edge_gap_cm",
+    *EDGE_PROTECTION_FIELDS,
     "alignment_search_budget_sec",
     "default_cutting_cost_per_board_usd",
     "default_special_design_fee_usd",
@@ -398,6 +401,15 @@ def _apply_tool_diameter_defaults(settings: Any, payload: dict[str, Any]) -> Non
 
 
 def _apply_values(settings: Any, payload: dict[str, Any]) -> None:
+    if set(EDGE_PROTECTION_FIELDS).intersection(payload):
+        try:
+            current = EdgeProtectionPolicy.from_settings(settings).field_values()
+            policy = EdgeProtectionPolicy(*(payload.get(key, current[key]) for key in EDGE_PROTECTION_FIELDS))
+        except PlanSettingsValidationError:
+            frappe.throw(_("Edge protection margins must be finite non-negative numbers."), frappe.ValidationError)
+            raise AssertionError("unreachable")
+        for key, value in policy.field_values().items():
+            settings.set(key, value)
     _apply_plan_default_values(settings, payload)
     _apply_tool_diameter_defaults(settings, payload)
 
