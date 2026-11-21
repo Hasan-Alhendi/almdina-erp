@@ -38,8 +38,18 @@
         return `<button type="button" class="alm-btn-secondary ${className} abe-tool-btn"${disabled}${pressed}${attrs} title="${esc(title)}" aria-label="${esc(label)}">${icon}</button>`;
     }
 
+    function drawingsDirty(storeView) {
+        return Boolean(
+            (storeView && storeView.drawingsDirty)
+            || (storeView && storeView.drawingView && storeView.drawingView.dirty)
+        );
+    }
+
     function saveStatusText(storeView) {
         const state = (storeView && storeView.saveState) || "clean";
+        if (drawingsDirty(storeView) && state !== "saving" && state !== "failed" && state !== "conflict") {
+            return __("Unsaved changes");
+        }
         if (state === "dirty") return __("Unsaved changes");
         if (state === "saving") return __("Saving layout");
         if (state === "saved") return __("Layout saved");
@@ -60,7 +70,9 @@
     function saveDisabled(storeView) {
         const state = (storeView && storeView.saveState) || "clean";
         if (!storeView || storeView.canSaveLayout === false || storeView.sourceOnly) return true;
-        return state === "saving" || state === "saved" || state === "clean";
+        if (state === "saving") return true;
+        if (drawingsDirty(storeView)) return false;
+        return state === "saved" || state === "clean";
     }
 
     function saveTitle(storeView) {
@@ -70,27 +82,42 @@
         if (storeView && storeView.canSaveLayout === false) {
             return __("You do not have permission to save this layout.");
         }
+        if (drawingsDirty(storeView) && storeView.distributionDirty) {
+            return `${__("Save layout and drawing")}. ${saveStatusText(storeView)}`;
+        }
+        if (drawingsDirty(storeView)) return __("Save drawing");
         return `${__("Save layout")}. ${saveStatusText(storeView)}`;
     }
 
+    function copyPlanReady(storeView) {
+        if (!storeView || storeView.createPlanInFlight || storeView.sourceOnly || storeView.canSaveLayout === false) {
+            return false;
+        }
+        if (storeView.distributionDirty || drawingsDirty(storeView)) return true;
+        if (Number(storeView.draftVersion) > 0) return true;
+        return storeView.savedDrawingReady === true;
+    }
+
     function pageActionsHtml(storeView) {
-        const createDisabled = Boolean(
-            storeView.createPlanInFlight
-            || storeView.distributionDirty
-            || !(Number(storeView.draftVersion) > 0)
-            || storeView.sourceOnly
-            || storeView.canSaveLayout === false
-        );
-        const createTitle = storeView.distributionDirty
-            ? __("Save the current distribution before applying it to the cutting plan.")
-            : __("Apply this layout as an unapproved edited cutting plan copy.");
+        const createDisabled = !copyPlanReady(storeView);
+        const createTitle = !copyPlanReady(storeView)
+            ? (
+                storeView.sourceOnly
+                    ? __("This view shows the source plan. The saved draft is unchanged.")
+                    : (storeView.canSaveLayout === false
+                        ? __("You do not have permission to save this layout.")
+                        : __("Save a door drawing or the board distribution before copying the cutting plan."))
+            )
+            : ((storeView.distributionDirty || drawingsDirty(storeView))
+                ? __("Unsaved edits are saved before the cutting plan is copied.")
+                : __("Apply this layout as an unapproved edited cutting plan copy."));
         return `
             <div class="abe-page-actions" role="toolbar" aria-label="${esc(__("Board editor page actions"))}">
                 ${toolButton("abe-save", "save", saveTitle(storeView), {
                     disabled: saveDisabled(storeView),
                     attrs: ` data-abe-save-state="${esc(storeView.saveState || "clean")}"`,
                 })}
-                <span class="abe-save-state" data-abe-save-state="${esc(storeView.saveState || "clean")}" role="status">${esc(saveStatusText(storeView))}</span>
+                <span class="abe-save-state" data-abe-save-state="${esc(storeView.saveState || "clean")}" data-abe-drawings-dirty="${drawingsDirty(storeView) ? "1" : "0"}" role="status">${esc(saveStatusText(storeView))}</span>
                 ${toolButton("abe-create-plan", "copy", __("Apply to cutting plan"), {
                     disabled: createDisabled,
                     title: createTitle,
@@ -140,7 +167,7 @@
     function clickTargetKeepsSelection(target) {
         if (!target || typeof target.closest !== "function") return false;
         return Boolean(target.closest(
-            "[data-piece-id], [data-piece-key], [data-abe-rotate-handle], [data-abe-angle-mirror], [data-board-drag], [data-sheet]"
+            "[data-piece-id], [data-piece-key], [data-abe-rotate-handle], [data-abe-angle-mirror], [data-board-drag], [data-sheet], [data-abe-drawing-path], [data-abe-drawing-measure], [data-abe-drawing-cursor]"
         ));
     }
 
@@ -1408,6 +1435,461 @@
         });
     }
 
+    function editorModeSwitch(mode) {
+        const current = mode === "drawing" ? "drawing" : "board";
+        const button = (value, label) => {
+            const pressed = current === value;
+            return `<button type="button" class="abe-mode-btn${pressed ? " is-active" : ""}" data-abe-editor-mode="${value}" aria-pressed="${pressed ? "true" : "false"}">${esc(__(label))}</button>`;
+        };
+        return `<div class="abe-mode-switch" role="group" aria-label="${esc(__("Editor mode"))}">${button("board", "Board")}${button("drawing", "Drawing")}</div>`;
+    }
+
+    const DRAWING_TOOL_ICONS = {
+        select: "mouse-pointer-2",
+        polyline: "spline",
+        shapes: "shapes",
+        pen: "pen-tool",
+        text: "type",
+        node_edit: "waypoints",
+        snap: "magnet",
+        reference_image: "image",
+    };
+
+    function drawingToolControl(tool, label, pressed, enabled, extraAttrs) {
+        const translated = __(label);
+        const icon = frappeIcon(DRAWING_TOOL_ICONS[tool] || "circle");
+        if (!enabled && tool !== "select" && tool !== "polyline") {
+            return `<span class="abe-drawing-tool abe-tool-btn" aria-disabled="true" title="${esc(translated)}">${icon}</span>`;
+        }
+        const extras = extraAttrs || "";
+        const pressedAttr = extras.indexOf("aria-pressed=") >= 0 ? "" : ` aria-pressed="${pressed ? "true" : "false"}"`;
+        const toolAttr = extras.indexOf("data-abe-") >= 0 ? "" : ` data-abe-drawing-tool="${esc(tool)}"`;
+        return `<button type="button" class="alm-btn-secondary abe-drawing-tool abe-tool-btn${pressed ? " is-active" : ""}"${toolAttr}${pressedAttr}${enabled ? "" : " disabled"}${extras} title="${esc(translated)}" aria-label="${esc(translated)}">${icon}</button>`;
+    }
+
+    function iconAction(className, iconName, label, attrs, alreadyTranslated) {
+        const translated = alreadyTranslated ? label : __(label);
+        return `<button type="button" class="alm-btn-secondary abe-tool-btn ${className}"${attrs || ""} title="${esc(translated)}" aria-label="${esc(translated)}">${frappeIcon(iconName)}</button>`;
+    }
+
+    function cutProblemHtml(drawing) {
+        const problem = drawing && drawing.cutProblem;
+        if (!problem || !problem.messageKey) return "";
+        const size = problem.widthCm != null && problem.lengthCm != null
+            ? __("Door {0}. Size {1} × {2} cm. {3}")
+                .replace("{0}", String(problem.label || ""))
+                .replace("{1}", String(problem.widthCm))
+                .replace("{2}", String(problem.lengthCm))
+                .replace("{3}", __(problem.messageKey))
+            : __(problem.messageKey);
+        return `<div class="abe-cut-problem" data-abe-cut-problem="1" role="alert">
+            <strong>${esc(__("Invalid cut outline"))}</strong>
+            <span>${esc(size)}</span>
+            <button type="button" data-abe-drawing-action="select-problem">${esc(__("Select the problem path"))}</button>
+            <button type="button" data-abe-drawing-action="clear-problem">${esc(__("Clear cut outline"))}</button>
+        </div>`;
+    }
+
+    function drawingWorkspaceHtml(storeView) {
+        if ((storeView && storeView.editorMode) !== "drawing") return "";
+        const target = (storeView && storeView.drawingTarget) || {};
+        const drawing = storeView.drawingView || {};
+        const EditorMode = window.AlmdinaBoardEditor && window.AlmdinaBoardEditor.EditorMode;
+        const tools = (EditorMode && EditorMode.futureTools) || [];
+        const enabled = target.status === "special" && target.canEdit === true && drawing.ready !== false;
+        const activeTool = drawing.tool || "select";
+        const historyHtml = `
+            <span class="abe-tool-sep" aria-hidden="true"></span>
+            ${iconAction("abe-drawing-history", "undo-2", "Undo", ` data-abe-drawing-history="undo"${drawing.canUndo ? "" : " disabled"}`)}
+            ${iconAction("abe-drawing-history", "redo-2", "Redo", ` data-abe-drawing-history="redo"${drawing.canRedo ? "" : " disabled"}`)}
+        `;
+        const toolHtml = tools.map((tool) => {
+            if (tool.id === "select" || tool.id === "polyline") {
+                return drawingToolControl(tool.id, tool.labelKey, activeTool === tool.id, enabled);
+            }
+            if ((tool.id === "shapes" || tool.id === "node_edit" || tool.id === "pen" || tool.id === "text") && enabled) {
+                return drawingToolControl(tool.id, tool.labelKey, activeTool === tool.id, true);
+            }
+            if (tool.id === "snap" && enabled) {
+                const settings = drawing.snapSettings || {};
+                const snapOn = settings.enabled !== false;
+                const menuOpen = drawing.snapMenuOpen === true;
+                return drawingToolControl("snap", tool.labelKey, menuOpen, true, ` data-abe-snap-toggle="1" aria-pressed="${snapOn ? "true" : "false"}"`);
+            }
+            if (tool.id === "reference_image" && enabled) {
+                const menuOpen = drawing.referenceMenuOpen === true;
+                return drawingToolControl("reference_image", tool.labelKey, menuOpen, true, ` data-abe-reference-toggle="1"`);
+            }
+            return drawingToolControl(tool.id, tool.labelKey, false, false);
+        }).join("");
+        return `<div class="abe-drawing-tools" data-abe-drawing-workspace="1" role="group" aria-label="${esc(__("Drawing tools"))}">${toolHtml}${historyHtml}</div>`;
+    }
+
+    function pageDirection() {
+        const locale = window.AlmdinaLocale;
+        if (locale && typeof locale.direction === "function") return locale.direction();
+        return (frappe.boot && frappe.boot.lang === "ar") ? "rtl" : "ltr";
+    }
+
+    function formatMeasureMm(value) {
+        if (value == null || value === "") return "";
+        const number = Number(value);
+        if (!Number.isFinite(number)) return "";
+        return String(Math.round(number * 1000) / 1000);
+    }
+
+    function formatMeasureAngle(value) {
+        if (value == null || value === "") return "";
+        const number = Number(value);
+        if (!Number.isFinite(number)) return "";
+        let wrapped = number % 360;
+        if (wrapped < 0) wrapped += 360;
+        if (Math.abs(wrapped) < 1e-9 || Math.abs(wrapped - 360) < 1e-9) wrapped = 0;
+        return String(Math.round(wrapped * 1000) / 1000);
+    }
+
+    function drawingMeasureHtml(storeView, activeTool, pieceEnabled) {
+        if (!pieceEnabled) return "";
+        const drawing = (storeView && storeView.drawingView) || {};
+        const measure = drawing.measure || null;
+        if (activeTool === "polyline") {
+            return measureFieldsHtml(measure || { mode: "draw", enabled: false });
+        }
+        if (!measure || (measure.mode !== "edit" && measure.mode !== "closed")) return "";
+        if (measure.mode === "closed") {
+            return `<p class="abe-drawing-closed" data-abe-drawing-closed="1">${esc(__(measure.messageKey || "Closed paths cannot be resized one segment at a time."))}</p>`;
+        }
+        return measureFieldsHtml(measure);
+    }
+
+    function measureFieldsHtml(measure) {
+        const source = measure || {};
+        const enabled = source.enabled === true;
+        const lengthValue = source.lengthLocked
+            ? String(source.lengthText == null ? "" : source.lengthText)
+            : formatMeasureMm(source.lengthMm);
+        const angleValue = source.angleLocked
+            ? String(source.angleText == null ? "" : source.angleText)
+            : formatMeasureAngle(source.angleDeg);
+        const disabled = enabled ? "" : " disabled";
+        const lengthLocked = source.lengthLocked ? ` data-locked="1"` : "";
+        const angleLocked = source.angleLocked ? ` data-locked="1"` : "";
+        const title = enabled
+            ? ""
+            : ` title="${esc(__("Click a start point before entering a length."))}"`;
+        const lengthInvalid = source.errorField === "length" ? ` aria-invalid="true"` : "";
+        const angleInvalid = source.errorField === "angle" ? ` aria-invalid="true"` : "";
+        const error = source.errorKey
+            ? `<p class="abe-drawing-measure-error" data-abe-drawing-measure-error="1" role="alert">${esc(__(source.errorKey))}</p>`
+            : "";
+        return `<div class="abe-drawing-measure" data-abe-drawing-measure="1" data-abe-measure-mode="${esc(source.mode || "draw")}" dir="${esc(pageDirection())}"${title}>
+            <label>
+                <span>${esc(__("Length (mm)"))}</span>
+                <input type="text" inputmode="decimal" dir="ltr" autocomplete="off" spellcheck="false" data-abe-drawing-length="1" value="${esc(lengthValue)}"${disabled}${lengthLocked}${lengthInvalid} aria-label="${esc(__("Length (mm)"))}" />
+            </label>
+            <label>
+                <span>${esc(__("Angle (°)"))}</span>
+                <input type="text" inputmode="decimal" dir="ltr" autocomplete="off" spellcheck="false" data-abe-drawing-angle="1" value="${esc(angleValue)}"${disabled}${angleLocked}${angleInvalid} aria-label="${esc(__("Angle (°)"))}" />
+            </label>
+            ${error}
+            ${source.hintKey ? `<p class="abe-drawing-closed">${esc(__(source.hintKey))}</p>` : ""}
+        </div>`;
+    }
+
+    function penSettingsHtml(drawing, enabled) {
+        if (!enabled || !drawing || drawing.tool !== "pen") return "";
+        const Space = window.AlmdinaBoardEditor && window.AlmdinaBoardEditor.DrawingSpace;
+        const levels = Space && Space.penTools ? Space.penTools() : [];
+        const current = drawing.pen && drawing.pen.smoothing ? drawing.pen.smoothing : "low";
+        const closeDisabled = drawing.pen && drawing.pen.canClose ? "" : " disabled";
+        return `<div class="abe-pen-settings" data-abe-pen-settings="1" dir="${esc(pageDirection())}">
+            <span>${esc(__("Smoothing"))}</span>
+            <div role="group" aria-label="${esc(__("Smoothing"))}">${levels.map((level) => {
+                const active = current === level.id;
+                return `<button type="button" class="abe-pen-level${active ? " is-active" : ""}" data-abe-pen-smoothing="${esc(level.id)}" aria-pressed="${active ? "true" : "false"}">${esc(__(level.labelKey))}</button>`;
+            }).join("")}</div>
+            <button type="button" data-abe-drawing-action="close-pen"${closeDisabled}>${esc(__("Close path"))}</button>
+        </div>`;
+    }
+
+    function snapMenuHtml(drawing, enabled) {
+        if (!enabled || !drawing || drawing.snapMenuOpen !== true) return "";
+        const settings = drawing.snapSettings || {};
+        const box = (key, label) => {
+            const checked = key === "grid" ? settings.grid === true : settings[key] !== false;
+            return `<label><input type="checkbox" data-abe-snap-option="${esc(key)}"${checked ? " checked" : ""} />${esc(__(label))}</label>`;
+        };
+        const spacing = [1, 5, 10, 25, 50].indexOf(Number(settings.spacing)) >= 0 ? Number(settings.spacing) : 10;
+        const options = [1, 5, 10, 25, 50].map((step) => (
+            `<option value="${step}"${step === spacing ? " selected" : ""}>${step} mm</option>`
+        )).join("");
+        return `<div class="abe-snap-menu" data-abe-snap-menu="1" dir="${esc(pageDirection())}">
+            ${box("enabled", "Smart Snap")}
+            ${box("endpoint", "Endpoint")}
+            ${box("midpoint", "Midpoint")}
+            ${box("intersection", "Intersection")}
+            ${box("alignment", "Horizontal / Vertical")}
+            ${box("grid", "Grid")}
+            <label><span>${esc(__("Grid spacing"))}</span><select data-abe-snap-spacing="1" aria-label="${esc(__("Grid spacing"))}">${options}</select></label>
+        </div>`;
+    }
+
+    function referenceMenuHtml(drawing, enabled) {
+        if (!enabled || !drawing || drawing.referenceMenuOpen !== true) return "";
+        const rows = (drawing.references || []).map((reference, index) => {
+            const selected = reference.selected ? " is-active" : "";
+            const selectLabel = `${__("Reference image")} ${index + 1}`;
+            return `<span class="abe-reference-row${selected}">
+                ${iconAction("", "image", selectLabel, ` data-abe-reference-select="${esc(reference.id)}"`, true)}
+                ${iconAction("", reference.hidden ? "eye" : "eye-off", reference.hidden ? "Show reference image" : "Hide reference image", ` data-abe-reference-action="hide" data-abe-reference-id="${esc(reference.id)}"`)}
+                ${iconAction("", reference.locked ? "lock-open" : "lock", reference.locked ? "Unlock reference image" : "Lock reference image", ` data-abe-reference-action="lock" data-abe-reference-id="${esc(reference.id)}"`)}
+                ${iconAction("", "trash-2", "Delete reference image", ` data-abe-reference-action="delete" data-abe-reference-id="${esc(reference.id)}"`)}
+            </span>`;
+        }).join("");
+        return `<div class="abe-reference-menu" data-abe-reference-menu="1" dir="${esc(pageDirection())}">
+            ${iconAction("", "upload", "Upload reference image", ` data-abe-reference-upload="1"`)}
+            <input type="file" accept="image/*,.svg,.heic" data-abe-reference-file="1" hidden />
+            ${rows}
+        </div>`;
+    }
+
+    function referenceFormHtml(drawing) {
+        const form = drawing && drawing.referenceForm;
+        if (!form) return "";
+        const field = (key, label, value) => `<label class="abe-metric"><span>${esc(__(label))}</span><input type="text" inputmode="decimal" dir="ltr" autocomplete="off" spellcheck="false" data-abe-reference-field="${esc(key)}" value="${esc(value)}" aria-label="${esc(__(label))}" /></label>`;
+        const percent = Math.round(Number(form.opacity) * 1000) / 10;
+        const calibration = form.calibration
+            ? `<p class="abe-reference-note" data-abe-reference-calibration="1">${esc(__("Calibrated"))}: <span dir="ltr">${esc(form.calibration.known_distance_mm)} mm</span></p>`
+            : (form.calibrating
+                ? `<p class="abe-reference-note">${esc(__(form.calibrationMessage || "Pick the first point on the image."))}${form.currentDistance != null ? ` <span dir="ltr">${esc(form.currentDistance)} mm</span>` : ""}</p>
+                    <label><span>${esc(__("Known distance (mm)"))}</span><input type="text" inputmode="decimal" dir="ltr" data-abe-reference-known="1" value="${esc(form.knownText || "")}" /></label>
+                    ${iconAction("", "crosshair", "Apply calibration", ` data-abe-reference-action="apply-calibration"`)}`
+                : "");
+        return `<div class="abe-reference-form" data-abe-reference-form="1" dir="${esc(pageDirection())}">
+            ${field("x_mm", "Drawing X (mm)", form.x_mm)}
+            ${field("y_mm", "Drawing Y (mm)", form.y_mm)}
+            ${field("width_mm", "Width (mm)", form.width_mm)}
+            ${field("height_mm", "Height (mm)", form.height_mm)}
+            ${field("rotation_deg", "Angle (°)", form.rotation_deg)}
+            <label><span>${esc(__("Opacity (%)"))}</span><input type="range" min="0" max="100" step="1" dir="ltr" data-abe-reference-opacity="1" value="${esc(percent)}" aria-label="${esc(__("Opacity (%)"))}" /></label>
+            <label><input type="checkbox" data-abe-reference-aspect="1"${form.aspectLocked !== false ? " checked" : ""} />${esc(__("Lock aspect ratio"))}</label>
+            ${iconAction("", "crosshair", "Calibrate", ` data-abe-reference-action="calibrate"`)}
+            ${calibration}
+        </div>`;
+    }
+
+    function shapeMenuHtml(drawing) {
+        if (!drawing || drawing.tool !== "shapes") return "";
+        const Space = window.AlmdinaBoardEditor && window.AlmdinaBoardEditor.DrawingSpace;
+        const tools = Space && Space.shapeTools ? Space.shapeTools() : [];
+        return `<div class="abe-shape-menu" role="group" aria-label="${esc(__("Shapes"))}">${tools.map((tool) => {
+            const active = drawing.shapeKind === tool.id;
+            return `<button type="button" class="abe-shape-kind${active ? " is-active" : ""}" data-abe-shape-kind="${esc(tool.id)}" aria-pressed="${active ? "true" : "false"}">${esc(__(tool.labelKey))}</button>`;
+        }).join("")}</div>`;
+    }
+
+    function shapeFormHtml(drawing) {
+        const form = drawing && drawing.shapeForm;
+        const actions = form && form.actions || {};
+        const hasActions = actions.convert || actions.copy || actions.paste || actions.remove || actions.insert;
+        if (!form || ((!form.fields || !form.fields.length) && !hasActions)) return "";
+        const corners = [
+            ["top_left", "Top left"],
+            ["top_right", "Top right"],
+            ["bottom_left", "Bottom left"],
+            ["bottom_right", "Bottom right"],
+        ];
+        const fields = (form.fields || []).map((field) => {
+            if (field.key === "corner") {
+                const options = corners.map(([value, label]) => (
+                    `<option value="${esc(value)}"${String(field.value) === value ? " selected" : ""}>${esc(__(label))}</option>`
+                )).join("");
+                return `<label class="abe-metric"><span>${esc(__(field.labelKey))}</span><select data-abe-shape-field="${esc(field.key)}" aria-label="${esc(__(field.labelKey))}">${options}</select></label>`;
+            }
+            return `<label class="abe-metric"><span>${esc(__(field.labelKey))}</span><input type="text" inputmode="decimal" dir="ltr" autocomplete="off" spellcheck="false" data-abe-shape-field="${esc(field.key)}" value="${esc(field.value == null ? "" : field.value)}" aria-label="${esc(__(field.labelKey))}" /></label>`;
+        }).join("");
+        const error = form.errorKey
+            ? `<p class="abe-drawing-measure-error" data-abe-shape-error="1" role="alert">${esc(__(form.errorKey))}</p>`
+            : "";
+        const buttons = [
+            actions.convert ? `<button type="button" data-abe-drawing-action="convert" title="${esc(__("Convert the shape into independent nodes and segments so its geometry can be edited."))}">${esc(__("Convert to path"))}</button>` : "",
+            actions.copy ? `<button type="button" data-abe-drawing-action="copy">${esc(__("Copy"))}</button>` : "",
+            actions.paste ? `<button type="button" data-abe-drawing-action="paste">${esc(__("Paste"))}</button>` : "",
+            actions.remove ? `<button type="button" data-abe-drawing-action="remove">${esc(__("Delete"))}</button>` : "",
+            actions.insert ? `<button type="button" data-abe-drawing-action="insert-node">${esc(__("Add node"))}</button>` : "",
+        ].join("");
+        const actionRow = buttons ? `<div class="abe-drawing-actions">${buttons}</div>` : "";
+        return `<div class="abe-drawing-measure abe-shape-form" data-abe-shape-form="1" data-abe-shape-mode="${esc(form.mode || "create")}" dir="${esc(pageDirection())}">${fields}${error}${actionRow}</div>`;
+    }
+
+    function referenceImageMarkup(reference, scale) {
+        const world = reference && reference.world;
+        const width = Number(reference && reference.widthMm);
+        const height = Number(reference && reference.heightMm);
+        if (!world || !(width > 0) || !(height > 0)) return "";
+        const a = (world.xAxis.x - world.origin.x) / width;
+        const b = (world.xAxis.y - world.origin.y) / width;
+        const c = (world.yAxis.x - world.origin.x) / height;
+        const d = (world.yAxis.y - world.origin.y) / height;
+        const matrix = `matrix(${a} ${b} ${c} ${d} ${world.origin.x} ${world.origin.y})`;
+        const opacity = reference.opacity == null ? 0.5 : reference.opacity;
+        const image = reference.href
+            ? `<image data-abe-reference-image="${esc(reference.id)}" href="${esc(reference.href)}" width="${width}" height="${height}" transform="${matrix}" opacity="${opacity}" pointer-events="none" preserveAspectRatio="none"/>`
+            : `<g data-abe-reference-image="${esc(reference.id)}" transform="${matrix}" pointer-events="none"><rect width="${width}" height="${height}" fill="none" stroke="#98a2b3" stroke-dasharray="6 4" vector-effect="non-scaling-stroke"/></g>`;
+        if (!reference.selected || !reference.interactive) return image;
+        const corners = [world.origin, world.xAxis, {
+            x: world.xAxis.x + (world.yAxis.x - world.origin.x),
+            y: world.xAxis.y + (world.yAxis.y - world.origin.y),
+        }, world.yAxis];
+        const outline = corners.map((point) => `${point.x},${point.y}`).join(" ");
+        const handles = reference.locked ? "" : ["nw", "ne", "se", "sw"].map((corner, index) => {
+            const point = corners[index === 0 ? 0 : (index === 1 ? 1 : (index === 2 ? 2 : 3))];
+            return `<circle data-abe-reference-handle="${esc(corner)}" data-abe-reference-id="${esc(reference.id)}" cx="${point.x}" cy="${point.y}" r="${6 / scale}" fill="#fff" stroke="#0b5fff" pointer-events="all"/>`;
+        }).join("") + `<circle data-abe-reference-handle="rotate" data-abe-reference-id="${esc(reference.id)}" cx="${(world.origin.x + world.xAxis.x) / 2}" cy="${(world.origin.y + world.xAxis.y) / 2 - (16 / scale)}" r="${6 / scale}" fill="#f79009" stroke="#7a2e0e" pointer-events="all"/>`;
+        return `${image}<polygon data-abe-reference-bounds="${esc(reference.id)}" points="${outline}" fill="none" stroke="#0b5fff" stroke-width="1.2" vector-effect="non-scaling-stroke" pointer-events="none"/>${handles}`;
+    }
+
+    function proposedCutSvg(storeView) {
+        const cuts = storeView && storeView.proposedCuts;
+        if (!Array.isArray(cuts) || !cuts.length) return "";
+        return cuts.map((cut) => {
+            const points = cut.points || [];
+            if (points.length < 3) return "";
+            const commands = points.map((point, index) => `${index === 0 ? "M" : "L"}${point.x} ${point.y}`).join(" ") + " Z";
+            const label = points[0];
+            return `<g class="abe-proposed-cut" data-abe-proposed-cut="${esc(cut.pieceInstanceId || "")}" pointer-events="none"><path d="${commands}" fill="none" stroke="#b54708" stroke-width="2" stroke-dasharray="7 3" vector-effect="non-scaling-stroke"/><text x="${label.x}" y="${label.y}" font-size="12" fill="#b54708">${esc(__("Proposed cut"))}</text></g>`;
+        }).join("");
+    }
+
+    function drawingPathPaint(path) {
+        if (path.selected) return { stroke: "#0b5fff", width: 2.4, dash: "" };
+        if (path.role === "manufacturing_outer" && path.problem) return { stroke: "#d92d20", width: 2.2, dash: ' stroke-dasharray="5 3"' };
+        if (path.role === "manufacturing_outer") return { stroke: "#b54708", width: 2.2, dash: "" };
+        if (path.role === "annotation") return { stroke: "#667085", width: 1.4, dash: ' stroke-dasharray="2 3"' };
+        return { stroke: "#344054", width: 1.6, dash: "" };
+    }
+
+    function pathFormHtml(drawing) {
+        const form = drawing && drawing.pathForm;
+        if (!form) return "";
+        const role = form.role || "construction";
+        const current = { construction: "role-construction", annotation: "role-annotation", manufacturing_outer: "role-manufacturing" }[role];
+        const button = (value, label) => `<button type="button" data-abe-drawing-action="${value}"${current === value ? ' aria-pressed="true"' : ""}>${esc(__(label))}</button>`;
+        const clear = role === "manufacturing_outer"
+            ? `<button type="button" data-abe-drawing-action="role-clear">${esc(__("Clear cut outline"))}</button>`
+            : "";
+        const validate = role === "manufacturing_outer"
+            ? `<button type="button" data-abe-drawing-action="validate-path">${esc(__("Validate cut outline"))}</button>`
+            : "";
+        return `<div class="abe-path-form abe-drawing-actions" data-abe-path-form="1">
+            <span>${esc(__("Path purpose"))}</span>
+            ${button("role-construction", "Guide line")}
+            ${button("role-annotation", "Note")}
+            ${button("role-manufacturing", "Cut outline")}
+            ${clear}
+            ${validate}
+            <label class="abe-metric">${esc(__("Move X (mm)"))}<input data-abe-path-dx="1" inputmode="decimal" dir="ltr" value="0"></label>
+            <label class="abe-metric">${esc(__("Move Y (mm)"))}<input data-abe-path-dy="1" inputmode="decimal" dir="ltr" value="0"></label>
+            <button type="button" data-abe-drawing-action="move-path">${esc(__("Move path"))}</button>
+        </div>`;
+    }
+
+    function drawingOverlaySvg(storeView, scale) {
+        const drawing = storeView && storeView.drawingView;
+        if (!drawing || storeView.editorMode !== "drawing") return "";
+        const safeScale = Math.max(0.05, Number(scale) || 1);
+        const nodeRadius = 4.5 / safeScale;
+        const selectCursor = drawing && drawing.tool === "select"
+            ? (drawing.dragging ? ' style="cursor:grabbing"' : ' style="cursor:grab"')
+            : "";
+        const parts = [];
+        (drawing.references || []).forEach((reference) => {
+            if (reference.hidden) return;
+            parts.push(referenceImageMarkup(reference, safeScale));
+        });
+        (drawing.paths || []).forEach((path) => {
+            const points = path.points || [];
+            if (!points.length) return;
+            if (points.length >= 2 || path.markup) {
+                const commands = path.markup || points.map((point, index) => (
+                    `${index === 0 ? "M" : "L"}${point.x} ${point.y}`
+                )).join(" ");
+                const paint = drawingPathPaint(path);
+                parts.push(`<path data-abe-drawing-path="${esc(path.id)}" data-abe-drawing-role="${esc(path.role || "construction")}"${path.problem ? ' data-abe-path-problem="1"' : ""} d="${commands}${path.markup || !path.closed ? "" : " Z"}" fill="none" stroke="${paint.stroke}" stroke-width="${paint.width}"${paint.dash} vector-effect="non-scaling-stroke" stroke-linejoin="round" stroke-linecap="round"${selectCursor}/>`);
+                if (path.role === "manufacturing_outer" && points[0]) {
+                    const mark = path.problem ? __("Cut outline problem") : __("Cut");
+                    parts.push(`<text data-abe-cut-mark="${esc(path.id)}" x="${points[0].x}" y="${points[0].y}" font-size="${11 / safeScale}" fill="${paint.stroke}">${esc(mark)}</text>`);
+                }
+            }
+            if (!path.selected && !path.active) return;
+            if (drawing.tool === "select" && path.selected) return;
+            points.forEach((point, index) => {
+                const end = index === points.length - 1 && !path.closed;
+                const start = index === 0;
+                const fill = point.selected ? "#f79009" : (start ? "#12b76a" : (end ? "#0b5fff" : "#fff"));
+                parts.push(`<circle data-abe-drawing-node="${esc(point.id)}" cx="${point.x}" cy="${point.y}" r="${point.selected ? nodeRadius * 1.35 : nodeRadius}" fill="${fill}" stroke="#0b5fff" stroke-width="${1.4 / safeScale}"/>`);
+            });
+            (path.controls || []).forEach((control) => {
+                parts.push(`<circle data-abe-drawing-control="${esc(control.segmentId)}" data-abe-control-index="${esc(control.index)}" cx="${control.x}" cy="${control.y}" r="${3.2 / safeScale}" fill="#f79009" stroke="#7a2e0e" stroke-width="${1.2 / safeScale}"/>`);
+            });
+        });
+        (drawing.texts || []).forEach((text) => {
+            (text.rings || []).forEach((ring, index) => {
+                if (!ring.length) return;
+                const commands = ring.map((point, pointIndex) => `${pointIndex === 0 ? "M" : "L"}${point.x} ${point.y}`).join(" ");
+                parts.push(`<path data-abe-drawing-text="${esc(text.id)}" data-abe-text-ring="${index}" d="${commands} Z" fill="none" stroke="${text.approved ? "#b54708" : "#175cd3"}" stroke-width="${text.selected ? 2.2 : 1.4}" vector-effect="non-scaling-stroke" stroke-linejoin="round" stroke-linecap="round"${selectCursor}/>`);
+            });
+            if (!text.selected || !text.frame) return;
+            const frame = text.frame;
+            parts.push(`<rect data-abe-text-frame="${esc(text.id)}" x="${frame.x}" y="${frame.y}" width="${frame.width}" height="${frame.height}" fill="none" stroke="#0b5fff" stroke-width="${1.2 / safeScale}" stroke-dasharray="${4 / safeScale} ${3 / safeScale}"/>`);
+            (text.handles || []).forEach((handle) => {
+                parts.push(`<circle data-abe-text-handle="${esc(text.id)}" data-abe-text-handle-kind="${esc(handle.kind)}" cx="${handle.x}" cy="${handle.y}" r="${nodeRadius}" fill="#fff" stroke="#0b5fff" stroke-width="${1.4 / safeScale}"/>`);
+            });
+        });
+        (drawing.shapes || []).forEach((shape) => {
+            const points = shape.points || [];
+            if (points.length < 2) return;
+            const commands = points.map((point, index) => `${index === 0 ? "M" : "L"}${point.x} ${point.y}`).join(" ");
+            parts.push(`<path data-abe-drawing-shape="${esc(shape.id)}" d="${commands}${shape.closed ? " Z" : ""}" fill="none" stroke="${shape.selected ? "#0b5fff" : "#344054"}" stroke-width="${shape.selected ? 2.4 : 1.6}" vector-effect="non-scaling-stroke" stroke-linejoin="round" stroke-linecap="round"${selectCursor}/>`);
+            if (!shape.selected || drawing.tool === "select") return;
+            (shape.handles || []).forEach((handle) => {
+                parts.push(`<circle data-abe-shape-handle="${esc(shape.id)}" cx="${handle.x}" cy="${handle.y}" r="${nodeRadius}" fill="#fff" stroke="#0b5fff" stroke-width="${1.4 / safeScale}"/>`);
+            });
+        });
+        const resize = drawing.resize;
+        if (resize && drawing.tool === "select" && Array.isArray(resize.handles)) {
+            const box = (resize.corners || []).map((point) => `${point.x},${point.y}`).join(" ");
+            if (box) {
+                parts.push(`<polygon data-abe-resize-box="1" points="${box}" fill="none" stroke="#0b5fff" stroke-width="${1.2 / safeScale}" vector-effect="non-scaling-stroke" pointer-events="none"/>`);
+            }
+            const visual = 8 / safeScale;
+            const hit = 18 / safeScale;
+            resize.handles.forEach((handle) => {
+                parts.push(`<g data-abe-resize-handle="${esc(handle.id)}" style="cursor:${esc(handle.cursor || "nwse-resize")}"><rect x="${handle.x - hit / 2}" y="${handle.y - hit / 2}" width="${hit}" height="${hit}" fill="transparent"/><rect x="${handle.x - visual / 2}" y="${handle.y - visual / 2}" width="${visual}" height="${visual}" fill="#fff" stroke="#0b5fff" stroke-width="${1.4 / safeScale}" pointer-events="none"/></g>`);
+            });
+            if (resize.live && resize.readout) {
+                parts.push(`<text class="abe-resize-readout" data-abe-resize-readout="1" x="${resize.readout.x}" y="${resize.readout.y - (14 / safeScale)}" font-size="${12 / safeScale}" fill="#0b5fff" text-anchor="middle" pointer-events="none">${esc(resize.readout.text)}</text>`);
+            }
+        }
+        if (drawing.preview) {
+            const preview = drawing.preview;
+            parts.push(`<line data-abe-drawing-preview="1" x1="${preview.x1}" y1="${preview.y1}" x2="${preview.x2}" y2="${preview.y2}" stroke="#0b5fff" stroke-width="1.4" stroke-dasharray="7 5" vector-effect="non-scaling-stroke" pointer-events="none"/>`);
+        }
+        if (drawing.snap) parts.push(drawingSnapMarkup(drawing.snap, safeScale));
+        return parts.join("");
+    }
+
+    function drawingCursorHtml(storeView) {
+        const drawing = storeView && storeView.drawingView;
+        const target = storeView && storeView.drawingTarget;
+        if (!drawing || storeView.editorMode !== "drawing" || drawing.tool !== "polyline") return "";
+        if (!target || target.canEdit !== true) return "";
+        const measure = drawing.measure || { mode: "draw", enabled: false };
+        return `<div class="abe-drawing-cursor" data-abe-drawing-cursor="1" data-abe-drawing-measure="1" dir="${esc(pageDirection())}">
+            ${measureFieldsHtml(measure)}
+        </div>`;
+    }
+
     function finiteScrollPair(x, y) {
         const sx = Number(x);
         const sy = Number(y);
@@ -2008,8 +2490,20 @@
                 );
                 caption = pieceCaption(element, sessionPiece, storeView, boards, origin, scale);
             }
-            const html = (edges || caption)
-                ? `<g data-element-id="${esc(element.element_id)}"${pieceKeyAttr}${pieceIdAttr} data-fill-role="${esc(role)}" class="abe-piece${selected ? " is-selected" : ""}${sessionPiece && !sessionPiece.editable ? " is-locked" : ""}" style="pointer-events:${pointer};opacity:${opacity}"><path d="${esc(d)}" fill="${esc(fill)}" fill-rule="evenodd" stroke="${esc(stroke)}" stroke-width="${strokeWidth}"${dash} vector-effect="non-scaling-stroke"/>${edges}${doubleEdgeMarkup(geometry && geometry.outer, (element.payload && element.payload.display_edges) || null)}${caption}</g>`
+            let reserved = "";
+            if (
+                element.kind === "finished_outline"
+                && sessionPiece
+                && sessionPiece.reserves_blank
+                && Array.isArray(sessionPiece.reservation_mm)
+                && sessionPiece.reservation_mm.length >= 3
+            ) {
+                const ring = sessionPointsToWorld(sessionPiece.reservation_mm, sessionPiece, boards);
+                const reservedPath = ring.map((point, index) => `${index ? "L" : "M"}${point[0]} ${point[1]}`).join(" ") + " Z";
+                reserved = `<path d="${esc(reservedPath)}" fill="none" stroke="#98a2b3" stroke-width="0.8" stroke-dasharray="4 3" vector-effect="non-scaling-stroke" pointer-events="none"/>`;
+            }
+            const html = (edges || caption || reserved)
+                ? `<g data-element-id="${esc(element.element_id)}"${pieceKeyAttr}${pieceIdAttr} data-fill-role="${esc(role)}" class="abe-piece${selected ? " is-selected" : ""}${sessionPiece && !sessionPiece.editable ? " is-locked" : ""}" style="pointer-events:${pointer};opacity:${opacity}">${reserved}<path d="${esc(d)}" fill="${esc(fill)}" fill-rule="evenodd" stroke="${esc(stroke)}" stroke-width="${strokeWidth}"${dash} vector-effect="non-scaling-stroke"/>${edges}${doubleEdgeMarkup(geometry && geometry.outer, (element.payload && element.payload.display_edges) || null)}${caption}</g>`
                 : `<path data-element-id="${esc(element.element_id)}"${pieceKeyAttr}${pieceIdAttr} data-fill-role="${esc(role)}" d="${esc(d)}" fill="${esc(fill)}" fill-rule="evenodd" stroke="${esc(stroke)}" stroke-width="${strokeWidth}"${dash} vector-effect="non-scaling-stroke" style="pointer-events:${pointer};opacity:${opacity}" class="abe-piece${selected ? " is-selected" : ""}${sessionPiece && !sessionPiece.editable ? " is-locked" : ""}"/>`;
             (sheetGroups[sheetKey] || sheetGroups.__outside).push(html);
         });
@@ -2057,6 +2551,7 @@
         if ((sheetGroups.__outside || []).length) {
             body.push(`<g data-sheet-group="outside" class="abe-outside-group">${sheetGroups.__outside.join("")}</g>`);
         }
+        body.push(proposedCutSvg(storeView));
         const selectionChrome = selectionChromeSvg(session, storeView, metrics.scale || 1);
         if (selectionChrome) body.push(selectionChrome);
 
@@ -2122,67 +2617,79 @@
         );
 
         const magnetOn = storeView.magnetEnabled !== false;
-        const measureOn = storeView.measureToolActive === true;
+        const drawingMode = storeView.editorMode === "drawing";
+        const boardCommands = !drawingMode;
+        const selectCursor = drawingMode && storeView.drawingView && storeView.drawingView.tool === "select"
+            ? (storeView.drawingView.dragging ? "cursor:grabbing;" : "cursor:grab;")
+            : "";
+        const measureOn = boardCommands && storeView.measureToolActive === true;
         const toolSep = `<span class="abe-tool-sep" aria-hidden="true"></span>`;
         host.innerHTML = `
             ${dropNote}
-            <div class="abe-canvas-stage${measureOn ? " is-measuring" : ""}" data-abe-stage="1">
+            <div class="abe-canvas-stage${measureOn ? " is-measuring" : ""}${drawingMode ? " is-drawing" : ""}${drawingMode && storeView.drawingView && storeView.drawingView.tool === "select" ? " is-select" : ""}${drawingMode && storeView.drawingView && storeView.drawingView.tool === "polyline" ? " is-polyline" : ""}${drawingMode && storeView.drawingView && storeView.drawingView.tool === "pen" ? " is-pen" : ""}" data-abe-stage="1"${selectCursor ? ` style="${selectCursor}"` : ""}>
                 <svg class="abe-svg" xmlns="http://www.w3.org/2000/svg" width="${contentW}" height="${contentH}" viewBox="0 0 ${contentW} ${contentH}" role="img" aria-label="${esc(__("Board layout canvas"))}" style="direction:ltr;touch-action:pan-x pan-y">
                     <defs>${(displayStyle() && displayStyle().defs(scale)) || ""}</defs>
                     <g class="abe-world" transform="translate(${padX - metrics.minX * scale},${padY - metrics.minY * scale}) scale(${scale})">
                         ${body.join("")}
+                        ${drawingOverlaySvg(storeView, scale)}
                     </g>
                 </svg>
             </div>
+            ${drawingCursorHtml(storeView)}
             <div class="abe-float-dock">
                 <div class="abe-float-stack">
                 <div class="abe-canvas-tools abe-float-tools" role="toolbar" aria-label="${esc(__("Canvas tools"))}">
+                    ${editorModeSwitch(storeView.editorMode)}
+                    ${drawingMode ? drawingWorkspaceHtml(storeView) : ""}
+                    ${toolSep}
                     ${toolButton("abe-zoom-in", "zoom-in", __("Zoom in"))}
                     ${toolButton("abe-zoom-out", "zoom-out", __("Zoom out"))}
                     ${toolButton("abe-fit-all", "maximize-2", __("Fit all"))}
-                    ${toolSep}
+                    ${drawingMode ? "" : `${toolSep}
                     ${toolButton("abe-undo", "undo-2", __("Undo"), { disabled: !storeView.canUndo })}
-                    ${toolButton("abe-redo", "redo-2", __("Redo"), { disabled: !storeView.canRedo })}
-                    ${toolButton("abe-restore", "refresh-ccw", __("Restore entry layout"))}
+                    ${toolButton("abe-redo", "redo-2", __("Redo"), { disabled: !boardCommands || !storeView.canRedo })}
+                    ${toolButton("abe-restore", "refresh-ccw", __("Restore entry layout"), { disabled: !boardCommands })}
                     ${toolSep}
                     ${toolButton("abe-magnet" + (magnetOn ? " is-active" : ""), "magnet", __("Magnet"), {
                         pressed: magnetOn,
+                        disabled: !boardCommands,
                         attrs: ` data-abe-magnet="1"`,
                         title: __("Magnet: snap pieces to board edges and neighbouring pieces while dragging. Hold Alt to bypass."),
                     })}
                     ${toolButton("abe-measure" + (measureOn ? " is-active" : ""), "ruler", __("Measure"), {
                         pressed: measureOn,
+                        disabled: !boardCommands,
                         attrs: ` data-abe-measure-tool="1"`,
                         title: __("Measure tool: drag a straight line on a board to read its length in millimetres. Esc clears the line."),
                     })}
-                    <label class="abe-angle-field${angleEditable ? "" : " is-disabled"}" title="${esc(angleTitle)}">
-                        <input type="text" inputmode="decimal" class="abe-angle-input" value="${esc(String(Math.round(angleValue * 1000) / 1000))}" ${angleEditable ? "" : "disabled"} aria-label="${esc(angleTitle)}" title="${esc(angleTitle)}" />
+                    <label class="abe-angle-field${angleEditable && boardCommands ? "" : " is-disabled"}" title="${esc(angleTitle)}">
+                        <input type="text" inputmode="decimal" class="abe-angle-input" value="${esc(String(Math.round(angleValue * 1000) / 1000))}" ${angleEditable && boardCommands ? "" : "disabled"} aria-label="${esc(angleTitle)}" title="${esc(angleTitle)}" />
                         <span aria-hidden="true">°</span>
                     </label>
                     ${toolButton("abe-angle-0-180", "arrow-left-right", angle0_180Label, {
-                        disabled: !angleEditable,
+                        disabled: !boardCommands || !angleEditable,
                         title: anglePairTitle || angle0_180Label,
                     })}
                     ${toolButton("abe-angle-90-270", "arrow-up-down", angle90_270Label, {
-                        disabled: !angleEditable,
+                        disabled: !boardCommands || !angleEditable,
                         title: anglePairTitle || angle90_270Label,
                     })}
                     ${toolButton("abe-rotate-30", "refresh", __("Rotate +30°"), {
-                        disabled: !angleEditable,
+                        disabled: !boardCommands || !angleEditable,
                         title: angleEditable
                             ? __("Add 30 degrees in the positive rotation direction.")
                             : angleTitle,
                     })}
                     ${toolButton("abe-angle-mirror", "flip-horizontal-2", __("Mirror angle"), {
-                        disabled: !transformMirrorEnabled,
+                        disabled: !boardCommands || !transformMirrorEnabled,
                         title: transformMirrorTitle,
                     })}
                     ${toolSep}
                     ${toolButton("abe-remove-piece", "trash-2", __("Remove from distribution"), {
-                        disabled: !canRemovePiece,
+                        disabled: !boardCommands || !canRemovePiece,
                         title: removePieceTitle,
                     })}
-                    ${toolButton("abe-remove-board", "square-x", __("Remove board from distribution"), { disabled: !canRemoveBoard })}
+                    ${toolButton("abe-remove-board", "square-x", __("Remove board from distribution"), { disabled: !canRemoveBoard })}`}
                 </div>
                 </div>
             </div>
@@ -2285,6 +2792,167 @@
         host.querySelector(".abe-fit-all").onclick = () => handlers && handlers.fitAll && handlers.fitAll(layout);
         host.querySelector(".abe-zoom-in").onclick = () => handlers && handlers.zoom && handlers.zoom(1.2);
         host.querySelector(".abe-zoom-out").onclick = () => handlers && handlers.zoom && handlers.zoom(1 / 1.2);
+        host.querySelectorAll("[data-abe-editor-mode]").forEach((button) => {
+            button.addEventListener("click", () => {
+                if (handlers && handlers.setEditorMode) {
+                    handlers.setEditorMode(button.getAttribute("data-abe-editor-mode"));
+                }
+            });
+        });
+        host.querySelectorAll("[data-abe-drawing-tool]").forEach((button) => {
+            button.addEventListener("click", () => {
+                if (button.disabled) return;
+                if (handlers && handlers.setDrawingTool) {
+                    handlers.setDrawingTool(button.getAttribute("data-abe-drawing-tool"));
+                }
+            });
+        });
+        host.querySelectorAll("[data-abe-drawing-history]").forEach((button) => {
+            button.addEventListener("pointerdown", (event) => event.stopPropagation());
+            button.addEventListener("click", (event) => {
+                event.stopPropagation();
+                if (button.disabled) return;
+                if (handlers && handlers.drawingHistory) {
+                    handlers.drawingHistory(button.getAttribute("data-abe-drawing-history"));
+                }
+            });
+        });
+        host.querySelectorAll("[data-abe-drawing-action]").forEach((button) => {
+            button.addEventListener("click", () => {
+                if (button.disabled) return;
+                if (handlers && handlers.drawingAction) {
+                    handlers.drawingAction(button.getAttribute("data-abe-drawing-action"));
+                }
+            });
+        });
+        host.querySelectorAll("[data-abe-reference-toggle]").forEach((button) => {
+            button.addEventListener("click", (event) => {
+                event.stopPropagation();
+                if (handlers && handlers.openReferencePicker) handlers.openReferencePicker();
+                else if (handlers && handlers.toggleReferenceMenu) handlers.toggleReferenceMenu();
+            });
+        });
+        host.querySelectorAll("[data-abe-reference-menu], [data-abe-reference-form], [data-abe-path-form]").forEach((panel) => {
+            const stop = (event) => event.stopPropagation();
+            panel.addEventListener("pointerdown", stop);
+            panel.addEventListener("click", stop);
+        });
+        host.querySelectorAll("[data-abe-reference-upload]").forEach((button) => {
+            button.addEventListener("click", (event) => {
+                event.stopPropagation();
+                const input = button.parentElement && button.parentElement.querySelector("[data-abe-reference-file]");
+                if (input && input.click) input.click();
+            });
+        });
+        host.querySelectorAll("[data-abe-reference-file]").forEach((input) => {
+            input.addEventListener("change", () => {
+                const files = input.files ? Array.prototype.slice.call(input.files) : [];
+                if (handlers && handlers.uploadReferenceFiles && files.length) handlers.uploadReferenceFiles(files);
+                input.value = "";
+            });
+        });
+        host.querySelectorAll("[data-abe-reference-select]").forEach((button) => {
+            button.addEventListener("click", (event) => {
+                event.stopPropagation();
+                if (handlers && handlers.selectReference) handlers.selectReference(button.getAttribute("data-abe-reference-select"));
+            });
+        });
+        host.querySelectorAll("[data-abe-reference-action]").forEach((button) => {
+            button.addEventListener("click", (event) => {
+                event.stopPropagation();
+                if (handlers && handlers.referenceAction) {
+                    handlers.referenceAction(button.getAttribute("data-abe-reference-action"), button.getAttribute("data-abe-reference-id"));
+                }
+            });
+        });
+        host.querySelectorAll("[data-abe-reference-field], [data-abe-reference-opacity], [data-abe-reference-known]").forEach((input) => {
+            input.addEventListener("change", (event) => {
+                event.stopPropagation();
+                if (handlers && handlers.commitReferenceField) {
+                    handlers.commitReferenceField(input.getAttribute("data-abe-reference-field") || (input.hasAttribute("data-abe-reference-opacity") ? "opacity" : "known"), input.value);
+                }
+            });
+        });
+        host.querySelectorAll("[data-abe-reference-aspect]").forEach((input) => {
+            input.addEventListener("change", (event) => {
+                event.stopPropagation();
+                if (handlers && handlers.setReferenceAspect) handlers.setReferenceAspect(input.checked === true);
+            });
+        });
+        host.querySelectorAll("[data-abe-snap-toggle]").forEach((button) => {
+            button.addEventListener("click", (event) => {
+                event.stopPropagation();
+                if (handlers && handlers.toggleSnapMenu) handlers.toggleSnapMenu();
+            });
+        });
+        host.querySelectorAll("[data-abe-snap-menu]").forEach((menu) => {
+            const stop = (event) => event.stopPropagation();
+            menu.addEventListener("pointerdown", stop);
+            menu.addEventListener("click", stop);
+        });
+        host.querySelectorAll("[data-abe-snap-option]").forEach((input) => {
+            input.addEventListener("change", (event) => {
+                event.stopPropagation();
+                if (handlers && handlers.setSnapOption) {
+                    handlers.setSnapOption(input.getAttribute("data-abe-snap-option"), input.checked === true);
+                }
+            });
+        });
+        host.querySelectorAll("[data-abe-snap-spacing]").forEach((select) => {
+            select.addEventListener("change", (event) => {
+                event.stopPropagation();
+                if (handlers && handlers.setSnapOption) handlers.setSnapOption("spacing", select.value);
+            });
+        });
+        host.querySelectorAll("[data-abe-pen-settings]").forEach((bar) => {
+            const stop = (event) => event.stopPropagation();
+            bar.addEventListener("pointerdown", stop);
+            bar.addEventListener("click", stop);
+        });
+        host.querySelectorAll("[data-abe-pen-smoothing]").forEach((button) => {
+            button.addEventListener("click", (event) => {
+                event.stopPropagation();
+                if (handlers && handlers.setPenSmoothing) {
+                    handlers.setPenSmoothing(button.getAttribute("data-abe-pen-smoothing"));
+                }
+            });
+        });
+        host.querySelectorAll("[data-abe-shape-kind]").forEach((button) => {
+            button.addEventListener("click", (event) => {
+                event.stopPropagation();
+                if (handlers && handlers.setShapeKind) handlers.setShapeKind(button.getAttribute("data-abe-shape-kind"));
+            });
+        });
+        host.querySelectorAll("[data-abe-shape-form]").forEach((form) => {
+            const stop = (event) => event.stopPropagation();
+            form.addEventListener("pointerdown", stop);
+            form.addEventListener("click", stop);
+            form.querySelectorAll("[data-abe-shape-field]").forEach((input) => {
+                input.addEventListener("input", () => {
+                    if (handlers && handlers.onShapeInput) {
+                        handlers.onShapeInput(input.getAttribute("data-abe-shape-field"), input.value);
+                    }
+                });
+                input.addEventListener("keydown", (event) => {
+                    if (event.key !== "Enter" && event.code !== "Enter" && event.code !== "NumpadEnter" && (event.keyCode || event.which) !== 13) {
+                        return;
+                    }
+                    event.preventDefault();
+                    event.stopPropagation();
+                    if (handlers && handlers.commitShapeForm) handlers.commitShapeForm(input.getAttribute("data-abe-shape-field"));
+                });
+            });
+        });
+        bindDrawingMeasure(host, handlers);
+        const drawingCursor = host.querySelector("[data-abe-drawing-cursor]");
+        if (drawingCursor) {
+            const keepDrawingGesture = (event) => {
+                event.stopPropagation();
+            };
+            drawingCursor.addEventListener("pointerdown", keepDrawingGesture);
+            drawingCursor.addEventListener("pointerup", keepDrawingGesture);
+            drawingCursor.addEventListener("click", keepDrawingGesture);
+        }
         const floatDock = host.querySelector(".abe-float-dock");
         if (floatDock) {
             floatDock.addEventListener("pointerdown", (event) => {
@@ -2381,6 +3049,11 @@
             node.addEventListener("pointerdown", (event) => {
                 if (handlers && handlers.isPanKey && handlers.isPanKey()) return;
                 if (event.button === 1) return;
+                if (handlers && handlers.drawingPointerDown && handlers.drawingPointerDown(event)) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    return;
+                }
                 const pieceKey = node.getAttribute("data-abe-rotate-handle");
                 if (handlers && handlers.beginRotateGesture) {
                     handlers.beginRotateGesture(pieceKey, event);
@@ -2408,6 +3081,11 @@
             node.addEventListener("pointerdown", (event) => {
                 if (handlers && handlers.isPanKey && handlers.isPanKey()) return;
                 if (event.button === 1) return;
+                if (handlers && handlers.drawingPointerDown && handlers.drawingPointerDown(event)) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    return;
+                }
                 const pieceKey = node.getAttribute("data-piece-key");
                 const pieceId = node.getAttribute("data-piece-id");
                 if (handlers && handlers.beginPieceGesture) {
@@ -2463,6 +3141,19 @@
             if (clickTargetKeepsSelection(event.target)) return;
             if (handlers && handlers.clearSelection) handlers.clearSelection();
         });
+        stage.addEventListener("dragover", (event) => {
+            const files = event.dataTransfer && event.dataTransfer.types;
+            const hasFile = files && Array.prototype.indexOf.call(files, "Files") >= 0;
+            if (!hasFile || !handlers || !handlers.uploadReferenceFiles) return;
+            event.preventDefault();
+        });
+        stage.addEventListener("drop", (event) => {
+            const files = event.dataTransfer && event.dataTransfer.files;
+            if (!files || !files.length || !handlers || !handlers.uploadReferenceFiles) return;
+            event.preventDefault();
+            event.stopPropagation();
+            handlers.uploadReferenceFiles(Array.prototype.slice.call(files));
+        });
         stage.addEventListener("pointerdown", (event) => {
             if (panRequested(event)) {
                 ignoreBackgroundClick = true;
@@ -2474,6 +3165,20 @@
                 stage.classList.add("is-panning");
                 event.preventDefault();
                 stage.setPointerCapture(event.pointerId);
+                return;
+            }
+            const drawingField = event.target && event.target.closest
+                && event.target.closest("[data-abe-drawing-cursor], [data-abe-drawing-measure], [data-abe-shape-form], [data-abe-pen-settings], [data-abe-snap-menu], [data-abe-snap-toggle], [data-abe-reference-menu], [data-abe-reference-form], [data-abe-reference-toggle]");
+            if (drawingField) return;
+            if (event.button === 0 && event.target && event.target.closest && event.target.closest("[data-abe-reference-handle]")) {
+                ignoreBackgroundClick = true;
+                if (handlers && handlers.referencePointerDown) handlers.referencePointerDown(event);
+                event.preventDefault();
+                return;
+            }
+            if (event.button === 0 && handlers && handlers.drawingPointerDown && handlers.drawingPointerDown(event)) {
+                ignoreBackgroundClick = true;
+                event.preventDefault();
                 return;
             }
             if (measureOn && event.button === 0 && handlers && handlers.beginMeasureGesture) {
@@ -2493,6 +3198,11 @@
                     // Capture only after marquee activates (real drag); pending empty
                     // clicks are settled by marquee finish + click suppression.
                 }
+            }
+        });
+        stage.addEventListener("dblclick", (event) => {
+            if (handlers && handlers.drawingDoubleClick && handlers.drawingDoubleClick(event)) {
+                event.preventDefault();
             }
         });
         stage.addEventListener("pointermove", (event) => {
@@ -2628,6 +3338,526 @@
         return clientToWorldViaMetrics(svg, metrics, clientX, clientY);
     }
 
+    function measureInputs(host, kind) {
+        if (!host || typeof host.querySelectorAll !== "function") return [];
+        const attr = kind === "angle" ? "data-abe-drawing-angle" : "data-abe-drawing-length";
+        return Array.from(host.querySelectorAll(`[${attr}]`));
+    }
+
+    function measureFocused(node) {
+        return typeof document !== "undefined"
+            && document
+            && node
+            && document.activeElement === node;
+    }
+
+    function measureLocked(node) {
+        return Boolean(node && node.dataset && node.dataset.locked === "1");
+    }
+
+    function writeUnlockedMeasure(node, value) {
+        if (!node || node.disabled || measureLocked(node) || measureFocused(node)) return;
+        node.value = value;
+    }
+
+    function syncMeasureTwins(host, kind) {
+        const inputs = measureInputs(host, kind);
+        if (!inputs.length) return;
+        const source = inputs.find((node) => measureFocused(node))
+            || inputs.find((node) => measureLocked(node))
+            || inputs[0];
+        inputs.forEach((node) => {
+            if (node === source || measureFocused(node)) return;
+            node.value = source.value;
+            if (measureLocked(source) && node.dataset) node.dataset.locked = "1";
+        });
+    }
+
+    function bindDrawingMeasure(host, handlers) {
+        if (!host || typeof host.querySelectorAll !== "function") return;
+        const inputs = measureInputs(host, "length").concat(measureInputs(host, "angle"));
+        if (!inputs.length) return;
+        const isMeasureEnter = (event) => {
+            if (!event || event.isComposing) return false;
+            if (event.key === "Enter" || event.code === "Enter" || event.code === "NumpadEnter") return true;
+            return (event.keyCode || event.which) === 13;
+        };
+        const commit = (event) => {
+            if (!isMeasureEnter(event) || event.defaultPrevented) return;
+            event.preventDefault();
+            event.stopPropagation();
+            const kind = event.target && event.target.getAttribute
+                && event.target.getAttribute("data-abe-drawing-angle") ? "angle" : "length";
+            measureInputs(host, kind).forEach((input) => {
+                if (input !== event.target) input.value = event.target.value;
+            });
+            const bar = host.querySelector("[data-abe-drawing-measure]") || host;
+            const lengthInput = bar.querySelector("[data-abe-drawing-length]");
+            const angleInput = bar.querySelector("[data-abe-drawing-angle]");
+            if (handlers && handlers.commitDrawingHud) {
+                handlers.commitDrawingHud(
+                    lengthInput && lengthInput.value,
+                    angleInput && angleInput.value,
+                    kind
+                );
+            }
+        };
+        inputs.forEach((input) => {
+            input.addEventListener("input", () => {
+                const text = input.value == null ? "" : String(input.value);
+                const locked = text.trim() !== "";
+                if (input.dataset) input.dataset.locked = locked ? "1" : "";
+                const kind = input.getAttribute("data-abe-drawing-angle") ? "angle" : "length";
+                measureInputs(host, kind).forEach((twin) => {
+                    if (twin === input) return;
+                    twin.value = text;
+                    if (twin.dataset) twin.dataset.locked = locked ? "1" : "";
+                });
+                if (handlers && handlers.onDrawingMeasureInput) {
+                    handlers.onDrawingMeasureInput(kind, locked ? text : "");
+                }
+            });
+            input.addEventListener("keydown", (event) => {
+                if (isMeasureEnter(event)) commit(event);
+                if (
+                    event.key === "Escape"
+                    || event.key === " "
+                    || event.key === "Delete"
+                    || event.key === "Backspace"
+                    || (event.key && event.key.indexOf("Arrow") === 0)
+                ) {
+                    event.stopPropagation();
+                }
+                if (event.key === "Enter" || event.key === "Escape" || event.key === " ") {
+                    event.preventDefault();
+                }
+            });
+            input.addEventListener("wheel", (event) => {
+                event.stopPropagation();
+            });
+        });
+    }
+
+    const DRAWING_HUD_GAP_PX = 24;
+    const DRAWING_HUD_HYSTERESIS_PX = 16;
+
+    function clampNumber(value, min, max) {
+        if (!(max > min)) return min;
+        return Math.min(max, Math.max(min, value));
+    }
+
+    function computePolylineHudPosition(spec) {
+        const input = spec || {};
+        const endX = Number(input.endX);
+        const startX = Number(input.startX);
+        const startY = Number(input.startY);
+        const width = Math.max(1, Number(input.width) || 1);
+        const height = Math.max(1, Number(input.height) || 1);
+        const gap = input.gap == null ? DRAWING_HUD_GAP_PX : Math.max(0, Number(input.gap) || 0);
+        const hysteresis = input.hysteresis == null
+            ? DRAWING_HUD_HYSTERESIS_PX
+            : Math.max(0, Number(input.hysteresis) || 0);
+        const bounds = input.bounds || {
+            left: 0,
+            top: 0,
+            right: startX + width + gap + 8,
+            bottom: startY + height + gap + 8,
+        };
+        // End point chooses the side only. The box itself is anchored to the fixed start node.
+        const dx = Number.isFinite(startX) && Number.isFinite(endX) ? endX - startX : 0;
+        let side = input.previousSide === "left" ? "left" : "right";
+        if (dx >= hysteresis) side = "right";
+        else if (dx <= -hysteresis) side = "left";
+        const opposite = side === "right" ? "left" : "right";
+
+        function candidate(placeSide, above) {
+            return {
+                left: placeSide === "right" ? startX + gap : startX - width - gap,
+                top: above ? startY - height - gap : startY + gap,
+                side,
+                placedSide: placeSide,
+                above,
+            };
+        }
+
+        function fits(pos) {
+            return pos.left >= bounds.left
+                && pos.top >= bounds.top
+                && pos.left + width <= bounds.right
+                && pos.top + height <= bounds.bottom;
+        }
+
+        function covers(pos) {
+            return startX >= pos.left
+                && startX <= pos.left + width
+                && startY >= pos.top
+                && startY <= pos.top + height;
+        }
+
+        const options = [
+            candidate(side, true),
+            candidate(opposite, true),
+            candidate(side, false),
+            candidate(opposite, false),
+        ];
+        let chosen = null;
+        for (let index = 0; index < options.length; index += 1) {
+            if (fits(options[index]) && !covers(options[index])) {
+                chosen = options[index];
+                break;
+            }
+        }
+        if (!chosen) {
+            const maxLeft = Math.max(bounds.left, bounds.right - width);
+            const maxTop = Math.max(bounds.top, bounds.bottom - height);
+            const preferred = options[0];
+            preferred.left = clampNumber(preferred.left, bounds.left, maxLeft);
+            preferred.top = clampNumber(preferred.top, bounds.top, maxTop);
+            const below = options[2];
+            below.left = clampNumber(below.left, bounds.left, maxLeft);
+            below.top = clampNumber(below.top, bounds.top, maxTop);
+            chosen = covers(preferred) && !covers(below) ? below : preferred;
+            if (covers(chosen)) {
+                chosen.left = clampNumber(side === "right" ? startX + gap : startX - width - gap, bounds.left, maxLeft);
+            }
+            chosen.side = side;
+        }
+        return {
+            left: chosen.left,
+            top: chosen.top,
+            side: chosen.side,
+            placedSide: chosen.placedSide,
+            above: chosen.above === true,
+        };
+    }
+
+    const computeDynamicInputPosition = computePolylineHudPosition;
+
+    function parseWorldTransform(world) {
+        const raw = world && world.getAttribute ? String(world.getAttribute("transform") || "") : "";
+        const translate = raw.match(/translate\(\s*([-\d.eE]+)(?:[,\s]+([-\d.eE]+))?\s*\)/);
+        const scale = raw.match(/scale\(\s*([-\d.eE]+)\s*\)/);
+        if (!translate || !scale) return null;
+        const tx = Number(translate[1]);
+        const ty = translate[2] == null ? 0 : Number(translate[2]);
+        const factor = Number(scale[1]);
+        if (![tx, ty, factor].every(Number.isFinite) || !(Math.abs(factor) > 1e-9)) return null;
+        return { tx, ty, scale: factor };
+    }
+
+    function worldToHostLocal(host, worldX, worldY) {
+        if (!host || !Number.isFinite(Number(worldX)) || !Number.isFinite(Number(worldY))) return null;
+        const svg = host.querySelector(".abe-svg");
+        const world = host.querySelector(".abe-world");
+        if (!svg || !world) return null;
+        if (typeof world.getScreenCTM === "function" && typeof svg.createSVGPoint === "function") {
+            try {
+                const ctm = world.getScreenCTM();
+                if (ctm && typeof ctm.a === "number") {
+                    const point = svg.createSVGPoint();
+                    point.x = Number(worldX);
+                    point.y = Number(worldY);
+                    const mapped = point.matrixTransform(ctm);
+                    if (mapped && Number.isFinite(mapped.x) && Number.isFinite(mapped.y)) {
+                        const local = clientPointToLocal(host, mapped.x, mapped.y);
+                        return { x: local.x, y: local.y, clientX: mapped.x, clientY: mapped.y };
+                    }
+                }
+            } catch (err) {
+                /* metric fallback below */
+            }
+        }
+        const transform = parseWorldTransform(world);
+        if (!transform || typeof svg.getBoundingClientRect !== "function") return null;
+        const svgX = transform.tx + Number(worldX) * transform.scale;
+        const svgY = transform.ty + Number(worldY) * transform.scale;
+        const rect = svg.getBoundingClientRect();
+        const contentW = Number(svg.getAttribute && svg.getAttribute("width")) || rect.width;
+        const contentH = Number(svg.getAttribute && svg.getAttribute("height")) || rect.height;
+        if (!(contentW > 0) || !(contentH > 0) || !(rect.width > 0) || !(rect.height > 0)) return null;
+        const clientX = rect.left + (svgX / contentW) * rect.width;
+        const clientY = rect.top + (svgY / contentH) * rect.height;
+        const local = clientPointToLocal(host, clientX, clientY);
+        return { x: local.x, y: local.y, clientX, clientY };
+    }
+
+    function drawingHudBounds(host) {
+        const width = host.clientWidth || 0;
+        const height = host.clientHeight || 0;
+        const bounds = { left: 8, top: 8, right: Math.max(8, width - 8), bottom: Math.max(8, height - 8) };
+        const stage = host.querySelector("[data-abe-stage]");
+        if (stage && typeof stage.getBoundingClientRect === "function") {
+            const rect = stage.getBoundingClientRect();
+            if (rect.width > 0 && rect.height > 0) {
+                const origin = clientPointToLocal(host, rect.left, rect.top);
+                const far = clientPointToLocal(host, rect.right, rect.bottom);
+                bounds.left = Math.max(bounds.left, origin.x + 8);
+                bounds.top = Math.max(bounds.top, origin.y + 8);
+                bounds.right = Math.min(bounds.right, far.x - 8);
+                bounds.bottom = Math.min(bounds.bottom, far.y - 8);
+            }
+        }
+        const dock = host.querySelector(".abe-float-dock");
+        if (dock && typeof dock.getBoundingClientRect === "function") {
+            const dockTop = clientPointToLocal(host, 0, dock.getBoundingClientRect().top).y;
+            if (dockTop > bounds.top + 8) bounds.bottom = Math.min(bounds.bottom, dockTop - 8);
+        }
+        return bounds;
+    }
+
+    function drawingCursorFocused(cursor) {
+        const active = typeof document !== "undefined" && document ? document.activeElement : null;
+        let node = active;
+        while (node) {
+            if (node === cursor) return true;
+            node = node.parentElement || null;
+        }
+        return false;
+    }
+
+    function placeDrawingCursor(host, cursor, hud, preview) {
+        if (drawingCursorFocused(cursor) && cursor.style && cursor.style.left) return;
+        const width = cursor.offsetWidth || 180;
+        const height = cursor.offsetHeight || 28;
+        const bounds = drawingHudBounds(host);
+        const previewStart = preview ? worldToHostLocal(host, preview.x1, preview.y1) : null;
+        const previewEnd = preview ? worldToHostLocal(host, preview.x2, preview.y2) : null;
+        const pointer = hud && hud.clientX != null && hud.clientY != null
+            ? clientPointToLocal(host, hud.clientX, hud.clientY)
+            : null;
+        const anchor = previewStart || (hud && hud.startClientX != null
+            ? clientPointToLocal(host, hud.startClientX, hud.startClientY)
+            : null);
+        const end = previewEnd || pointer;
+        if (!anchor || !end) return;
+        const previousSide = cursor.dataset && (cursor.dataset.hudSide === "left" || cursor.dataset.hudSide === "right")
+            ? cursor.dataset.hudSide
+            : null;
+        const placed = computePolylineHudPosition({
+            startX: anchor.x,
+            startY: anchor.y,
+            endX: end.x,
+            endY: end.y,
+            width,
+            height,
+            bounds,
+            gap: DRAWING_HUD_GAP_PX,
+            hysteresis: DRAWING_HUD_HYSTERESIS_PX,
+            previousSide,
+        });
+        if (cursor.dataset) cursor.dataset.hudSide = placed.side;
+        if (cursor.setAttribute) {
+            cursor.setAttribute("data-abe-hud-side", placed.side);
+            cursor.setAttribute("data-abe-hud-placed", placed.placedSide);
+        }
+        cursor.style.left = `${placed.left}px`;
+        cursor.style.top = `${placed.top}px`;
+    }
+
+    function patchDrawingMeasure(host, hud, preview) {
+        if (!host) return;
+        const cursor = host.querySelector("[data-abe-drawing-cursor]");
+        const toolbar = host.querySelector("[data-abe-drawing-measure]");
+        const toolbarLength = toolbar && toolbar.querySelector("[data-abe-drawing-length]");
+        if (!hud || !toolbarLength || toolbarLength.disabled) {
+            if (cursor && cursor.classList) cursor.classList.remove("is-visible");
+            return;
+        }
+        if (hud.lengthMm != null) {
+            measureInputs(host, "length").forEach((input) => writeUnlockedMeasure(input, formatMeasureMm(hud.lengthMm)));
+        }
+        if (hud.angleDeg != null) {
+            measureInputs(host, "angle").forEach((input) => writeUnlockedMeasure(input, formatMeasureAngle(hud.angleDeg)));
+        }
+        syncMeasureTwins(host, "length");
+        syncMeasureTwins(host, "angle");
+        if (!cursor || hud.clientX == null || hud.clientY == null) {
+            if (cursor && cursor.classList) cursor.classList.remove("is-visible");
+            return;
+        }
+        if (cursor.classList) cursor.classList.add("is-visible");
+        placeDrawingCursor(host, cursor, hud, preview);
+    }
+
+    function drawingSnapMarkup(snap, scale) {
+        if (!snap || snap.x == null || snap.y == null) return "";
+        const safeScale = Math.max(0.05, Number(scale) || 1);
+        const type = snap.type || "endpoint";
+        const label = snap.labelKey ? esc(__(snap.labelKey)) : "";
+        const unit = 1 / safeScale;
+        const guide = snap.guide
+            ? `<line data-abe-snap-guide="1" x1="${snap.guide.x1}" y1="${snap.guide.y1}" x2="${snap.guide.x2}" y2="${snap.guide.y2}" stroke="#f79009" stroke-width="${unit}" pointer-events="none"/>`
+            : "";
+        let glyph = `<rect x="${snap.x - (4 * unit)}" y="${snap.y - (4 * unit)}" width="${8 * unit}" height="${8 * unit}" fill="none" stroke="#b54708" stroke-width="${1.6 * unit}" pointer-events="none"/>`;
+        if (type === "midpoint") {
+            glyph = `<polygon points="${snap.x},${snap.y - (6 * unit)} ${snap.x + (6 * unit)},${snap.y + (4 * unit)} ${snap.x - (6 * unit)},${snap.y + (4 * unit)}" fill="none" stroke="#b54708" stroke-width="${1.6 * unit}" pointer-events="none"/>`;
+        } else if (type === "intersection") {
+            glyph = `<path d="M${snap.x - (5 * unit)} ${snap.y - (5 * unit)} L${snap.x + (5 * unit)} ${snap.y + (5 * unit)} M${snap.x + (5 * unit)} ${snap.y - (5 * unit)} L${snap.x - (5 * unit)} ${snap.y + (5 * unit)}" fill="none" stroke="#b54708" stroke-width="${1.6 * unit}" pointer-events="none"/>`;
+        } else if (type === "grid") {
+            glyph = `<path d="M${snap.x} ${snap.y - (6 * unit)} V${snap.y + (6 * unit)} M${snap.x - (6 * unit)} ${snap.y} H${snap.x + (6 * unit)}" fill="none" stroke="#b54708" stroke-width="${1.6 * unit}" pointer-events="none"/>`;
+        }
+        const text = label
+            ? `<text data-abe-snap-label="${label}" x="${snap.x + (12 * unit)}" y="${snap.y + (16 * unit)}" fill="#b54708" font-size="${11 * unit}" pointer-events="none">${label}</text>`
+            : "";
+        return `<g data-abe-drawing-snap="1" data-abe-snap-type="${esc(type)}" pointer-events="none">${guide}${glyph}${text}</g>`;
+    }
+
+    function patchReferenceFrame(host, reference, frame, Space) {
+        const Reference = window.AlmdinaBoardEditor && window.AlmdinaBoardEditor.DrawingReference;
+        const node = host && reference && host.querySelector(`[data-abe-reference-image="${reference.id}"]`);
+        if (!Reference || !node || !frame || !Space) return;
+        const width = Number(reference.width_mm);
+        const height = Number(reference.height_mm);
+        if (!(width > 0) || !(height > 0)) return;
+        const project = Reference.project(reference, (x, y) => Space.doorToWorld(frame, x, y));
+        const a = (project.xAxis.x - project.origin.x) / width;
+        const b = (project.xAxis.y - project.origin.y) / width;
+        const c = (project.yAxis.x - project.origin.x) / height;
+        const d = (project.yAxis.y - project.origin.y) / height;
+        node.setAttribute("transform", `matrix(${a} ${b} ${c} ${d} ${project.origin.x} ${project.origin.y})`);
+        if (node.tagName && String(node.tagName).toLowerCase() === "image") {
+            node.setAttribute("width", String(width));
+            node.setAttribute("height", String(height));
+        }
+        const corners = [project.origin, project.xAxis, {
+            x: project.xAxis.x + (project.yAxis.x - project.origin.x),
+            y: project.xAxis.y + (project.yAxis.y - project.origin.y),
+        }, project.yAxis];
+        const bounds = host.querySelector(`[data-abe-reference-bounds="${reference.id}"]`);
+        if (bounds) bounds.setAttribute("points", corners.map((point) => `${point.x},${point.y}`).join(" "));
+        ["nw", "ne", "se", "sw"].forEach((corner, index) => {
+            const handle = host.querySelector(`[data-abe-reference-handle="${corner}"][data-abe-reference-id="${reference.id}"]`);
+            if (!handle) return;
+            handle.setAttribute("cx", String(corners[index].x));
+            handle.setAttribute("cy", String(corners[index].y));
+        });
+    }
+
+    function patchDrawingPreview(host, preview, snap, hud) {
+        const world = host && host.querySelector(".abe-world");
+        if (world) {
+            world.querySelectorAll("[data-abe-drawing-preview], [data-abe-drawing-snap]").forEach((node) => node.remove());
+            const svgNs = "http://www.w3.org/2000/svg";
+            if (preview && typeof document !== "undefined" && document.createElementNS) {
+                const line = document.createElementNS(svgNs, "line");
+                line.setAttribute("data-abe-drawing-preview", "1");
+                line.setAttribute("x1", String(preview.x1));
+                line.setAttribute("y1", String(preview.y1));
+                line.setAttribute("x2", String(preview.x2));
+                line.setAttribute("y2", String(preview.y2));
+                line.setAttribute("stroke", "#0b5fff");
+                line.setAttribute("stroke-width", "1.4");
+                line.setAttribute("stroke-dasharray", "7 5");
+                line.setAttribute("vector-effect", "non-scaling-stroke");
+                line.setAttribute("pointer-events", "none");
+                world.appendChild(line);
+            }
+            if (snap && snap.x != null && typeof document !== "undefined" && document.createElementNS) {
+                const scale = Math.max(0.05, Number((host.__abeWorldMetrics || {}).scale) || 1);
+                const unit = 1 / scale;
+                const type = snap.type || "endpoint";
+                const group = document.createElementNS(svgNs, "g");
+                group.setAttribute("data-abe-drawing-snap", "1");
+                group.setAttribute("data-abe-snap-type", type);
+                group.setAttribute("pointer-events", "none");
+                if (snap.guide) {
+                    const guide = document.createElementNS(svgNs, "line");
+                    guide.setAttribute("data-abe-snap-guide", "1");
+                    guide.setAttribute("x1", String(snap.guide.x1));
+                    guide.setAttribute("y1", String(snap.guide.y1));
+                    guide.setAttribute("x2", String(snap.guide.x2));
+                    guide.setAttribute("y2", String(snap.guide.y2));
+                    guide.setAttribute("stroke", "#f79009");
+                    guide.setAttribute("pointer-events", "none");
+                    group.appendChild(guide);
+                }
+                const glyph = document.createElementNS(svgNs, type === "midpoint" ? "polygon" : (type === "endpoint" ? "rect" : "path"));
+                glyph.setAttribute("fill", "none");
+                glyph.setAttribute("stroke", "#b54708");
+                glyph.setAttribute("stroke-width", String(1.6 * unit));
+                glyph.setAttribute("pointer-events", "none");
+                if (type === "midpoint") {
+                    glyph.setAttribute("points", `${snap.x},${snap.y - (6 * unit)} ${snap.x + (6 * unit)},${snap.y + (4 * unit)} ${snap.x - (6 * unit)},${snap.y + (4 * unit)}`);
+                } else if (type === "endpoint") {
+                    glyph.setAttribute("x", String(snap.x - (4 * unit)));
+                    glyph.setAttribute("y", String(snap.y - (4 * unit)));
+                    glyph.setAttribute("width", String(8 * unit));
+                    glyph.setAttribute("height", String(8 * unit));
+                } else if (type === "grid") {
+                    glyph.setAttribute("d", `M${snap.x} ${snap.y - (6 * unit)} V${snap.y + (6 * unit)} M${snap.x - (6 * unit)} ${snap.y} H${snap.x + (6 * unit)}`);
+                } else {
+                    glyph.setAttribute("d", `M${snap.x - (5 * unit)} ${snap.y - (5 * unit)} L${snap.x + (5 * unit)} ${snap.y + (5 * unit)} M${snap.x + (5 * unit)} ${snap.y - (5 * unit)} L${snap.x - (5 * unit)} ${snap.y + (5 * unit)}`);
+                }
+                group.appendChild(glyph);
+                if (snap.labelKey) {
+                    const text = document.createElementNS(svgNs, "text");
+                    text.setAttribute("data-abe-snap-label", String(__(snap.labelKey)));
+                    text.setAttribute("x", String(snap.x + (12 * unit)));
+                    text.setAttribute("y", String(snap.y + (16 * unit)));
+                    text.setAttribute("pointer-events", "none");
+                    text.textContent = String(__(snap.labelKey));
+                    group.appendChild(text);
+                }
+                world.appendChild(group);
+            }
+        }
+        patchDrawingMeasure(host, hud, preview);
+    }
+
+    function patchPenPreview(host, points) {
+        const world = host && host.querySelector(".abe-world");
+        if (!world) return;
+        const existing = world.querySelector("[data-abe-pen-preview]");
+        if (!points || points.length < 2) {
+            if (existing && existing.remove) existing.remove();
+            return;
+        }
+        const markup = points.map((point, index) => `${index === 0 ? "M" : "L"}${point.x} ${point.y}`).join(" ");
+        if (existing) {
+            existing.setAttribute("d", markup);
+            return;
+        }
+        if (typeof document === "undefined" || !document.createElementNS) return;
+        const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        path.setAttribute("data-abe-pen-preview", "1");
+        path.setAttribute("d", markup);
+        path.setAttribute("fill", "none");
+        path.setAttribute("stroke", "#243044");
+        path.setAttribute("stroke-width", "1.8");
+        path.setAttribute("stroke-linecap", "round");
+        path.setAttribute("stroke-linejoin", "round");
+        path.setAttribute("vector-effect", "non-scaling-stroke");
+        path.setAttribute("pointer-events", "none");
+        world.appendChild(path);
+    }
+
+    function patchShapePreview(host, points, closed) {
+        const world = host && host.querySelector(".abe-world");
+        if (!world) return;
+        const existing = world.querySelector("[data-abe-shape-preview]");
+        if (!points || points.length < 2) {
+            if (existing) existing.remove();
+            return;
+        }
+        const commands = points.map((point, index) => `${index === 0 ? "M" : "L"}${point.x} ${point.y}`).join(" ");
+        const markup = `${commands}${closed ? " Z" : ""}`;
+        if (existing) {
+            existing.setAttribute("d", markup);
+            return;
+        }
+        if (typeof document === "undefined" || !document.createElementNS) return;
+        const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        path.setAttribute("data-abe-shape-preview", "1");
+        path.setAttribute("d", markup);
+        path.setAttribute("fill", "none");
+        path.setAttribute("stroke", "#0b5fff");
+        path.setAttribute("stroke-width", "1.4");
+        path.setAttribute("stroke-dasharray", "7 5");
+        path.setAttribute("vector-effect", "non-scaling-stroke");
+        path.setAttribute("pointer-events", "none");
+        world.appendChild(path);
+    }
+
     window.AlmdinaBoardEditor = window.AlmdinaBoardEditor || {};
     window.AlmdinaBoardEditor.CanvasRenderer = Object.freeze({
         render,
@@ -2655,6 +3885,12 @@
         SCALE_MAX,
         patchDragPreview,
         patchMeasureOverlay,
+        patchDrawingPreview,
+        patchReferenceFrame,
+        patchShapePreview,
+        patchPenPreview,
+        bindDrawingMeasure,
+        copyPlanReady,
         patchMarqueeOverlay,
         clickTargetKeepsSelection,
         marqueeBlockedTarget,
@@ -2669,6 +3905,9 @@
         elementCssZoom,
         clientPointToLocal,
         clientDeltaToLocal,
+        computePolylineHudPosition,
+        computeDynamicInputPosition,
+        worldToHostLocal,
         BOARD_SCREEN_MIN_PX,
         BOARD_SCREEN_MAX_PX,
         BOARD_TITLE_MM,

@@ -381,7 +381,27 @@
                 geometry_source: piece.geometry_source || "",
                 exact_geometry: Boolean(piece.exact_geometry),
                 special_representation: piece.special_representation || null,
+                reserves_blank: piece.reserves_blank === true,
             };
+            if (sessionPiece.reserves_blank) {
+                const stored = piece.blank_reservation_cm;
+                const placementW = (Number(placement.w) || 0) * 10;
+                const placementH = (Number(placement.h) || 0) * 10;
+                const reservation = Array.isArray(stored) && stored.length >= 3
+                    ? stored.map((point) => [Number(point[0]) * 10, Number(point[1]) * 10])
+                    : (placementW > 0 && placementH > 0
+                        ? [
+                            [sessionPiece.local_x_mm, sessionPiece.local_y_mm],
+                            [sessionPiece.local_x_mm + placementW, sessionPiece.local_y_mm],
+                            [sessionPiece.local_x_mm + placementW, sessionPiece.local_y_mm + placementH],
+                            [sessionPiece.local_x_mm, sessionPiece.local_y_mm + placementH],
+                        ]
+                        : null);
+                if (reservation) {
+                    sessionPiece.reservation_mm = reservation;
+                    sessionPiece.base_reservation_mm = reservation.map((point) => [point[0], point[1]]);
+                }
+            }
             {
                 const explicit = String(piece.resource_kind || "").trim().toUpperCase();
                 const sheetMeta = sheets.find((row) => Number(row.sheet_no) === Number(piece.sheet_no));
@@ -398,9 +418,12 @@
                     sessionPiece.offcut_execution_party = "UNASSIGNED";
                 }
             }
-            if (Array.isArray(sessionPiece.base_outline_mm) && sessionPiece.base_outline_mm.length >= 3) {
-                const xs = sessionPiece.base_outline_mm.map((point) => Number(point[0]) || 0);
-                const ys = sessionPiece.base_outline_mm.map((point) => Number(point[1]) || 0);
+            const pivotRing = sessionPiece.reserves_blank && Array.isArray(sessionPiece.base_reservation_mm)
+                ? sessionPiece.base_reservation_mm
+                : sessionPiece.base_outline_mm;
+            if (Array.isArray(pivotRing) && pivotRing.length >= 3) {
+                const xs = pivotRing.map((point) => Number(point[0]) || 0);
+                const ys = pivotRing.map((point) => Number(point[1]) || 0);
                 sessionPiece.pivot_mm = {
                     x: (Math.min(...xs) + Math.max(...xs)) * 0.5,
                     y: (Math.min(...ys) + Math.max(...ys)) * 0.5,

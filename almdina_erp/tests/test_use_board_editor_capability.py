@@ -249,6 +249,7 @@ class UseBoardEditorGateTests(unittest.TestCase):
         for relative in (
             "almdina_erp/services/board_editor_draft_service.py",
             "almdina_erp/services/board_editor_draft_review_service.py",
+            "almdina_erp/services/board_editor_drawing_service.py",
             "almdina_erp/services/board_editor_plan_create_service.py",
         ):
             with self.subTest(relative=relative):

@@ -279,20 +279,52 @@
         return Object.freeze(model);
     }
 
-    function createModel({ source, outerMm, holesMm = [], placement, exact = false, invalid = false }) {
-        const bounds = geometryBounds(outerMm);
+    function fillsFrame(localPoints, bounds) {
+        if (localPoints.length !== 4) return false;
+        return localPoints.every(point => (
+            (Math.abs(point[0]) <= EPSILON || Math.abs(point[0] - bounds.width) <= EPSILON)
+            && (Math.abs(point[1]) <= EPSILON || Math.abs(point[1] - bounds.height) <= EPSILON)
+        ));
+    }
+
+    function blankFrameMm(piece) {
+        const raw = piece && piece.special_shape_geometry_json;
+        let reserves = false;
+        if (typeof raw === "string" && raw.trim()) {
+            try {
+                reserves = JSON.parse(raw).reservation === "blank";
+            } catch (error) {
+                reserves = false;
+            }
+        } else if (raw && typeof raw === "object") {
+            reserves = raw.reservation === "blank";
+        }
+        if (!reserves) return null;
+        const x = number(piece.x) * 10;
+        const y = number(piece.y) * 10;
+        const width = number(piece.w) * 10;
+        const height = number(piece.h) * 10;
+        if (!(width > EPSILON) || !(height > EPSILON)) return null;
+        return { minX: x, minY: y, maxX: x + width, maxY: y + height, width, height };
+    }
+
+    function createModel({ source, outerMm, holesMm = [], placement, exact = false, invalid = false, frameMm = null }) {
+        const bounds = frameMm || geometryBounds(outerMm);
         const localOuter = localize(outerMm, bounds);
         const localHoles = holesMm.map(points => localize(points, bounds));
         const localBounds = { minX: 0, minY: 0, maxX: bounds.width, maxY: bounds.height, width: bounds.width, height: bounds.height };
         const outer = normalizedRing(localOuter, localBounds);
         const holes = localHoles.map(points => normalizedRing(points, localBounds));
-        const vector = !isAxisAlignedRectangle(outer, holes);
+        const vector = frameMm
+            ? !fillsFrame(localOuter, localBounds)
+            : !isAxisAlignedRectangle(outer, holes);
         const labelPoint = vector ? visualCenter(outer, holes) : [50, 50];
         return freezeModel({
             schemaVersion: MODEL_VERSION,
             source,
             exact: Boolean(exact),
             invalid: Boolean(invalid),
+            reservesBlank: Boolean(frameMm),
             vector,
             geometryIdentity: geometryHash(source, localOuter, localHoles),
             geometry: {
@@ -345,6 +377,25 @@
         }
         const outerMm = ring(geometry.outer, "geometry.outer");
         const holesMm = geometry.holes.map((hole, index) => ring(hole, `geometry.holes[${index}]`));
+        const frame = blankFrameMm(piece);
+        if (frame) {
+            // An interior contour keeps its offset inside the reserved blank.
+            // Collapsing the piece to the contour box hides that cut on the plan.
+            return createModel({
+                source: "dxf",
+                outerMm,
+                holesMm,
+                exact: true,
+                frameMm: frame,
+                placement: {
+                    xCm: number(piece.x),
+                    yCm: number(piece.y),
+                    widthCm: number(piece.w),
+                    heightCm: number(piece.h),
+                    rotationDegrees: 0,
+                },
+            });
+        }
         const bounds = geometryBounds(outerMm);
         return createModel({
             source: "dxf",
@@ -423,13 +474,17 @@
     }
 
     function resolve(piece) {
+        let model = null;
         try {
-            const dxf = persistedDxfModel(piece);
-            if (dxf) return dxf;
+            model = persistedDxfModel(piece);
         } catch {
-            return rectangleModel(piece, { source: "invalid-dxf", invalid: true });
+            model = rectangleModel(piece, { source: "invalid-dxf", invalid: true });
         }
-        return voidRotationModel(piece) || manualSpecialModel(piece) || cornerModel(piece) || rectangleModel(piece);
+        if (!model) model = voidRotationModel(piece);
+        if (!model) model = manualSpecialModel(piece);
+        if (!model) model = cornerModel(piece);
+        if (!model) model = rectangleModel(piece);
+        return model;
     }
 
     window.AlmdinaCuttingPlanPieceGeometry = Object.freeze({

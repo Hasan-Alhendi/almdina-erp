@@ -40,6 +40,7 @@
 .abe-page[dir="rtl"] .abe-sidebar,
 .abe-page[dir="rtl"] .abe-right-sidebar-host,
 .abe-page[dir="rtl"] .abe-right-sidebar,
+.abe-page[dir="rtl"] .abe-draw-props,
 .abe-page[dir="rtl"] .abe-float-dock,
 .abe-page[dir="rtl"] .abe-float-stack,
 .abe-page[dir="rtl"] .abe-inspector-piece,
@@ -252,6 +253,14 @@
 
 .abe-right-sidebar-host {
   grid-area: inspector;
+}
+
+.abe-body.is-drawing {
+  --abe-right-sidebar-width: 300px;
+}
+
+.abe-body.is-drawing.is-draw-props-collapsed {
+  --abe-right-sidebar-width: 36px;
 }
 
 .abe-sidebar {
@@ -762,6 +771,583 @@
   max-width: 100%;
 }
 
+.abe-mode-switch,
+.abe-drawing-workspace {
+  pointer-events: auto;
+  max-width: 100%;
+  border: 1px solid var(--alm-border, #e5e9f1);
+  border-radius: var(--alm-radius-md, 14px);
+  background: var(--alm-surface, #fff);
+  color: var(--alm-text, #172033);
+  box-shadow: var(--alm-shadow-sm, 0 1px 2px rgba(15, 23, 42, 0.04), 0 5px 18px rgba(15, 23, 42, 0.045));
+}
+
+.abe-mode-switch {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px;
+  gap: 2px;
+}
+
+.abe-mode-btn {
+  border: 0;
+  background: transparent;
+  color: var(--alm-text-muted, #667085);
+  border-radius: 10px;
+  min-height: 26px;
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.abe-mode-btn.is-active {
+  background: var(--alm-secondary-hover-bg, #f2f4f7);
+  color: var(--alm-text, #172033);
+}
+
+.abe-mode-btn:focus-visible,
+.abe-drawing-workspace:focus-within {
+  outline: 2px solid var(--alm-focus, #3b6fd8);
+  outline-offset: 1px;
+}
+
+.abe-drawing-workspace {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 8px;
+}
+
+.abe-drawing-status,
+.abe-drawing-note {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.abe-drawing-note,
+.abe-drawing-tool {
+  color: var(--alm-text-muted, #98a2b3);
+}
+
+.abe-drawing-tools {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 4px;
+  pointer-events: auto;
+}
+
+.abe-float-tools .abe-drawing-tool.is-active {
+  background: #dbeafe;
+  color: #0b5fff;
+}
+
+.abe-draw-props {
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--alm-surface, #fff);
+  color: var(--alm-text, #172033);
+  border-inline-start: 1px solid var(--alm-border, #e5e9f1);
+}
+
+.abe-draw-props.is-collapsed {
+  align-items: center;
+  padding-top: 8px;
+}
+
+.abe-prop-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 36px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--alm-border, #e5e9f1);
+}
+
+.abe-prop-head h2 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.abe-draw-props-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  overflow-x: hidden;
+  padding: 8px;
+}
+
+.abe-prop-section {
+  border-bottom: 1px solid var(--alm-border, #e5e9f1);
+  padding-bottom: 6px;
+  margin-bottom: 6px;
+}
+
+.abe-prop-section summary {
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.abe-prop-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.abe-metric-wide {
+  grid-column: 1 / -1;
+}
+
+.abe-text-form textarea,
+.abe-draw-props textarea {
+  width: 100%;
+  min-height: 72px;
+  resize: vertical;
+  border: 1px solid var(--alm-border, #e5e9f1);
+  border-radius: 8px;
+  padding: 6px;
+  background: var(--alm-surface, #fff);
+  color: inherit;
+  font: inherit;
+}
+
+.abe-prop-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.abe-prop-actions button {
+  min-height: 26px;
+  border-radius: 8px;
+}
+
+.abe-prop-door,
+.abe-prop-message,
+.abe-prop-label,
+.abe-drawing-actions,
+.abe-shape-menu,
+.abe-pen-settings,
+.abe-snap-menu,
+.abe-reference-menu,
+.abe-reference-form,
+.abe-path-form,
+.abe-shape-form {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.abe-metric {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  font-size: 11px;
+}
+
+.abe-metric input,
+.abe-metric select,
+.abe-draw-props input[type="text"],
+.abe-draw-props select {
+  width: 100%;
+  min-height: 26px;
+  border: 1px solid var(--alm-border, #e5e9f1);
+  border-radius: 8px;
+  padding: 2px 6px;
+  background: var(--alm-surface, #fff);
+  color: inherit;
+}
+
+.abe-draw-props button[disabled],
+.abe-float-tools button[disabled] {
+  opacity: 0.45;
+}
+
+.abe-path-form .is-valid-cut[aria-pressed="true"] {
+  background: #e7f6ee;
+  color: #067647;
+}
+
+.abe-cut-problem {
+  color: #b42318;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+}
+
+.abe-drawing-tool {
+  font-size: 11px;
+  line-height: 1.2;
+  padding: 2px 6px;
+  border-radius: 8px;
+  background: var(--alm-secondary-hover-bg, #f2f4f7);
+  cursor: not-allowed;
+  user-select: none;
+}
+
+.abe-drawing-size {
+  font-variant-numeric: tabular-nums;
+}
+
+.abe-canvas-stage.is-drawing .abe-piece {
+  cursor: pointer;
+}
+
+.abe-canvas-stage.is-polyline,
+.abe-canvas-stage.is-polyline .abe-piece,
+.abe-canvas-stage.is-pen,
+.abe-canvas-stage.is-pen .abe-piece,
+.abe-canvas-stage.is-pen .abe-svg {
+  cursor: crosshair;
+}
+
+.abe-canvas-stage.is-pen {
+  touch-action: none;
+}
+
+.abe-pen-settings {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 4px;
+  max-width: 36rem;
+}
+
+.abe-pen-level,
+.abe-pen-settings [data-abe-drawing-action] {
+  border: 0;
+  background: var(--alm-secondary-hover-bg, #f2f4f7);
+  color: var(--alm-text, #172033);
+  border-radius: 8px;
+  min-height: 24px;
+  padding: 0 8px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.abe-pen-level.is-active {
+  background: #dbe7ff;
+}
+
+.abe-pen-settings [data-abe-drawing-action]:disabled {
+  color: var(--alm-text-muted, #98a2b3);
+  cursor: not-allowed;
+}
+
+button.abe-drawing-tool {
+  border: 0;
+  background: transparent;
+  color: var(--alm-text, #172033);
+  border-radius: 8px;
+  min-height: 24px;
+  padding: 0 8px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+button.abe-drawing-tool.is-active {
+  background: var(--alm-secondary-hover-bg, #f2f4f7);
+}
+
+button.abe-drawing-tool:disabled {
+  color: var(--alm-text-muted, #98a2b3);
+  cursor: not-allowed;
+}
+
+.abe-shape-menu,
+.abe-snap-menu {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 4px 8px;
+  max-width: 36rem;
+}
+
+.abe-reference-menu,
+.abe-reference-form {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 4px 8px;
+  max-width: 36rem;
+}
+
+.abe-reference-form label,
+.abe-reference-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+}
+
+.abe-reference-form input[type="text"] {
+  width: 4.5rem;
+  min-height: 24px;
+  border: 1px solid var(--alm-border, #e5e9f1);
+  border-radius: 8px;
+  background: var(--alm-surface, #fff);
+  color: inherit;
+  font-size: 12px;
+}
+
+.abe-reference-form input[type="range"] {
+  width: 5rem;
+}
+
+.abe-reference-note {
+  margin: 0;
+  font-size: 12px;
+}
+
+.abe-snap-menu label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+}
+
+.abe-snap-menu select {
+  min-height: 24px;
+  border: 1px solid var(--alm-border, #e5e9f1);
+  border-radius: 8px;
+  background: var(--alm-surface, #fff);
+  color: inherit;
+  font-size: 12px;
+}
+
+.abe-shape-kind {
+  border: 0;
+  background: var(--alm-secondary-hover-bg, #f2f4f7);
+  color: var(--alm-text, #172033);
+  border-radius: 8px;
+  min-height: 24px;
+  padding: 0 8px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.abe-shape-kind.is-active {
+  background: #dbe7ff;
+}
+
+.abe-shape-form select {
+  min-height: 24px;
+  border: 1px solid var(--alm-border, #e5e9f1);
+  border-radius: 8px;
+  background: var(--alm-surface, #fff);
+  color: inherit;
+  font-size: 12px;
+}
+
+.abe-drawing-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px;
+}
+
+.abe-drawing-actions button {
+  border: 0;
+  background: var(--alm-secondary-hover-bg, #f2f4f7);
+  color: var(--alm-text, #172033);
+  border-radius: 8px;
+  min-height: 24px;
+  padding: 0 8px;
+  font-size: 12px;
+}
+
+.abe-drawing-actions button:disabled {
+  opacity: 0.45;
+}
+
+.abe-drawing-tools {
+  gap: 2px;
+}
+
+.abe-drawing-workspace .abe-tool-btn,
+.abe-reference-menu .abe-tool-btn,
+.abe-reference-form .abe-tool-btn {
+  width: 28px;
+  height: 28px;
+  min-width: 28px;
+  min-height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--alm-text, #172033);
+  box-shadow: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.abe-drawing-workspace .abe-tool-btn svg,
+.abe-reference-menu .abe-tool-btn svg,
+.abe-reference-form .abe-tool-btn svg {
+  width: 15px;
+  height: 15px;
+}
+
+.abe-drawing-workspace .abe-tool-btn.is-active,
+.abe-reference-row.is-active .abe-tool-btn {
+  background: #dbe7ff;
+  color: #0b5fff;
+}
+
+.abe-drawing-workspace .abe-tool-btn:hover:not(:disabled),
+.abe-reference-menu .abe-tool-btn:hover,
+.abe-reference-form .abe-tool-btn:hover {
+  background: var(--alm-secondary-hover-bg, #f2f4f7);
+}
+
+.abe-drawing-workspace .abe-tool-btn:disabled,
+.abe-drawing-tools .abe-tool-btn[aria-disabled="true"] {
+  color: var(--alm-text-muted, #98a2b3);
+  cursor: not-allowed;
+  background: transparent;
+}
+
+.abe-metric {
+  display: inline-grid;
+  grid-template-columns: auto 72px;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--alm-text-muted, #667085);
+}
+
+.abe-metric input,
+.abe-metric select,
+.abe-shape-form input[type="text"],
+.abe-reference-form input[type="text"] {
+  width: 72px;
+  min-height: 24px;
+  border: 1px solid var(--alm-border, #e5e9f1);
+  border-radius: 8px;
+  background: var(--alm-surface, #fff);
+  color: var(--alm-text, #172033);
+  font-size: 12px;
+  padding: 0 6px;
+}
+
+.abe-metric input:disabled,
+.abe-metric select:disabled {
+  opacity: 0.45;
+}
+
+.abe-drawing-dirty {
+  color: #b54708;
+  font-weight: 600;
+}
+
+.abe-drawing-measure {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  max-width: 100%;
+}
+
+.abe-drawing-measure label,
+.abe-drawing-cursor label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.abe-drawing-measure input,
+.abe-drawing-cursor input {
+  width: 4.6rem;
+  min-height: 24px;
+  border: 1px solid var(--alm-border, #e5e9f1);
+  border-radius: 8px;
+  padding: 0 6px;
+  direction: ltr;
+  text-align: left;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  background: var(--alm-surface, #fff);
+  color: inherit;
+  box-shadow: none;
+}
+
+.abe-drawing-measure input:disabled {
+  opacity: 0.55;
+  background: var(--alm-secondary-hover-bg, #f2f4f7);
+  cursor: not-allowed;
+}
+
+.abe-drawing-measure-error {
+  flex-basis: 100%;
+  margin: 0;
+  color: #b42318;
+  font-size: 12px;
+  line-height: 1.3;
+  text-align: center;
+}
+
+.abe-drawing-measure input:focus-visible,
+.abe-drawing-cursor input:focus-visible {
+  outline: 2px solid var(--alm-focus, #3b6fd8);
+  outline-offset: 1px;
+}
+
+.abe-drawing-closed {
+  margin: 0;
+  max-width: 28rem;
+  color: var(--alm-text-muted, #667085);
+  font-size: 12px;
+  text-align: center;
+}
+
+.abe-drawing-cursor {
+  position: absolute;
+  z-index: 6;
+  display: none;
+  align-items: center;
+  gap: 8px;
+  width: max-content;
+  padding: 4px 6px;
+  border: 1px solid var(--alm-border, #e5e9f1);
+  border-radius: var(--alm-radius-md, 14px);
+  background: var(--alm-surface, #fff);
+  box-shadow: var(--alm-shadow-sm, 0 1px 2px rgba(15, 23, 42, 0.04), 0 5px 18px rgba(15, 23, 42, 0.045));
+  font-size: 12px;
+  pointer-events: auto;
+}
+
+.abe-drawing-cursor.is-visible {
+  display: flex;
+}
+
 .abe-canvas-tools,
 .abe-float-tools {
   pointer-events: auto;
@@ -1094,6 +1680,9 @@
 [data-theme="dark"] .abe-sidebar,
 [data-theme="dark"] .abe-right-sidebar,
 [data-theme="dark"] .abe-section-head,
+[data-theme="dark"] .abe-mode-switch,
+[data-theme="dark"] .abe-drawing-workspace,
+[data-theme="dark"] .abe-drawing-cursor,
 [data-theme="dark"] .abe-float-tools,
 [data-theme="dark"] .abe-state {
   background: var(--alm-surface, #1b2430);
@@ -1158,4 +1747,180 @@
     gap: 2px;
     padding: 4px 6px;
   }
+}
+
+.abe-draw-props .abe-prop-btn {
+  appearance: none;
+  border: 1px solid var(--alm-border, #e5e9f1);
+  background: var(--alm-surface, #fff);
+  color: var(--alm-text, #172033);
+  border-radius: 8px;
+  min-height: 28px;
+  padding: 0 10px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.2;
+  cursor: pointer;
+}
+
+.abe-draw-props .abe-prop-btn:hover:not(:disabled) {
+  background: var(--alm-secondary-hover-bg, #f2f4f7);
+}
+
+.abe-draw-props .abe-prop-btn:active:not(:disabled) {
+  background: #dbeafe;
+}
+
+.abe-draw-props .abe-prop-btn:focus-visible {
+  outline: 2px solid #0b5fff;
+  outline-offset: 1px;
+}
+
+.abe-draw-props .abe-prop-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.abe-draw-props .abe-prop-btn.is-primary {
+  background: #0b5fff;
+  border-color: #0b5fff;
+  color: #fff;
+}
+
+.abe-draw-props .abe-prop-btn.is-primary:hover:not(:disabled) {
+  background: #0848c7;
+}
+
+.abe-draw-props .abe-prop-btn.is-danger {
+  color: #b42318;
+  background: #fff;
+  border-color: #fecdca;
+}
+
+.abe-draw-props .abe-prop-btn.is-active,
+.abe-draw-props .abe-prop-btn[aria-pressed="true"] {
+  background: #dbeafe;
+  border-color: #bfdbfe;
+  color: #0b5fff;
+}
+
+.abe-draw-props .abe-prop-btn-icon {
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.abe-draw-props .abe-prop-actions,
+.abe-draw-props .abe-shape-menu,
+.abe-draw-props .abe-snap-menu,
+.abe-draw-props .abe-reference-menu,
+.abe-draw-props .abe-reference-form,
+.abe-draw-props .abe-path-form {
+  width: 100%;
+  max-width: none;
+  align-items: stretch;
+}
+
+.abe-draw-props .abe-shape-menu {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.abe-draw-props .abe-shape-kind {
+  width: 100%;
+  aspect-ratio: 1;
+  min-height: 0;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.abe-draw-props .abe-shape-glyph {
+  width: 28px;
+  height: 28px;
+}
+
+.abe-draw-props .abe-metric,
+.abe-draw-props .abe-metric.abe-metric-wide {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-width: 0;
+}
+
+.abe-draw-props .abe-metric input,
+.abe-draw-props .abe-metric select,
+.abe-draw-props .abe-metric textarea,
+.abe-draw-props .abe-shape-form input[type="text"],
+.abe-draw-props .abe-reference-form input[type="text"] {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.abe-draw-props textarea {
+  min-height: 96px;
+  resize: vertical;
+}
+
+.abe-draw-props .abe-reference-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+}
+
+.abe-draw-props .abe-reference-list {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 4px;
+  width: 100%;
+}
+
+.abe-draw-props .abe-reference-pick {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  min-height: 36px;
+}
+
+.abe-draw-props .abe-reference-pick img {
+  width: 28px;
+  height: 28px;
+  object-fit: cover;
+  border-radius: 4px;
+}
+
+.abe-draw-props .abe-opacity {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.abe-draw-props .abe-opacity input[type="range"] {
+  width: 100%;
+}
+
+.abe-draw-props .abe-snap-menu label {
+  display: flex;
+  width: 100%;
+}
+
+.abe-resize-readout {
+  font-weight: 700;
+  paint-order: stroke;
+  stroke: #fff;
+  stroke-width: 3px;
 }
