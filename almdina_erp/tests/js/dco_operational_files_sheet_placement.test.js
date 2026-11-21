@@ -227,6 +227,71 @@ assert.strictEqual(zoomed, ux.clampCutPreviewZoom(1.5));
 assert.ok(!panel.includes("placementDiagramMarkup"));
 assert.ok(!panel.includes("data-placement-diagram"));
 assert.ok(panel.includes("data-sheet-placement"));
+assert.ok(panel.includes("data-width-stop-cm"));
+assert.ok(panel.includes("data-length-stop-cm"));
+assert.ok(panel.includes("data-reset-sheet-stops"));
+assert.ok(panel.includes("data-width-stop-side"));
+assert.ok(css.includes(".dco-operational-sheet__stop-row"));
+assert.ok(translations.includes("مصدم العرض (سم)"));
+assert.ok(translations.includes("مصدم الطول (سم)"));
+assert.ok(translations.includes("استعادة المصادم الافتراضية"));
+const defaults = ux.defaultSheetStops(workspace.cnc_machines[0], 122, 244);
+assert.strictEqual(defaults.width_stop_cm, 8);
+assert.strictEqual(defaults.length_stop_cm, 6);
+assert.strictEqual(defaults.width_stop_side, "Left Side");
+const edited = {
+    ...state,
+    sheetStops: {
+        width_stop_side: "Right Side",
+        width_stop_cm: 3,
+        length_stop_side: "Top Side",
+        length_stop_cm: 0,
+    },
+};
+const editedPlacement = ux.placementPreviewPayload(workspace, edited);
+assert.strictEqual(editedPlacement.offset_left_cm, 5);
+assert.strictEqual(editedPlacement.offset_bottom_cm, 6);
+assert.strictEqual(editedPlacement.right_clearance_cm, 3);
+assert.strictEqual(editedPlacement.top_clearance_cm, 0);
+assert.strictEqual(editedPlacement.work_zero_position, "Bottom Left");
+assert.strictEqual(
+    ux.validateSheetPlacementFits(workspace, {
+        ...edited,
+        sheetStops: { ...edited.sheetStops, width_stop_cm: -1 },
+    }).code,
+    "width_stop_invalid"
+);
+assert.strictEqual(
+    ux.validateSheetPlacementFits(workspace, {
+        ...edited,
+        sheetStops: { ...edited.sheetStops, length_stop_cm: 6.01 },
+    }).code,
+    "length_stop_invalid"
+);
+assert.strictEqual(
+    ux.validateSheetPlacementFits(workspace, {
+        ...state,
+        sheetStops: {
+            width_stop_side: "Left Side",
+            width_stop_cm: 0,
+            length_stop_side: "Bottom Side",
+            length_stop_cm: 0,
+        },
+    }).ok,
+    true
+);
+const keptSide = ux.placementPreviewPayload(workspace, {
+    ...state,
+    sheetStops: {
+        width_stop_side: "Right Side",
+        width_stop_cm: defaults.width_stop_cm,
+        length_stop_side: "Bottom Side",
+        length_stop_cm: defaults.length_stop_cm,
+    },
+});
+assert.strictEqual(keptSide.horizontal_stop_cm, 8);
+assert.strictEqual(keptSide.offset_left_cm, 0);
+
 assert.ok(css.includes(".dco-cnc-cut-preview__stop-badge"));
 assert.ok(css.includes("font-size: 12px"));
 assert.ok(!css.includes(".dco-cnc-cut-preview__stop-badge") || !/\.dco-cnc-cut-preview__stop-badge\s*\{[^}]*--cut-zoom/.test(css));

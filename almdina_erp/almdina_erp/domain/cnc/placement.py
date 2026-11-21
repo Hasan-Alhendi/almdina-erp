@@ -1,15 +1,17 @@
 """Sheet placement on a CNC machine bed.
 
 Internal geometry stays bottom-left, X to the right, Y up, in millimetres.
-The width stop and the length stop are independent of the work zero. Each
-stop occupies the whole gap between the full board and the machine bed on
-the chosen side, and the board sits flush against the two opposite edges.
-Work zero then chooses the G54 origin. The shift is applied once. It does
-not reverse axes, rotate the sheet, or change path shape.
+The width stop and the length stop are independent of the work zero.
+A sheet may store its own side and distance. That distance is the gap on
+the chosen side; any remainder stays on the opposite side, so the board
+may have clearance on both sides. When a sheet has no stored distance, the
+whole gap stays on the machine's chosen side. Work zero then chooses the
+G54 origin. The shift is applied once. It does not reverse axes, rotate
+the sheet, or change path shape.
 
-Stored manual stop distances are historical. They are not copied onto a
-side and they do not move the board. A machine with no chosen sides stays
-unset until someone selects them.
+Distances stored on the CNC Machine are historical. They are not copied
+onto a side and they do not move the board. A machine with no chosen sides
+stays unset until someone selects them.
 
 Profile home is already a G54 position and is not shifted again. G53
 machine coordinates are not produced here.
@@ -88,6 +90,7 @@ class SheetPlacement:
     vertical_stop_cm: float = 0.0
     horizontal_stop_side: str = "left"
     vertical_stop_side: str = "bottom"
+    stops_custom: bool = False
 
     @property
     def offset_left_mm(self) -> float:
@@ -112,6 +115,17 @@ class SheetPlacement:
     @property
     def sheet_length_mm(self) -> float:
         return float(self.sheet_length_cm) * CM_TO_MM
+
+
+def _bounded_stop(value: Any, *, gap_cm: float, code: str) -> float:
+    """Accept a sheet stop from zero through the full-board gap. Do not clamp."""
+
+    if isinstance(value, bool) or value is None or (isinstance(value, str) and not str(value).strip()):
+        raise PlacementError(code)
+    number = _finite_non_negative(value, code=code)
+    if number - float(gap_cm) > 1e-6:
+        raise PlacementError(code)
+    return number
 
 
 def _finite_non_negative(value: Any, *, code: str) -> float:
@@ -342,12 +356,15 @@ def sheet_origin_mm(
     sheet_length_mm: float,
     width_stop_side: str,
     length_stop_side: str,
+    width_stop_cm: float | None = None,
+    length_stop_cm: float | None = None,
 ) -> tuple[float, float]:
     """Bottom-left corner of the full board on the machine bed.
 
-    The stop gap is the machine size minus the full board size. It sits on
-    the selected side. The board is flush with the opposite edges. Work zero
-    is not an argument: it does not choose the side.
+    The gap is the machine size minus the full board size. A stop distance
+    occupies that much of the gap on the selected side. The remainder stays
+    on the opposite side. Omitting a distance keeps the whole gap on the
+    selected side. Work zero is not an argument: it does not choose the side.
     """
 
     width_side = _stop_side(width_stop_side, allowed=WIDTH_STOP_SIDES)
@@ -364,8 +381,14 @@ def sheet_origin_mm(
         float(sheet_length_mm) / CM_TO_MM,
         axis="length",
     )
-    origin_x = width_gap if width_side == WIDTH_STOP_LEFT else 0.0
-    origin_y = length_gap if length_side == LENGTH_STOP_BOTTOM else 0.0
+    width_stop = width_gap if width_stop_cm is None else _bounded_stop(
+        width_stop_cm, gap_cm=width_gap, code="width_stop_invalid"
+    )
+    length_stop = length_gap if length_stop_cm is None else _bounded_stop(
+        length_stop_cm, gap_cm=length_gap, code="length_stop_invalid"
+    )
+    origin_x = width_stop if width_side == WIDTH_STOP_LEFT else width_gap - width_stop
+    origin_y = length_stop if length_side == LENGTH_STOP_BOTTOM else length_gap - length_stop
     return origin_x * CM_TO_MM, origin_y * CM_TO_MM
 
 
@@ -433,16 +456,35 @@ def validate_sheet_fits_machine(
     automatic_clearance_cm(machine_l, sheet_l, axis="length")
 
 
+def _explicit_sheet_stops(raw: Mapping[str, Any] | None) -> Mapping[str, Any] | None:
+    """None keeps the machine sides and the full gap. A mapping is explicit."""
+
+    if raw is None:
+        return None
+    if not isinstance(raw, Mapping):
+        raise PlacementError("width_stop_invalid")
+    if not any(raw.get(key) not in (None, "") for key in (
+        "width_stop_side",
+        "width_stop_cm",
+        "length_stop_side",
+        "length_stop_cm",
+    )):
+        return None
+    return raw
+
+
 def build_sheet_placement(
     *,
     machine: CncMachineSpec | Mapping[str, Any],
     sheet_width_cm: Any,
     sheet_length_cm: Any,
+    sheet_stops: Mapping[str, Any] | None = None,
 ) -> SheetPlacement:
-    """Place a full board from the machine size and the two stop sides.
+    """Place a full board from the machine bed and the sheet stops.
 
-    Callers cannot pass a different offset. Historical stop distances and
-    values named ``offset_left_cm`` on a mapping are ignored.
+    Client offsets are ignored. Historical machine distances are ignored.
+    ``sheet_stops`` may replace the side and the distance for this sheet.
+    Omitting it keeps the whole gap on the machine's chosen sides.
     """
 
     spec = _spec_from_machine(machine)
@@ -452,13 +494,32 @@ def build_sheet_placement(
     sheet_l = _finite_positive(sheet_length_cm, code="sheet_length_invalid")
     width_gap = automatic_clearance_cm(spec.width_cm, sheet_w, axis="width")
     length_gap = automatic_clearance_cm(spec.length_cm, sheet_l, axis="length")
+    explicit = _explicit_sheet_stops(sheet_stops)
+    if explicit is None:
+        width_side = spec.width_stop_side
+        length_side = spec.length_stop_side
+        width_stop = width_gap
+        length_stop = length_gap
+    else:
+        width_side = _stop_side(explicit.get("width_stop_side"), allowed=WIDTH_STOP_SIDES)
+        length_side = _stop_side(explicit.get("length_stop_side"), allowed=LENGTH_STOP_SIDES)
+        if width_side is None or length_side is None:
+            raise PlacementError("cnc_machine_stop_sides_required")
+        width_stop = _bounded_stop(
+            explicit.get("width_stop_cm"), gap_cm=width_gap, code="width_stop_invalid"
+        )
+        length_stop = _bounded_stop(
+            explicit.get("length_stop_cm"), gap_cm=length_gap, code="length_stop_invalid"
+        )
     origin_x, origin_y = sheet_origin_mm(
         machine_width_mm=spec.width_cm * CM_TO_MM,
         machine_length_mm=spec.length_cm * CM_TO_MM,
         sheet_width_mm=sheet_w * CM_TO_MM,
         sheet_length_mm=sheet_l * CM_TO_MM,
-        width_stop_side=spec.width_stop_side,
-        length_stop_side=spec.length_stop_side,
+        width_stop_side=width_side,
+        length_stop_side=length_side,
+        width_stop_cm=width_stop,
+        length_stop_cm=length_stop,
     )
     _origin_inside_bed(
         machine_width_cm=spec.width_cm,
@@ -468,8 +529,9 @@ def build_sheet_placement(
         origin_x_mm=origin_x,
         origin_y_mm=origin_y,
     )
-    horizontal_side = "left" if spec.width_stop_side == WIDTH_STOP_LEFT else "right"
-    vertical_side = "bottom" if spec.length_stop_side == LENGTH_STOP_BOTTOM else "top"
+    horizontal_side = "left" if width_side == WIDTH_STOP_LEFT else "right"
+    vertical_side = "bottom" if length_side == LENGTH_STOP_BOTTOM else "top"
+    custom = abs(width_stop - width_gap) > 1e-6 or abs(length_stop - length_gap) > 1e-6
     return SheetPlacement(
         machine_name=spec.name,
         machine_width_cm=spec.width_cm,
@@ -479,17 +541,18 @@ def build_sheet_placement(
         sheet_width_cm=sheet_w,
         sheet_length_cm=sheet_l,
         work_zero_position=spec.work_zero_position,
-        horizontal_stop_cm=width_gap,
-        vertical_stop_cm=length_gap,
+        horizontal_stop_cm=width_stop,
+        vertical_stop_cm=length_stop,
         horizontal_stop_side=horizontal_side,
         vertical_stop_side=vertical_side,
+        stops_custom=custom,
     )
 
 
 def placement_fingerprint_payload(placement: SheetPlacement | None) -> dict[str, Any]:
     if placement is None:
         return {}
-    return {
+    payload = {
         "cnc_machine": placement.machine_name,
         "machine_width_cm": placement.machine_width_cm,
         "machine_length_cm": placement.machine_length_cm,
@@ -500,6 +563,10 @@ def placement_fingerprint_payload(placement: SheetPlacement | None) -> dict[str,
         "vertical_stop_side": placement.vertical_stop_side,
         "placement_transform_version": placement.transform_version,
     }
+    if placement.stops_custom:
+        payload["width_stop_cm"] = placement.horizontal_stop_cm
+        payload["length_stop_cm"] = placement.vertical_stop_cm
+    return payload
 
 
 def placement_snapshot_payload(placement: SheetPlacement) -> dict[str, Any]:

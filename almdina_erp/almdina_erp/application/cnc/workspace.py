@@ -89,11 +89,12 @@ def resolve_sheet_placement(
     sheet_width_cm: float,
     sheet_length_cm: float,
     require_machine: bool = False,
+    sheet_stops: Mapping[str, Any] | None = None,
 ):
-    """Validate placement using the machine's saved stops and work zero.
+    """Validate placement from the machine bed and this sheet's stops.
 
-    Client offsets are not an argument. A different value cannot replace
-    the stops stored on the CNC Machine.
+    Client offsets are not an argument. ``sheet_stops`` is the only sheet
+    override. Omitting it keeps the machine sides and the full gap.
     """
 
     machine_name = str((machine or {}).get("name") or (machine or {}).get("machine_name") or "").strip()
@@ -107,7 +108,60 @@ def resolve_sheet_placement(
         machine=machine or {},
         sheet_width_cm=sheet_width_cm,
         sheet_length_cm=sheet_length_cm,
+        sheet_stops=sheet_stops,
     )
+
+
+def sheet_stops_payload(placement) -> dict[str, Any] | None:
+    """Persist the four sheet stop values. None keeps the historical full gap."""
+
+    if placement is None:
+        return None
+    return {
+        "width_stop_side": (
+            "Left Side" if placement.horizontal_stop_side == "left" else "Right Side"
+        ),
+        "width_stop_cm": placement.horizontal_stop_cm,
+        "length_stop_side": (
+            "Bottom Side" if placement.vertical_stop_side == "bottom" else "Top Side"
+        ),
+        "length_stop_cm": placement.vertical_stop_cm,
+    }
+
+
+def _stored_sheet_stops(existing: Mapping[str, Any] | None) -> Mapping[str, Any] | None:
+    raw = (existing or {}).get("sheet_stops")
+    return raw if isinstance(raw, Mapping) and raw else None
+
+
+def _sheet_stops_argument(
+    existing: Mapping[str, Any] | None,
+    *,
+    machine_name: str,
+    width_stop_side: Any,
+    width_stop_cm: Any,
+    length_stop_side: Any,
+    length_stop_cm: Any,
+) -> Mapping[str, Any] | None:
+    """Choose the stops for this save. A different machine drops the old sheet stops."""
+
+    supplied = any(value is not None for value in (
+        width_stop_side,
+        width_stop_cm,
+        length_stop_side,
+        length_stop_cm,
+    ))
+    if supplied:
+        return {
+            "width_stop_side": width_stop_side,
+            "width_stop_cm": width_stop_cm,
+            "length_stop_side": length_stop_side,
+            "length_stop_cm": length_stop_cm,
+        }
+    saved_machine = str((existing or {}).get("cnc_machine") or "").strip()
+    if machine_name and saved_machine and machine_name != saved_machine:
+        return None
+    return _stored_sheet_stops(existing)
 
 
 def _saved_for(
@@ -392,6 +446,7 @@ def build_operational_workspace(
                         machine=machine_row,
                         sheet_width_cm=sheet_w,
                         sheet_length_cm=sheet_l,
+                        sheet_stops=_stored_sheet_stops(saved),
                     )
                     placement_fp = placement_fingerprint_payload(placement)
                     effective_left = placement.offset_left_cm
@@ -461,6 +516,7 @@ def build_operational_workspace(
                 "cut_path_sequence": list(sequence),
                 "perimeter_cut_early_confirmed": perimeter_early,
                 "cnc_machine": str((saved or {}).get("cnc_machine") or ""),
+                "sheet_stops": _stored_sheet_stops(saved),
                 "offset_left_cm": float(effective_left or 0) if saved is not None else 0.0,
                 "offset_bottom_cm": float(effective_bottom or 0) if saved is not None else 0.0,
                 "post_processor": str((saved or {}).get("post_processor") or ""),
@@ -593,6 +649,10 @@ def prepare_sheet_settings(
     cnc_machine: str | None = None,
     offset_left_cm: Any = None,
     offset_bottom_cm: Any = None,
+    width_stop_side: Any = None,
+    width_stop_cm: Any = None,
+    length_stop_side: Any = None,
+    length_stop_cm: Any = None,
     machine_catalog: Sequence[Mapping[str, Any]] | None = None,
     plan_snapshot: Mapping[str, Any] | None = None,
     require_cnc_machine: bool = False,
@@ -673,7 +733,7 @@ def prepare_sheet_settings(
         machine_name = str((existing or {}).get("cnc_machine") or "").strip()
     else:
         machine_name = str(cnc_machine or "").strip()
-    # Sheet and RPC offsets cannot replace the stops saved on the machine.
+    # Client offsets are not a placement source. Sheet stops are validated below.
     del offset_left_cm, offset_bottom_cm
     machine_row = next(
         (
@@ -698,6 +758,14 @@ def prepare_sheet_settings(
         if machine_name
         else str((existing or {}).get("post_processor") or "")
     )
+    chosen_stops = _sheet_stops_argument(
+        existing,
+        machine_name=machine_name,
+        width_stop_side=width_stop_side,
+        width_stop_cm=width_stop_cm,
+        length_stop_side=length_stop_side,
+        length_stop_cm=length_stop_cm,
+    )
     if machine_name:
         sheet_w, sheet_l = approved_sheet_size_cm(plan_snapshot, sheet_no=int(sheet_no))
         placement = resolve_sheet_placement(
@@ -705,6 +773,7 @@ def prepare_sheet_settings(
             sheet_width_cm=sheet_w,
             sheet_length_cm=sheet_l,
             require_machine=True,
+            sheet_stops=chosen_stops,
         )
     profile_payload = dict(machine_profile.get("fingerprint_payload") or {})
     placement_fp = placement_fingerprint_payload(placement)
@@ -745,6 +814,7 @@ def prepare_sheet_settings(
         "cut_path_sequence": list(sequence),
         "perimeter_cut_early_confirmed": perimeter_early,
         "cnc_machine": placement.machine_name if placement else "",
+        "sheet_stops": sheet_stops_payload(placement) if placement is not None and chosen_stops is not None else None,
         "offset_left_cm": placement.offset_left_cm if placement else 0.0,
         "offset_bottom_cm": placement.offset_bottom_cm if placement else 0.0,
         "post_processor": stored_processor,

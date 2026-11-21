@@ -757,6 +757,123 @@ def test_fingerprint_changes_when_work_zero_changes():
     )
 
 
+def _stops(width_side, width_cm, length_side, length_cm):
+    return {
+        "width_stop_side": width_side,
+        "width_stop_cm": width_cm,
+        "length_stop_side": length_side,
+        "length_stop_cm": length_cm,
+    }
+
+
+@pytest.mark.parametrize("position", WORK_ZERO_POSITIONS)
+@pytest.mark.parametrize(
+    ("width_side", "length_side"),
+    (
+        ("Left Side", "Bottom Side"),
+        ("Left Side", "Top Side"),
+        ("Right Side", "Bottom Side"),
+        ("Right Side", "Top Side"),
+    ),
+)
+def test_editable_stops_move_the_sheet_without_moving_work_zero(position, width_side, length_side):
+    machine = _reference_machine(position)
+    machine["width_cm"] = 210
+    machine["length_cm"] = 310
+    before = build_sheet_placement(machine=machine, sheet_width_cm=183, sheet_length_cm=280)
+    after = build_sheet_placement(
+        machine=machine,
+        sheet_width_cm=183,
+        sheet_length_cm=280,
+        sheet_stops=_stops(width_side, 10, length_side, 0),
+    )
+    assert before.offset_left_cm == (27 if machine["width_stop_side"] == "Left Side" else 0)
+    assert after.work_zero_position == position
+    assert after.horizontal_stop_cm == 10
+    assert after.vertical_stop_cm == 0
+    assert after.offset_left_cm == (10 if width_side == "Left Side" else 17)
+    assert after.offset_bottom_cm == (0 if length_side == "Bottom Side" else 30)
+    placed = apply_placement_to_program(_nc_program([(0, 0)]), after)
+    travel = placed["operations"][0]["toolpaths"][0]["motions"][0]
+    assert (travel["x_mm"], travel["y_mm"]) == sheet_to_nc_xy(0, 0, after)
+    assert placed["work_zero_position"] == position
+    home = placed["operations"][0]["toolpaths"][0]["home"]
+    assert (home["x_mm"], home["y_mm"], home["z_mm"]) == (0, 100, 120)
+
+
+def test_partial_stop_leaves_clearance_on_both_sides_and_rejects_out_of_range():
+    machine = _machine(width_cm=210, length_cm=310)
+    placement = build_sheet_placement(
+        machine=machine,
+        sheet_width_cm=183,
+        sheet_length_cm=280,
+        sheet_stops=_stops("Left Side", 0, "Bottom Side", 30),
+    )
+    assert placement.offset_left_cm == 0
+    assert placement.offset_bottom_cm == 30
+    assert placement.stops_custom is True
+    same = build_sheet_placement(
+        machine=_machine(width_cm=183, length_cm=280),
+        sheet_width_cm=183,
+        sheet_length_cm=280,
+        sheet_stops=_stops("Right Side", 0, "Top Side", 0),
+    )
+    assert (same.offset_left_cm, same.offset_bottom_cm) == (0, 0)
+    assert same.stops_custom is False
+    for value in (-1, "abc", True, 27.01):
+        with pytest.raises(PlacementError) as rejected:
+            build_sheet_placement(
+                machine=machine,
+                sheet_width_cm=183,
+                sheet_length_cm=280,
+                sheet_stops=_stops("Left Side", value, "Bottom Side", 0),
+            )
+        assert rejected.value.code == "width_stop_invalid"
+
+
+def test_stop_fingerprint_changes_when_the_measurement_or_side_changes():
+    machine = _machine(width_cm=210, length_cm=310)
+    full = placement_fingerprint_payload(
+        build_sheet_placement(machine=machine, sheet_width_cm=183, sheet_length_cm=280)
+    )
+    shorter = placement_fingerprint_payload(
+        build_sheet_placement(
+            machine=machine,
+            sheet_width_cm=183,
+            sheet_length_cm=280,
+            sheet_stops=_stops("Left Side", 10, "Bottom Side", 30),
+        )
+    )
+    assert "width_stop_cm" not in full
+    assert shorter["width_stop_cm"] == 10
+    assert shorter["offset_left_cm"] == 10
+    left = build_sheet_placement(
+        machine=machine,
+        sheet_width_cm=183,
+        sheet_length_cm=280,
+        sheet_stops=_stops("Left Side", 13.5, "Bottom Side", 30),
+    )
+    right = build_sheet_placement(
+        machine=machine,
+        sheet_width_cm=183,
+        sheet_length_cm=280,
+        sheet_stops=_stops("Right Side", 13.5, "Bottom Side", 30),
+    )
+    assert left.offset_left_cm == right.offset_left_cm == 13.5
+    assert placement_fingerprint_payload(left) != placement_fingerprint_payload(right)
+    assert settings_fingerprint(
+        operation_presets={},
+        path_overrides={},
+        presets={},
+        sheet_placement=full,
+    ) != settings_fingerprint(
+        operation_presets={},
+        path_overrides={},
+        presets={},
+        sheet_placement=shorter,
+    )
+
+
 def test_legacy_offsets_are_not_copied_onto_the_machine():
     assert legacy_machine_stops_remain_unset(()) is False
     assert legacy_machine_stops_remain_unset([(0, 0), (0, 0)]) is False

@@ -4371,6 +4371,11 @@ Top Side,أعلى
 "Side of the width stop. It is independent of the work zero. The gap is calculated from the machine width and the full board width.",جهة مصدم العرض مستقلة عن نقطة الصفر. يُحسب الفراغ من عرض الماكينة وعرض اللوح الكامل.
 "Side of the length stop. It is independent of the work zero. The gap is calculated from the machine length and the full board length.",جهة مصدم الطول مستقلة عن نقطة الصفر. يُحسب الفراغ من طول الماكينة وطول اللوح الكامل.
 "Choose the width stop side and the length stop side on the CNC machine before generating a new file.",اختر جهة مصدم العرض وجهة مصدم الطول على الماكينة قبل توليد ملف جديد.
+Width Stop (cm),مصدم العرض (سم)
+Length Stop (cm),مصدم الطول (سم)
+Restore default stops,استعادة المصادم الافتراضية
+"The width stop must be a number from 0 cm up to the gap between the machine and the full sheet.",يجب أن يكون مصدم العرض رقمًا من 0 سم وحتى الفراغ بين الماكينة واللوح الكامل.
+"The length stop must be a number from 0 cm up to the gap between the machine and the full sheet.",يجب أن يكون مصدم الطول رقمًا من 0 سم وحتى الفراغ بين الماكينة واللوح الكامل.
 "The board is larger than the machine width. NC cannot be generated.",اللوح أكبر من عرض الماكينة. لا يمكن توليد الملف التشغيلي.
 "The board is larger than the machine length. NC cannot be generated.",اللوح أكبر من طول الماكينة. لا يمكن توليد الملف التشغيلي.
 "The operational file has been generated.",تم توليد الملف التشغيلي
