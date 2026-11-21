@@ -110,11 +110,21 @@ class TestFrontendFeatureOwnershipContract(unittest.TestCase):
                 hooks,
                 f"{script} must stay outside the DCO first-open manifest",
             )
+            # The CNC tab may be opened before the Plan tab. Its two
+            # shared geometry dependencies are named in both feature batches;
+            # the asset loader deduplicates by URL at runtime.
+            shared_with_cnc = filename in {
+                "door_cutting_order_piece_geometry.js",
+                "door_cutting_order_cutting_plan_renderer.js",
+            }
+            expected = 2 if shared_with_cnc else 1
             self.assertEqual(
                 registry.count(filename),
-                1,
-                f"{script} must have one canonical lazy workspace owner",
+                expected,
+                f"{script} must be owned by its exact required feature batches",
             )
+            if shared_with_cnc:
+                self.assertIn(filename, registry.split("operational_files:", 1)[1])
             positions.append(registry.index(filename))
 
         self.assertEqual(

@@ -13,6 +13,40 @@ from almdina_erp.almdina_erp.domain.cutting.primitives import create_sheet, expa
 from almdina_erp.almdina_erp.domain.cutting.shape_aware_nesting import _placed_corner
 from almdina_erp.almdina_erp.domain.cutting.evaluation import validate_plan, placement_permission_errors
 from almdina_erp.almdina_erp.services.strict_dxf_import_service import _find_exact_candidate
+from almdina_erp.almdina_erp.domain.cutting.dxf_topology import (
+    ContourCandidate, ExpectedPieceEvidence, _inventory_assignment,
+)
+
+
+def test_strict_inventory_distinguishes_equal_bbox_corner_types_by_real_contour():
+    l = ((0., 0.), (100., 0.), (100., 300.), (400., 300.),
+         (400., 400.), (0., 400.))
+    clipped = ((0., 0.), (100., 0.), (400., 300.),
+               (400., 400.), (0., 400.))
+    expected = (
+        ExpectedPieceEvidence(400., 400., True, piece_type="Clipped Corner"),
+        ExpectedPieceEvidence(400., 400., True, piece_type="L-Shaped Corner"),
+    )
+    for ordered in ((l, clipped), (clipped[::-1], l[::-1])):
+        contours = tuple(ContourCandidate(index, shape) for index, shape in enumerate(ordered))
+        assignment = _inventory_assignment(
+            contours, expected, dimension_tolerance=.01,
+            geometry_tolerance=.001, reject_type_ambiguity=True,
+        )
+        assert assignment is not None
+        kinds = tuple(expected[index].piece_type for index in assignment)
+        assert kinds == tuple(
+            "L-Shaped Corner" if len(shape) == 6 else "Clipped Corner"
+            for shape in ordered
+        )
+    # A rectangle supplies neither verified L-notch nor corner clipping.
+    rectangular = ContourCandidate(11, ((0., 0.), (400., 0.),
+                                         (400., 400.), (0., 400.)))
+    assert _inventory_assignment(
+        (rectangular,), expected, dimension_tolerance=.01,
+        geometry_tolerance=.001, reject_type_ambiguity=True,
+    ) is None
+
 
 
 @pytest.mark.parametrize('noncorner', ['Glass', 'Regular'])

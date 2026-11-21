@@ -344,8 +344,8 @@
                 </div>
             </div>
             ${toolPickerMarkup(context, form)}` : ""}
-            <div class="dco-artcam-actions">
-                <button type="submit" class="btn btn-primary btn-sm" data-artcam-calculate>${escapeHtml(translate("Calculate Now"))}</button>
+            <div class="dco-artcam-actions almdina-ui">
+                <button type="submit" class="btn alm-btn-primary btn-sm" data-artcam-calculate>${escapeHtml(translate("Calculate Now"))}</button>
             </div>
             <p class="dco-artcam-status" data-artcam-status role="status"></p>
         </form>`;

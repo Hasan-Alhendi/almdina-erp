@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from math import hypot
 from typing import Any, Sequence
 
 from .dxf_geometry import (
@@ -382,6 +383,37 @@ def outline_compatible_with_piece_type(
     return bool(holes)
 
 
+def _corner_outline_type(
+    polygon: Sequence[Point], *, tolerance: float,
+) -> str | None:
+    """Use proven concavity to distinguish equal-bbox corner types.
+
+    Neither contour order nor a DXF TEXT label proves which door was cut.
+    Degenerate and sub-tolerance contours remain unclassified.
+    """
+    ring = tuple(polygon)
+    if len(ring) > 1 and hypot(
+        ring[0][0] - ring[-1][0], ring[0][1] - ring[-1][1],
+    ) <= tolerance:
+        ring = ring[:-1]
+    if len(ring) < 5:
+        return None
+    signs: set[int] = set()
+    for index, point in enumerate(ring):
+        previous, following = ring[index - 1], ring[(index + 1) % len(ring)]
+        before = (point[0] - previous[0], point[1] - previous[1])
+        after = (following[0] - point[0], following[1] - point[1])
+        cross = before[0] * after[1] - before[1] * after[0]
+        threshold = tolerance * (hypot(*before) + hypot(*after))
+        if abs(cross) > threshold:
+            signs.add(1 if cross > 0 else -1)
+    if len(signs) == 2 and len(ring) >= 6:
+        return "L-Shaped Corner"
+    if len(signs) == 1:
+        return "Clipped Corner"
+    return None
+
+
 def _size_match(
     contour: ContourCandidate,
     expected: ExpectedPieceEvidence,
@@ -507,6 +539,8 @@ def _assignment_compatible(
     if not _size_match(contour, piece, dimension_tolerance=dimension_tolerance):
         return False
     kind = str(piece.piece_type or "")
+    if kind in {"L-Shaped Corner", "Clipped Corner"}:
+        return _corner_outline_type(contour.polygon, tolerance=geometry_tolerance) == kind
     if kind == "Glass" or piece.is_glass:
         competitors = [
             other

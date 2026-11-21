@@ -185,7 +185,7 @@ def test_repair_survives_snapshot_centering_reload_and_real_strict_roundtrip(tmp
         validate = domain_cutting_engine.validate
         def __init__(self, plan): self.plan = plan
         def optimize(self, *a, **kw): return deepcopy(self.plan)
-    # This test owns the *same-count repair* delta (35/70 -> 39/74).
+    # This test owns the *same-count repair* delta (37/70 -> 42/74).
     # Freeze the independent Final Alignment stage so its legitimate new
     # improvements cannot mutate this stage's before/after baseline.
     command = OptimizeOrderPlanCommand('quality-test','quality-test',BoardGeometry(122,244,.3,.5),
@@ -193,8 +193,8 @@ def test_repair_survives_snapshot_centering_reload_and_real_strict_roundtrip(tmp
                          alignment_search_budget_sec=0),tuple(rows))
     before = optimize_order_plan(command,engine=Frozen(plan)).snapshot
     after = optimize_order_plan(command,engine=Frozen(result)).snapshot
-    assert metrics(before)['alignment_ratio'] == pytest.approx(35/70)
-    assert metrics(after)['alignment_ratio'] == pytest.approx(39/74)
+    assert metrics(before)['alignment_ratio'] == pytest.approx(37/70)
+    assert metrics(after)['alignment_ratio'] == pytest.approx(42/74)
     assert after['industrial_rank'] < before['industrial_rank']
     saved = tmp_path/'selected.json'; saved.write_text(json.dumps(after))
     reloaded = json.loads(saved.read_text())

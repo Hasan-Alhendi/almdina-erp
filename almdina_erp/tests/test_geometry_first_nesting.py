@@ -129,10 +129,16 @@ def test_complete_pair_outcome_beats_quad_without_forcing_nest_count():
 
 
 def test_nonidentical_glass_L_clipped_complete_one_board_together():
-    from almdina_erp.almdina_erp.domain.cutting.plan_portfolio import nesting_coverage
-    _,plan=run('P5-joint-different',budget=4)
+    pieces,plan=run('P5-joint-different',budget=4)
     assert len(plan['sheets'])==1
-    assert {'Glass','L-Shaped Corner','Clipped Corner','Joint'}<=nesting_coverage(plan)
+    assert not validate_plan(plan,pieces,136.4,45.3,kerf_cm=.3)
+    assert not placement_permission_errors(plan,pieces,mirroring_allowed=False)
+    placed=[p for sheet in plan['sheets'] for p in sheet['pieces']]
+    assert {'Glass','L-Shaped Corner','Clipped Corner'} <= {p['piece_type'] for p in placed}
+    # Glass in nesting_coverage means a glass *guest*, not a Glass door.
+    # A valid one-board plan may use corner interlocks and place Glass directly;
+    # the time-budgeted search must not be forced to select one nesting style.
+    assert {p['piece_instance_id'] for p in placed} == {p['piece_instance_id'] for p in pieces}
 
 
 @pytest.mark.parametrize('kerf',[0,.3,.7])
