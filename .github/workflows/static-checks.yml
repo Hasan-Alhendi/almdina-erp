@@ -10,6 +10,45 @@ permissions:
   contents: read
 
 jobs:
+  simple-final-positioning:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Install existing test dependencies
+        run: python -m pip install '.[test]'
+      - name: Verify final positioning, manufacturing, lifecycle and actual DXF
+        run: >-
+          python -m pytest -q
+          almdina_erp/tests/test_simple_final_placement.py
+          almdina_erp/tests/test_simple_placement_settings.py
+          almdina_erp/tests/test_final_cut_line_alignment.py
+          almdina_erp/tests/test_sheet_edge_trim.py
+          almdina_erp/tests/test_alns_recalculation.py
+          almdina_erp/tests/test_compound_layout_refinement.py
+          almdina_erp/tests/test_pattern_layout_search.py
+          almdina_erp/tests/test_coupled_corner_frames.py
+          almdina_erp/tests/test_smart_cutting_lifecycle.py
+          almdina_erp/tests/test_cutting_plan_application.py
+          almdina_erp/tests/test_cutting_execution_trace.py
+          almdina_erp/tests/test_smart_cutting_manufacturing.py
+          almdina_erp/tests/test_plan_fingerprint_compatibility.py
+          almdina_erp/tests/test_cutting_domain_architecture.py
+          almdina_erp/tests/test_cutting_plan_architecture.py
+          almdina_erp/tests/test_locale_text_branch_gate.py
+          almdina_erp/tests/test_translation_catalog_gate.py
+      - name: Verify settings, gallery and Board Editor contracts
+        run: |
+          node almdina_erp/tests/js/factory_edge_protection.test.js
+          node almdina_erp/tests/js/plan_candidate_gallery.test.js
+          node almdina_erp/tests/js/board_editor_open.test.js
+
   static-validation:
     runs-on: ubuntu-latest
     steps:

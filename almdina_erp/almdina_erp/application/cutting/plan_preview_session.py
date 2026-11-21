@@ -4,6 +4,7 @@ from dataclasses import asdict, dataclass, field
 from typing import Any, Mapping
 
 from almdina_erp.almdina_erp.domain.orders.plan_fingerprint import fingerprint_payload
+from almdina_erp.almdina_erp.domain.cutting.plan_settings import EDGE_PROTECTION_FIELDS, EdgeProtectionPolicy
 
 
 PREVIEW_SESSION_VERSION = 2
@@ -40,6 +41,9 @@ def optimizer_settings_fingerprint(settings: Mapping[str, Any]) -> str:
         payload["settings"]["max_centerable_edge_gap_cm"] = float(
             settings.get("max_centerable_edge_gap_cm") or 0
         )
+    if any(key in settings for key in EDGE_PROTECTION_FIELDS):
+        payload["version"] = 3
+        payload["settings"].update(EdgeProtectionPolicy.from_settings(settings).field_values())
     return fingerprint_payload(payload)
 
 

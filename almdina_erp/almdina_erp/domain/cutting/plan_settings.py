@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from typing import Any
 
@@ -24,6 +25,37 @@ DEFAULT_PREFERRED_TRIM_MM = 5.0
 
 class PlanSettingsValidationError(ValueError):
     """Raised when optimizer settings violate the canonical product contract."""
+
+
+EDGE_PROTECTION_FIELDS = (
+    "edge_protection_horizontal_mm",
+    "edge_protection_vertical_mm",
+)
+
+
+@dataclass(frozen=True, slots=True)
+class EdgeProtectionPolicy:
+    """Factory-owned placement preference, separate from packing and saved trim."""
+
+    horizontal_mm: float = 0.0
+    vertical_mm: float = 0.0
+
+    def __post_init__(self) -> None:
+        for attribute, fieldname in zip(("horizontal_mm", "vertical_mm"), EDGE_PROTECTION_FIELDS):
+            value = _finite_number(getattr(self, attribute), fieldname)
+            if value < 0:
+                raise PlanSettingsValidationError(f"plan_setting_cannot_be_negative:{fieldname}")
+            object.__setattr__(self, attribute, value)
+
+    def field_values(self) -> dict[str, float]:
+        return dict(zip(EDGE_PROTECTION_FIELDS, (self.horizontal_mm, self.vertical_mm)))
+
+    @classmethod
+    def from_settings(cls, values: Any) -> EdgeProtectionPolicy:
+        """Missing fields on pre-migration installations mean disabled, never a new inset."""
+        stored = [values.get(key) if isinstance(values, Mapping) else getattr(values, key, None)
+                  for key in EDGE_PROTECTION_FIELDS]
+        return cls(*(0.0 if value is None else value for value in stored))
 
 
 @dataclass(frozen=True, slots=True, init=False)
@@ -74,7 +106,7 @@ class PlanSettings:
 def _finite_number(value: Any, fieldname: str) -> float:
     try:
         normalized = float(value)
-    except (TypeError, ValueError) as error:
+    except (TypeError, ValueError, OverflowError) as error:
         raise PlanSettingsValidationError(
             f"invalid_plan_setting:{fieldname}"
         ) from error
@@ -186,6 +218,8 @@ def canonical_default_plan_settings() -> PlanSettings:
 
 
 __all__ = [
+    "EDGE_PROTECTION_FIELDS",
+    "EdgeProtectionPolicy",
     "DEFAULT_KERF_MM",
     "DEFAULT_MACHINE_TYPE",
     "DEFAULT_OPTIMIZATION_TIME_LIMIT_SEC",
