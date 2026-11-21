@@ -28,6 +28,7 @@ jobs:
             almdina_erp/tests/test_dxf_import_service.py \
             almdina_erp/tests/test_edge_protection.py \
             almdina_erp/tests/test_geometry_aware_final_placement.py \
+            almdina_erp/tests/test_final_placement_budget.py \
             almdina_erp/tests/test_final_cut_line_alignment.py \
             almdina_erp/tests/test_sheet_edge_trim.py \
             almdina_erp/tests/test_cutter_center_paths.py

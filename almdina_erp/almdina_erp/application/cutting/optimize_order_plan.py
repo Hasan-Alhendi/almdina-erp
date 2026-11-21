@@ -3,6 +3,7 @@ from __future__ import annotations
 import math
 from copy import deepcopy
 import time
+from time import perf_counter
 from dataclasses import dataclass, replace
 from typing import Any, Protocol
 
@@ -438,6 +439,30 @@ def _refine_pattern_gallery(command,engine,expanded,seeds,incumbent,applied_trim
 def _snapshot_outcome(command, engine, plan, expanded, applied_trim, trim_decision, plan_settings, *,
                       alignment_budget=None):
     """One manufacturing snapshot projection for the default and every alternative."""
+    protection_enabled = bool(command.optimizer.edge_protection.horizontal_mm
+                              or command.optimizer.edge_protection.vertical_mm)
+    configured = command.optimizer.alignment_search_budget_sec
+    allowed = (max(0.0, min(configured, command.optimizer.time_limit_sec))
+               if math.isfinite(configured) and configured >= 0 else 0.0)
+
+    def final_placement_deadline():
+        nonlocal alignment_budget
+        # Positive protection reserves a share before preparation. The disabled
+        # policy still starts the legacy tail only when alignment is entered.
+        if alignment_budget is None:
+            alignment_budget = {"deadline": None}
+        if alignment_budget["deadline"] is None:
+            alignment_budget["deadline"] = time.monotonic() + allowed
+        now = time.monotonic()
+        remaining = max(1, int(alignment_budget.get("remaining_candidates") or 1))
+        return now + max(0.0, alignment_budget["deadline"]-now)/remaining
+
+    finalization_started = perf_counter()
+    placement_diagnostics = {} if protection_enabled else None
+    baseline_proof = None
+    candidate_deadline = (final_placement_deadline() if protection_enabled
+                          and plan_settings.optimization_mode == "smart" and allowed > 0 else None)
+
     board = command.board
     plan["kerf_cm"] = board.kerf_cm
     usable_width_cm = applied_trim.usable_width_cm(
@@ -489,23 +514,6 @@ def _snapshot_outcome(command, engine, plan, expanded, applied_trim, trim_decisi
         plan["sheets"] = original_sheets
         plan = _enrich_final_geometry_metrics(plan, metric_options)
 
-    protection_enabled = bool(command.optimizer.edge_protection.horizontal_mm
-                              or command.optimizer.edge_protection.vertical_mm)
-    configured = command.optimizer.alignment_search_budget_sec
-    allowed = (max(0.0, min(configured, command.optimizer.time_limit_sec))
-               if math.isfinite(configured) and configured >= 0 else 0.0)
-
-    def final_placement_deadline():
-        nonlocal alignment_budget
-        # Snapshot preparation does not consume the shared alignment tail.
-        if alignment_budget is None:
-            alignment_budget = {"deadline": None}
-        if alignment_budget["deadline"] is None:
-            alignment_budget["deadline"] = time.monotonic() + allowed
-        now = time.monotonic()
-        remaining = max(1, int(alignment_budget.get("remaining_candidates") or 1))
-        return now + max(0.0, alignment_budget["deadline"]-now)/remaining
-
     if plan_settings.optimization_mode == "smart":
         # An invalid centering proposal must not make alignment a no-op and
         # then be rolled back only *after* the refinement opportunity is gone.
@@ -514,7 +522,8 @@ def _snapshot_outcome(command, engine, plan, expanded, applied_trim, trim_decisi
             align_regular_cut_lines, validate_alignment_baseline, has_regular_alignment_candidates,
         )
         baseline_proof = None
-        if allowed > 0 and has_regular_alignment_candidates(plan, expanded, machine_type):
+        if (allowed > 0 and not protection_enabled
+                and has_regular_alignment_candidates(plan, expanded, machine_type)):
             baseline_proof = validate_alignment_baseline(plan, expanded, usable_width_cm, usable_length_cm,
                 board.kerf_cm, mirroring_allowed=piece_mirroring_allowed(command.allow_piece_mirroring))
             if baseline_proof is None:
@@ -539,10 +548,22 @@ def _snapshot_outcome(command, engine, plan, expanded, applied_trim, trim_decisi
                 baseline_proof=baseline_proof,
             )
 
-    def validate_snapshot_plan() -> list[str]:
-        errors = list(
-            engine.validate(plan, expanded, usable_width_cm, usable_length_cm)
-        )
+    snapshot_validation_sec = 0.0
+    def validate_snapshot_plan(*, record_proof=False) -> list[str]:
+        nonlocal snapshot_validation_sec, baseline_proof
+        validation_started = perf_counter()
+        errors = []
+        def validate_geometry(candidate,sources,width,height,**kwargs):
+            result = list(engine.validate(candidate,sources,width,height))
+            errors.extend(result)
+            return result
+        if record_proof:
+            from almdina_erp.almdina_erp.domain.cutting.final_cut_line_alignment import validate_alignment_baseline
+            baseline_proof = validate_alignment_baseline(plan,expanded,usable_width_cm,usable_length_cm,
+                board.kerf_cm,mirroring_allowed=piece_mirroring_allowed(command.allow_piece_mirroring),
+                validate_geometry=validate_geometry)
+        else:
+            validate_geometry(plan,expanded,usable_width_cm,usable_length_cm)
         errors.extend(
             placement_permission_errors(
                 plan,
@@ -556,14 +577,17 @@ def _snapshot_outcome(command, engine, plan, expanded, applied_trim, trim_decisi
             errors.append(
                 "تعذر وضع جميع القطع ضمن أبعاد اللوح والهامش الأدنى المحددين."
             )
+        snapshot_validation_sec += perf_counter()-validation_started
         return errors
 
-    validation_errors = validate_snapshot_plan()
+    validation_errors = validate_snapshot_plan(record_proof=protection_enabled)
     if validation_errors and plan.get("sheets") != original_sheets:
         plan["sheets"] = original_sheets
         plan = _enrich_final_geometry_metrics(plan, metric_options)
-        validation_errors = validate_snapshot_plan()
+        validation_errors = validate_snapshot_plan(record_proof=protection_enabled)
 
+    if placement_diagnostics is not None:
+        preparation_sec = perf_counter()-finalization_started
     edge_decisions = []
     if not validation_errors:
         from almdina_erp.almdina_erp.domain.cutting.edge_protection import protect_plan_edges
@@ -579,17 +603,21 @@ def _snapshot_outcome(command, engine, plan, expanded, applied_trim, trim_decisi
             machine_type=machine_type,
             mirroring_allowed=piece_mirroring_allowed(command.allow_piece_mirroring),
             metric_options={key: value for key, value in metric_options.items() if key != "machine_type"},
-            deadline_monotonic=(final_placement_deadline() if protection_enabled
-                                and plan_settings.optimization_mode == "smart" and allowed > 0 else None),
+            deadline_monotonic=candidate_deadline,
+            diagnostics=placement_diagnostics,
+            baseline_proof=baseline_proof,
             align_cut_lines=plan_settings.optimization_mode == "smart" and allowed > 0,
         )
         if plan is not before_protection:
             validation_errors = validate_snapshot_plan()
             if validation_errors:
                 plan = before_protection
+                if placement_diagnostics is not None:
+                    placement_diagnostics.update(rolled_back=True,
+                        accepted_before_adapter=placement_diagnostics.get("accepted",0),accepted=0)
                 for decision in edge_decisions:
                     if decision.get("piece_shifts_mm") or decision["shift_mm"]:
-                        decision.update(reason="UNSAFE_MOVE", shift_mm=0.0, detail="final_validation")
+                        decision.update(reason="GEOMETRY_REJECTED", shift_mm=0.0, detail="final_validation")
                         decision.pop("piece_shifts_mm", None)
                 validation_errors = validate_snapshot_plan()
 
@@ -663,6 +691,14 @@ def _snapshot_outcome(command, engine, plan, expanded, applied_trim, trim_decisi
             "errors": list(validation_errors),
         },
     }
+
+    if placement_diagnostics is not None:
+        placement_diagnostics.update(preparation_sec=preparation_sec,
+            finalization_sec=perf_counter()-finalization_started,
+            snapshot_validation_sec=snapshot_validation_sec,
+            candidate_deadline_remaining_sec=(max(0.0,candidate_deadline-time.monotonic())
+                                             if candidate_deadline is not None else None))
+        snapshot["final_placement_diagnostics"] = placement_diagnostics
 
     return OptimizationOutcome(
         snapshot=snapshot,

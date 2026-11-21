@@ -37,14 +37,18 @@ class _BaselineProof:
                 and self.plan == plan and self.sources == sources)
 
 
-def validate_alignment_baseline(plan, sources, width, height, kerf, *, mirroring_allowed):
+def validate_alignment_baseline(plan, sources, width, height, kerf, *, mirroring_allowed,
+                                validate_geometry=None):
     """An ephemeral full-validation proof, never a snapshot/client trust flag.
 
     Reuse is restricted to exact complete plan/source/context equality. Any
-    movement, metadata or permission change invalidates it. The final System
+    movement, metadata or permission change invalidates it. Application may
+    provide its independent engine validation port so the same complete check
+    supplies the proof instead of repeating it. No client proof is accepted.
+    The final System
     snapshot still receives its independent full manufacturing validation.
     """
-    if (validate_plan(plan, sources, width, height, kerf_cm=kerf)
+    if ((validate_geometry or validate_plan)(plan, sources, width, height, kerf_cm=kerf)
             or placement_permission_errors(plan, sources, mirroring_allowed=mirroring_allowed)):
         return None
     return _BaselineProof(deepcopy(plan), deepcopy(sources), (width, height, kerf, mirroring_allowed))
@@ -322,6 +326,7 @@ def _candidate_moves(
     plan: dict[str, Any], kerf_cm: float,
     eligible_by_sheet: dict[int, set[int]],
     deadline: float | None,
+    *, max_events: int | None = None,
 ) -> list[tuple[int, str, tuple[int, ...], float]]:
     """Axis events plus real shared-center contacts; no mm-by-mm scanning."""
     targets: dict[tuple[int, str, tuple[int, ...], float], int] = {}
@@ -332,13 +337,16 @@ def _candidate_moves(
             continue
         by_id = {int(p["id"]): p for p in pieces}
         for axis in ("x", "y"):
+            axis_count = 0
             size = "w" if axis == "x" else "h"
             cross, cross_size = ("y", "h") if axis == "x" else ("x", "w")
             candidate_groups = set(_groups(sheet, axis))
             candidate_groups.update(
                 _contact_preserving_groups(sheet, kerf_cm, eligible)
             )
-            for ids in sorted(candidate_groups, key=lambda group: (len(group), group)):
+            for ids in sorted(candidate_groups, key=lambda group: (-len(group) if max_events is not None else len(group), group)):
+                if max_events is not None and axis_count >= max_events // 2:
+                    break
                 if deadline is not None and time.monotonic() >= deadline:
                     break
                 if not set(ids).issubset(eligible):
@@ -350,8 +358,14 @@ def _candidate_moves(
                     continue
                 lo, hi = movable_range
                 for a in members:
+                    if max_events is not None and (axis_count >= max_events // 2
+                            or (deadline is not None and time.monotonic() >= deadline)):
+                        break
                     a0, a1 = num(a[axis]), num(a[axis]) + num(a[size])
                     for b in fixed:
+                        if max_events is not None and (axis_count >= max_events // 2
+                                or (deadline is not None and time.monotonic() >= deadline)):
+                            break
                         if int(b["id"]) not in eligible:
                             continue
                         b0, b1 = num(b[axis]), num(b[axis]) + num(b[size])
@@ -366,18 +380,23 @@ def _candidate_moves(
                         priority = 2 if gap <= kerf_cm + _EPS else 1
                         shifts = [(b0 - a0, priority), (b1 - a1, priority)]
                         for delta, priority in shifts:
+                            if max_events is not None and axis_count >= max_events // 2:
+                                break
                             if _EPS < abs(delta) and lo - _EPS <= delta <= hi + _EPS:
                                 key = (sheet_index, axis, ids, round(delta, 6))
+                                if key not in targets:
+                                    axis_count += 1
                                 targets[key] = max(priority, targets.get(key, 0))
     # Estimate geometric coherence BEFORE the expensive full-plan validation.
     # Do not mistake this estimate for CNC savings or use it for acceptance.
-    projected = {
-        move: _projected_axis_gain(
-            plan["sheets"][move[0]], move[1], move[2], move[3],
-            kerf_cm, eligible_by_sheet.get(move[0], set()),
-        )
-        for move in targets
-    }
+    projected = {}
+    for move in targets:
+        if max_events is not None and deadline is not None and time.monotonic() >= deadline:
+            break
+        projected[move] = _projected_axis_gain(plan["sheets"][move[0]], move[1], move[2], move[3],
+                                             kerf_cm, eligible_by_sheet.get(move[0], set()))
+    if max_events is not None:
+        targets = {move: targets[move] for move in projected}
     # Reserve exploration for real shared cuts and independent axes. Rank
     # candidates by expected coherence, not merely the smallest displacement.
     key = lambda item: (-projected[item], -len(item[2]), abs(item[3]),

@@ -1,5 +1,9 @@
 # Geometry-aware final placement — evidence
 
+The initial scheduling measured here is superseded by the
+[multi-board budget starvation correction](final-placement-budget/README.md).
+Its explicit coverage/timing/remaining-limit comparisons use `1a07d119` as baseline.
+
 Branch `feature/smart-edge-protection`, Draft PR #606, base Develop `2367b8ff`.
 Implementation follows the initial protection/settings commits `f82f2027` and
 `d5f96305`; the whole-sheet-only policy is superseded.

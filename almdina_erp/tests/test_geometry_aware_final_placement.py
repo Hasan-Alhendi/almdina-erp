@@ -177,7 +177,7 @@ def test_offcut_and_panel_saw_are_conservative_noops(kind):
         plan["sheets"][0]["resource_kind"] = kind
     result, decisions = finish(plan, sources, machine_type=kind if kind == "Panel Saw" else "CNC Router")
     assert result is plan
-    assert all(d["reason"] == "UNSAFE_MOVE" for d in decisions)
+    assert all(d["reason"] == "GEOMETRY_REJECTED" for d in decisions)
 
 
 def test_dense_sheet_over_existing_64_piece_cap_skips_expensive_work(monkeypatch):
@@ -196,17 +196,21 @@ def test_expired_budget_skips_and_expiry_after_acceptance_retains_best_proven(mo
     plan, sources = three_widths_witness()
     assert finish(plan, sources, deadline_monotonic=0)[0] is plan
     expired = [False]
-    enrich = edge.enrich_plan_metrics
+    validate = edge.validate_plan
     def expire(*args, **kwargs):
-        result = enrich(*args, **kwargs)
-        expired[0] = True
+        result = validate(*args, **kwargs)
+        if args[0]["sheets"][0]["pieces"][1]["x"] > 0:
+            expired[0] = True
         return result
     monkeypatch.setattr(edge, "time", SimpleNamespace(monotonic=lambda: 100 if expired[0] else 1))
-    monkeypatch.setattr(edge, "enrich_plan_metrics", expire)
+    monkeypatch.setattr(edge, "validate_plan", expire)
     diagnostics = {}
     result, _ = finish(plan, sources, policy=EdgeProtectionPolicy(15, 0),
                        deadline_monotonic=10, diagnostics=diagnostics)
-    assert positions(result)[2][0] == 1.5
+    # The early pass proves 15.5/15.5 mm before the later 15/16 mm alignment
+    # alternative. Expiry must retain that exact completed basic candidate.
+    assert positions(result)[2][0] == pytest.approx(1.55)
+    assert positions(result)[1][0] == 1.5
     assert diagnostics["accepted"] == 1
     assert not validate_plan(result, sources, 122, 244, kerf_cm=.5)
 

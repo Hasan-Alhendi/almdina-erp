@@ -170,7 +170,7 @@ def test_attached_toolpaths_on_sheet_or_plan_are_not_left_at_old_coordinates(own
     (plan["sheets"][0] if owner == "sheet" else plan)["cnc_toolpaths"] = [[0, 0], [75, 0]]
     result, decisions = _protect(plan, sources)
     assert result == plan
-    assert all(d["reason"] == "UNSAFE_MOVE" for d in decisions)
+    assert all(d["reason"] == "GEOMETRY_REJECTED" for d in decisions)
 
 
 def test_industrial_alignment_can_replace_separate_centering_safely():
@@ -194,7 +194,7 @@ def test_impossible_target_and_failed_full_validation_leave_no_partial_mutations
     monkeypatch.setattr(edge_protection, "validate_plan", lambda *a, **k: ["unsafe"])
     result, decisions = _protect(plan, sources)
     assert result == plan
-    assert all(d["reason"] == "UNSAFE_MOVE" and d["shift_mm"] == 0 for d in decisions)
+    assert all(d["reason"] == "GEOMETRY_REJECTED" and d["shift_mm"] == 0 for d in decisions)
 
 
 def test_axis_rejection_does_not_block_a_safe_move_on_the_other_axis():
@@ -202,7 +202,7 @@ def test_axis_rejection_does_not_block_a_safe_move_on_the_other_axis():
     result, decisions = _protect(plan, sources, policy=EdgeProtectionPolicy(200, 10))
     piece = result["sheets"][0]["pieces"][0]
     assert (piece["x"], piece["y"]) == (0, 1)
-    assert [d["reason"] for d in decisions] == ["UNSAFE_MOVE", "EDGE_PROTECTED"]
+    assert [d["reason"] for d in decisions] == ["GEOMETRY_REJECTED", "EDGE_PROTECTED"]
 
 
 def _command(**optimizer_options):
