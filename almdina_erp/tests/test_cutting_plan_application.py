@@ -756,7 +756,10 @@ class TestSmartFallbackProjection(unittest.TestCase):
         original = self.app._snapshot_outcome
 
         def project(*args, **kwargs):
-            calls.append(args[2]["projection_probe"])
+            # The probe counts search candidate projections; selected snapshots
+            # receive a later positioning/validation projection, without packing.
+            if not kwargs.get("final_positioning"):
+                calls.append(args[2]["projection_probe"])
             return original(*args, **kwargs)
 
         command = OptimizeOrderPlanCommand(
