@@ -2970,18 +2970,18 @@ Decrease the measurement,إنقاص القياس
 Row {0}: {1},السطر {0}: {1}
 "Row {0}: Piece dimensions {1} × {2} cm do not fit the board {3} × {4} cm, even after allowed rotation.",السطر {0}: قياسات الدرفة {1} × {2} سم لا تتسع ضمن اللوح {3} × {4} سم حتى بعد السماح بالدوران.
 The finished contour on GEOMETRY is not valid. {0},المحيط النهائي على طبقة GEOMETRY غير صالح. {0}
-Correct the finished contour on GEOMETRY, then upload the file again.,صحح المحيط النهائي على طبقة GEOMETRY ثم أعد رفع الملف.
+"Correct the finished contour on GEOMETRY, then upload the file again.",صحح المحيط النهائي على طبقة GEOMETRY ثم أعد رفع الملف.
 Contour {0} on layer {1}.,المحيط {0} على طبقة {1}.
 invalid geometry,هندسة غير صالحة
 A regular door could not be matched because the DXF contour is not a rectangle.,تعذر مطابقة درفة عادية لأن المحيط في DXF غير مستطيل.
 A special door could not be matched because the rectangular contour has no internal opening.,تعذر مطابقة درفة خاصة لأن المحيط مستطيل بلا فتحة داخلية.
-Use a non-rectangular contour, or add at least one internal through-cut opening inside the rectangle.,استخدم محيطًا غير مستطيل، أو أضف فتحة قص نافذة واحدة على الأقل داخل المستطيل.
+"Use a non-rectangular contour, or add at least one internal through-cut opening inside the rectangle.",استخدم محيطًا غير مستطيل، أو أضف فتحة قص نافذة واحدة على الأقل داخل المستطيل.
 A regular door cannot contain an internal through-cut opening.,لا يمكن أن تحتوي الدرفة العادية على فتحة قص نافذة.
 Remove the opening from the regular door contour.,أزل الفتحة من محيط الدرفة العادية.
 An internal opening cannot be cut with the selected cutter.,لا يمكن قص الفتحة الداخلية بالريشة المختارة.
 Enlarge the opening or choose a cutter that fits inside it.,كبّر الفتحة أو اختر ريشة تدخل داخلها.
 Glass and special doors with the same opening cannot be told apart.,تعذّر تمييز درفة البلور عن الدرفة الخاصة لأن الفتحة نفسها تطابق الاثنتين.
-Add manufacturing evidence that identifies each door, then import again.,أضف دليل تصنيع يميز كل درفة ثم أعد الاستيراد.
+"Add manufacturing evidence that identifies each door, then import again.",أضف دليل تصنيع يميز كل درفة ثم أعد الاستيراد.
 "The special-door group {0} × {1} cm has an extra {2} that the order does not require.",مجموعة الدرفات الخاصة {0} × {1} سم تحتوي على {2} إضافي غير مطلوب.
 "The special-door group {0} × {1} cm is missing a required {2}.",مجموعة الدرفات الخاصة {0} × {1} سم تفتقد {2} المطلوبة.
 That path is on a regular door and is not counted for the special door.,ذلك المسار على درفة عادية ولا يُحتسب للدرفة الخاصة.

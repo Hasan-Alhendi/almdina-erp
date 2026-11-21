@@ -1158,8 +1158,8 @@
         const canPrepare = Boolean(workspace && workspace.can_prepare);
         const control = generateNcControlState({ canPrepare });
         return `<div class="dco-operational-sheet__export" data-cnc-export-bar>
-            <div class="dco-operational-sheet__export-actions">
-                <button type="button" class="btn btn-primary btn-sm" data-cnc-save-sheet${canPrepare ? "" : " disabled"}>${escapeHtml(translate("Save sheet settings"))}</button>
+            <div class="dco-operational-sheet__export-actions almdina-ui">
+                <button type="button" class="btn alm-btn-primary btn-sm" data-cnc-save-sheet${canPrepare ? "" : " disabled"}>${escapeHtml(translate("Save sheet settings"))}</button>
                 <button type="button" class="btn btn-default btn-sm" data-cnc-generate-nc data-cnc-page-action="generate"${control.disabled ? " disabled" : ""} title="${escapeHtml(control.reason || "")}">${escapeHtml(translate("Generate NC file"))}</button>
             </div>
         </div>`;
