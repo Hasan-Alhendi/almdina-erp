@@ -83,7 +83,7 @@ No saved/Approved/Uploaded plan is automatically repositioned. Preview commit sa
 
 ## Validation and inherited failures
 
-Final focused run: **170 passed, 151 subtests**; the additional exact-Special polygon regression passes. Previous alignment/ALNS/Pattern/Corner/trim/lifecycle run: **172 passed**. Full independent job results and exact-head CI audit are recorded in the Draft PR. Settings/gallery/Board Editor JavaScript contracts pass. No validator or golden schema assertion was weakened.
+Final focused run: **170 passed, 151 subtests**; the additional exact-Special polygon regression passes. Previous alignment/ALNS/Pattern/Corner/trim/lifecycle run: **172 passed**. The full independent local run reached 342 passes and two failures: the inherited five-second trim=0.1 case, and a DXF-test sorting artifact where float tails reordered equal-X pieces. The latter now sorts at 1e-6 cm precision, well below its unchanged 1e-4 cm assertion tolerance; the actual native export/import regression passes. Full independent job results and exact-head CI audit are recorded in the Draft PR. Settings/gallery/Board Editor JavaScript contracts pass. No validator or golden schema assertion was weakened.
 
 The new mixed-axis fallback regression first fails with 1.5/1.5 instead of 1.75/1.5, then passes after preserving the safe horizontal center. Application projection probes now count candidate preparation separately from selected final positioning; their fallback/validation assertions remain intact.
 
