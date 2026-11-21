@@ -157,6 +157,7 @@ class SpecialDoorAddonDxfMatchingTest(unittest.TestCase):
     def test_glass_and_corners_are_not_reclassified_as_special(self) -> None:
         rectangle = ContourCandidate(1, ((0, 0), (400, 0), (400, 600), (0, 600)))
         notch = ContourCandidate(2, ((0, 0), (500, 0), (500, 200), (200, 200), (200, 500), (0, 500)))
+        clipped_contour = ContourCandidate(3, ((0, 0), (400, 0), (400, 500), (300, 600), (0, 600)))
         glass = resolve_contour_ownership(
             (rectangle,),
             (ExpectedPieceEvidence(400, 600, False, piece_type="Glass"),),
@@ -164,11 +165,20 @@ class SpecialDoorAddonDxfMatchingTest(unittest.TestCase):
             geometry_tolerance=0.25,
         )
         clipped = resolve_contour_ownership(
-            (rectangle,),
+            (clipped_contour,),
             (ExpectedPieceEvidence(400, 600, False, piece_type="Clipped Corner"),),
             dimension_tolerance=2,
             geometry_tolerance=0.25,
         )
+        # A plain rectangle cannot substantiate a clipped-corner identity.
+        with self.assertRaises(DxfTopologyError) as ordinary:
+            resolve_contour_ownership(
+                (rectangle,),
+                (ExpectedPieceEvidence(400, 600, False, piece_type="Clipped Corner"),),
+                dimension_tolerance=2,
+                geometry_tolerance=0.25,
+            )
+        self.assertEqual(ordinary.exception.code, "EXPECTED_PIECE_MISMATCH")
         shaped = resolve_contour_ownership(
             (notch,),
             (ExpectedPieceEvidence(500, 500, False, piece_type="L-Shaped Corner"),),
