@@ -16,6 +16,9 @@ from frappe.utils import cint
 from almdina_erp.almdina_erp.application.cutting.board_editor_projection import (
     project_board_editor,
 )
+from almdina_erp.almdina_erp.domain.cutting.board_editor_draft_review import (
+    apply_plan_tool_diameters,
+)
 from almdina_erp.almdina_erp.application.orders.plan_snapshot_security import (
     sanitize_plan_snapshot,
 )
@@ -611,13 +614,16 @@ def get_board_editor_projection(
         # Uploaded originals may contribute LAYER table + unbound references.
         enrichment = _uploaded_dxf_enrichment(order, plan)
 
-    projection = project_board_editor(
-        snapshot,
-        source_kind=source_kind,
-        layer_table=enrichment["layer_table"],
-        reference_entities=enrichment["reference_entities"],
-        saw_center_status=str(getattr(plan, "saw_center_status", "") or "") or None,
-        default_edge_type=str(getattr(order, "default_edge_type", "") or ""),
+    projection = apply_plan_tool_diameters(
+        project_board_editor(
+            snapshot,
+            source_kind=source_kind,
+            layer_table=enrichment["layer_table"],
+            reference_entities=enrichment["reference_entities"],
+            saw_center_status=str(getattr(plan, "saw_center_status", "") or "") or None,
+            default_edge_type=str(getattr(order, "default_edge_type", "") or ""),
+        ),
+        plan,
     )
     if enrichment["diagnostics"]:
         projection.setdefault("diagnostics", [])

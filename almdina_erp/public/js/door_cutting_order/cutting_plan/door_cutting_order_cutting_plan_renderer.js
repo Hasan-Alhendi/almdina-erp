@@ -1447,12 +1447,22 @@
         return kept.concat(tool);
     }
 
+    function dxfDisplayOverlays(piece) {
+        const persisted = Array.isArray(piece && piece.overlays) ? piece.overlays : [];
+        const liner = window.AlmdinaLinerGeometry;
+        const visuals = liner && typeof liner.visualDisplayOverlays === "function"
+            ? liner.visualDisplayOverlays(piece)
+            : [];
+        if (!visuals.length) return persisted;
+        return persisted.filter(item => !(item && item.kind === "liner")).concat(visuals);
+    }
+
     function render_piece_overlays(frm, piece, geometryModel, sheet, frame) {
         const spec = pieceWithLinerSpec(frm, piece);
         // DXF paths are imported physical evidence. A synthetic redraw from
         // order-side settings can reverse their orientation after a half-turn.
         const overlays = geometryModel && geometryModel.source === "dxf"
-            ? (Array.isArray(piece.overlays) ? piece.overlays : [])
+            ? dxfDisplayOverlays(piece)
             : guardLinerToolpath(
                 frm,
                 spec,

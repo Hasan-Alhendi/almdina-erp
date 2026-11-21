@@ -40,6 +40,7 @@ from almdina_erp.almdina_erp.domain.cutting.offcut_policy import (
 )
 from almdina_erp.almdina_erp.domain.cutting.plan_lifecycle import BOARD_EDITOR
 from almdina_erp.almdina_erp.domain.cutting.primitives import num
+from almdina_erp.almdina_erp.domain.orders.extra_addons import extra_overlay_layer_for_kind
 
 METHOD_KEY = "board_editor"
 METHOD_LABEL = "Board Editor"
@@ -498,10 +499,14 @@ def _overlays_from_machining(paths: Sequence[Mapping[str, Any]]) -> list[dict[st
         if len(points) < 2:
             continue
         kind = str(item.get("kind") or item.get("addon_kind") or "machining")
+        try:
+            layer = extra_overlay_layer_for_kind(kind)
+        except KeyError:
+            layer = str(item.get("layer") or kind)
         overlays.append(
             {
                 "kind": kind,
-                "layer": str(item.get("layer") or kind),
+                "layer": layer,
                 "geometry": serialize_overlay_geometry_mm(
                     points,
                     closed=bool(item.get("closed")),

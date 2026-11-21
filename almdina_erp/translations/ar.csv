@@ -3641,6 +3641,7 @@ A machining add-on conflicts with neighbouring material.,إضافة تصنيع �
 The {0} add-on conflicts with neighbouring material.,إضافة {0} تتعارض مع مادة مجاورة.
 The {0} add-on conflicts with neighbouring material ({1}).,إضافة {0} تتعارض مع مادة مجاورة ({1}).
 "The {0} add-on has no proven geometry ({1}), so readiness cannot be declared.",إضافة {0} بلا هندسة مثبتة ({1})، لذلك لا يمكن إعلان الجاهزية.
+"The liner tool is wider than the liner strip, so no machining path was stored with this copy.",ريشة اللاينر أعرض من شريط اللاينر، لذلك لم يُحفظ مسار تشغيل مع هذه النسخة.
 "This piece has no supported geometry ({0}), so it cannot be marked ready.",هذه القطعة بلا هندسة مدعومة ({0})، لذلك لا يمكن إعلانها جاهزة.
 Create cutting plan copy,إنشاء نسخة خطة قص
 Save the current distribution before creating a cutting plan copy.,احفظ التوزيع الحالي قبل إنشاء نسخة خطة قص.
