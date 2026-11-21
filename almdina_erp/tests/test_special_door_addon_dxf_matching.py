@@ -17,6 +17,7 @@ install_if_unavailable()
 
 from almdina_erp.almdina_erp.domain.cutting.dxf_topology import (
     ContourCandidate,
+    DxfTopologyError,
     ExpectedPieceEvidence,
     resolve_contour_ownership,
 )
