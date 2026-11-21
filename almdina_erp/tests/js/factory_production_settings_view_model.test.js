@@ -211,7 +211,7 @@ const arModel = moduleApi.create({
 });
 const arBackup = arModel.page(backupCurrent);
 assert.equal(arBackup.sections[7].rows[2].value, "آخر 7 نسخ احتياطية");
-assert.equal(arModel.sections(current)[0].rows[5].value, "تلقائي");
+assert.equal(arModel.catalogLabel(current, "optimization_catalog", "auto"), "تلقائي");
 
 const restoreOnly = model.page({
     values: {},
