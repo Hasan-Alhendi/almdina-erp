@@ -1121,6 +1121,27 @@
         };
     }
 
+    function reflectDisplayPath(path, piece) {
+        // Session mirror flags are the only pose not already in the loaded path.
+        // Reflect once about the entry pivot; rotation and translation stay in
+        // entryPointToWorld so a saved mirror is not applied a second time.
+        if (!piece || !Array.isArray(path)) return path;
+        const pivot = piece.entry_pivot_mm || piece.pivot_mm || { x: 0, y: 0 };
+        const centerX = Number(pivot.x) || 0;
+        const centerY = Number(pivot.y) || 0;
+        let next = path;
+        if (piece.mirrored) {
+            next = next.map((point) => [(2 * centerX) - (Number(point[0]) || 0), Number(point[1]) || 0]);
+        }
+        if (piece.flip_h) {
+            next = next.map((point) => [(2 * centerX) - (Number(point[0]) || 0), Number(point[1]) || 0]);
+        }
+        if (piece.flip_v) {
+            next = next.map((point) => [Number(point[0]) || 0, (2 * centerY) - (Number(point[1]) || 0)]);
+        }
+        return next;
+    }
+
     function entryPointToWorld(point, piece, boards) {
         // Projection geometry stays in the immutable entry usable-sheet frame.
         // Map once: rotate about entry_pivot, then place that pivot at the live world pivot.
@@ -2415,8 +2436,11 @@
                     )),
                 };
             } else if (sessionPiece && geometry && Array.isArray(geometry.path)) {
+                const sourcePath = element.payload && element.payload.geometry_source === "parametric_visual"
+                    ? reflectDisplayPath(geometry.path, sessionPiece)
+                    : geometry.path;
                 geometry = {
-                    path: geometry.path.map((point) => entryPointToWorld(point, sessionPiece, boards)),
+                    path: sourcePath.map((point) => entryPointToWorld(point, sessionPiece, boards)),
                     closed: geometry.closed,
                 };
             } else if (geometry && Array.isArray(geometry.outer)) {

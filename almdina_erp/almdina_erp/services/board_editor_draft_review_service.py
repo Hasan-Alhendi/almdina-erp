@@ -79,6 +79,10 @@ def _issue_message(issue: Mapping[str, Any]) -> str:
         if kind:
             return _("The {0} add-on conflicts with neighbouring material.").format(kind)
         return _message(code)
+    if code == "machining_path_unproven":
+        return _(
+            "The liner tool is wider than the liner strip, so no machining path was stored with this copy."
+        )
     if code == "geometry_unproven":
         if kind and reason:
             return _(
