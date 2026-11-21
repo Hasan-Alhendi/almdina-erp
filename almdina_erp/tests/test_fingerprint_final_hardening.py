@@ -234,6 +234,42 @@ class TestV3RequiredRepresentation(unittest.TestCase):
         with self.assertRaises(PlanFingerprintContractError):
             workspace.plan_input_fingerprint(order, plan, version=5)
 
+    def test_individual_glass_margins_are_v4_only_and_hash_each_side(self):
+        from almdina_erp.almdina_erp.domain.cutting.plan_fingerprint_contract import (
+            freeze_geometry_piece, PlanFingerprintContractError,
+        )
+        from almdina_erp.almdina_erp.domain.orders.plan_fingerprint import fingerprint_payload
+        from almdina_erp.almdina_erp.infrastructure.frappe import cutting_plan_workspace as ws
+
+        fixture, order, plan = golden_case()
+        piece = copy.deepcopy(fixture['contracts']['v3']['payload']['pieces'][0])
+        piece.pop('glass_margin_mm', None)
+        piece.update({
+            'piece_type': 'Glass', 'glass_margin_mode': 'Individual Sides',
+            'glass_margin_top_mm': 70.0, 'glass_margin_bottom_mm': 60.0,
+            'glass_margin_left_mm': 50.0, 'glass_margin_right_mm': 40.0,
+        })
+        with self.assertRaises(PlanFingerprintContractError):
+            freeze_geometry_piece(piece, version=3)
+        self.assertEqual(piece, freeze_geometry_piece(piece, version=4))
+        row = order.pieces[0]
+        row.__dict__.update({
+            'piece_type': 'Glass', 'glass_margin_mode': 'Individual Sides',
+            'glass_margin_top_mm': 70.0, 'glass_margin_bottom_mm': 60.0,
+            'glass_margin_left_mm': 50.0, 'glass_margin_right_mm': 40.0,
+        })
+        digest = ws.plan_input_fingerprint(order, plan)
+        self.assertEqual(digest, ws.plan_input_fingerprint(order, plan, version=4))
+        self.assertEqual(digest, fingerprint_payload(ws.manufacturing_baseline_v4(order, plan)))
+        with self.assertRaises(PlanFingerprintContractError):
+            ws.plan_input_fingerprint(order, plan, version=3)
+        row.glass_margin_top_mm = 71.0
+        self.assertNotEqual(digest, ws.plan_input_fingerprint(order, plan))
+        self.assertEqual(
+            'REVIEW_REQUIRED',
+            ws.plan_fingerprint_compatibility(order, plan, fixture['contracts']['v3']['sha256']).state,
+        )
+
     def test_v3_schema_meaning_cannot_change_under_the_same_version(self):
         from almdina_erp.almdina_erp.domain.cutting import plan_fingerprint_contract as contract
         from almdina_erp.almdina_erp.domain.orders.plan_fingerprint import fingerprint_payload

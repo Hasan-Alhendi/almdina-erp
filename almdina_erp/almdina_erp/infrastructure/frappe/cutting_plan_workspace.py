@@ -343,15 +343,19 @@ def _geometry_piece_rows(
     *,
     historical: bool = False,
     plan: Any | None = None,
+    version: int = FINGERPRINT_CONTRACT_VERSION,
 ) -> list[dict[str, Any]]:
     rows = []
     if historical:
-        return [historical_geometry_piece(row) for row in (order.pieces or [])]
+        return [
+            historical_geometry_piece(row, version=version)
+            for row in (order.pieces or [])
+        ]
     for row in _piece_rows(order, plan):
         piece = dict(row)
         for key in _COMMERCIAL_PIECE_KEYS:
             piece.pop(key, None)
-        rows.append(freeze_geometry_piece(piece))
+        rows.append(freeze_geometry_piece(piece, version=version))
     return rows
 
 
@@ -386,8 +390,16 @@ def _legacy_plan_input_fingerprint(order: Any, plan: Any) -> str:
     )
 
 
+def _uses_individual_glass_margins(order: Any) -> bool:
+    return any(
+        str(getattr(row, "piece_type", "") or "") == "Glass"
+        and str(getattr(row, "glass_margin_mode", "") or "") == "Individual Sides"
+        for row in (order.pieces or [])
+    )
+
+
 def plan_input_fingerprint(
-    order: Any, plan: Any, *, version: int = FINGERPRINT_CONTRACT_VERSION,
+    order: Any, plan: Any, *, version: int | None = None,
     omitted: tuple[str, ...] = (), historical: bool = False,
 ) -> str:
     """Fingerprint cutting geometry and optimizer settings, not commercial labels.
@@ -395,13 +407,18 @@ def plan_input_fingerprint(
     Customer name, board description, edge color, and edge-profile names/rates
     stay out of this hash so they do not stale or cancel a production plan.
     """
-
+    if version is None:
+        version = (
+            MANUFACTURING_BASELINE_VERSION
+            if _uses_individual_glass_margins(order)
+            else FINGERPRINT_CONTRACT_VERSION
+        )
     if version == MANUFACTURING_BASELINE_VERSION and not omitted:
         return fingerprint_payload(manufacturing_baseline_v4(order, plan, historical=historical))
     if (version, omitted) not in ((3, ()), *((2, fields) for _, fields in LEGACY_V2_SCHEMAS)):
         raise PlanFingerprintContractError("unsupported_fingerprint_schema")
     width_mm, length_mm = _board_dimensions_mm(order)
-    pieces = _geometry_piece_rows(order, historical=historical, plan=plan)
+    pieces = _geometry_piece_rows(order, historical=historical, plan=plan, version=version)
     pieces = [{key: value for key, value in row.items() if key not in omitted} for row in pieces]
     return fingerprint_payload(
         {
@@ -442,7 +459,10 @@ def manufacturing_baseline_v4(order: Any, plan: Any, *, historical: bool = False
             kerf_mm=_plan_attr(plan, "kerf_mm"),
             trim_margin_mm=_plan_attr(plan, "trim_margin_mm"),
         ),
-        "pieces": _geometry_piece_rows(order, historical=historical, plan=plan),
+        "pieces": _geometry_piece_rows(
+            order, historical=historical, plan=plan,
+            version=MANUFACTURING_BASELINE_VERSION,
+        ),
     }
 
 
@@ -501,6 +521,13 @@ def plan_fingerprint_compatibility(
         return FingerprintCompatibility("MISMATCH", current, "v3", "order_requirements_changed")
     if not stored:
         return FingerprintCompatibility("REVIEW_REQUIRED", "", reason="missing_fingerprint")
+    # Individual Glass margins cannot be reconstructed by the frozen V1–V3
+    # projection. A legacy snapshot with no declared schema needs explicit review,
+    # never a silently narrowed V3/V2 match.
+    if _uses_individual_glass_margins(order):
+        return FingerprintCompatibility(
+            "REVIEW_REQUIRED", "", reason="legacy_individual_glass_unverifiable",
+        )
 
     pieces = _geometry_piece_rows(order, historical=True)
     for contract, omitted in LEGACY_V2_SCHEMAS:
