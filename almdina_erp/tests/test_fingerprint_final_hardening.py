@@ -269,6 +269,17 @@ class TestV3RequiredRepresentation(unittest.TestCase):
             'REVIEW_REQUIRED',
             ws.plan_fingerprint_compatibility(order, plan, fixture['contracts']['v3']['sha256']).state,
         )
+        # Even an exact current V4 digest must not authorize a plan whose
+        # snapshot lacks the V4 baseline and captured layout evidence.
+        self.assertEqual(
+            'REVIEW_REQUIRED',
+            ws.plan_fingerprint_compatibility(order, plan, ws.plan_input_fingerprint(order, plan)).state,
+        )
+        plan.snapshot_json = json.dumps({'input_fingerprint_contract': 3})
+        self.assertEqual(
+            'MISMATCH',
+            ws.plan_fingerprint_compatibility(order, plan, ws.plan_input_fingerprint(order, plan)).state,
+        )
 
     def test_v3_schema_meaning_cannot_change_under_the_same_version(self):
         from almdina_erp.almdina_erp.domain.cutting import plan_fingerprint_contract as contract

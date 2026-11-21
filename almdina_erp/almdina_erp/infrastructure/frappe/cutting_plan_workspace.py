@@ -515,19 +515,21 @@ def plan_fingerprint_compatibility(
     if declared is not None and (type(declared) is not int or declared != FINGERPRINT_CONTRACT_VERSION):
         return FingerprintCompatibility("REVIEW_REQUIRED", "", reason="unsupported_contract")
     current = plan_input_fingerprint(order, plan, historical=True)
+    # Never recognize a V4 digest as a V3/legacy match without the recorded V4
+    # manufacturing baseline and approved layout. An old declared V3 plan changed
+    # its manufacturing requirements; an unversioned hash needs manual review.
+    if _uses_individual_glass_margins(order):
+        if declared is not None:
+            return FingerprintCompatibility("MISMATCH", current, "v3", "order_requirements_changed")
+        return FingerprintCompatibility(
+            "REVIEW_REQUIRED", "", reason="legacy_individual_glass_unverifiable",
+        )
     if stored and stored == current:
         return FingerprintCompatibility("MATCH", stored, "v3", "current_contract")
     if declared is not None:
         return FingerprintCompatibility("MISMATCH", current, "v3", "order_requirements_changed")
     if not stored:
         return FingerprintCompatibility("REVIEW_REQUIRED", "", reason="missing_fingerprint")
-    # Individual Glass margins cannot be reconstructed by the frozen V1–V3
-    # projection. A legacy snapshot with no declared schema needs explicit review,
-    # never a silently narrowed V3/V2 match.
-    if _uses_individual_glass_margins(order):
-        return FingerprintCompatibility(
-            "REVIEW_REQUIRED", "", reason="legacy_individual_glass_unverifiable",
-        )
 
     pieces = _geometry_piece_rows(order, historical=True)
     for contract, omitted in LEGACY_V2_SCHEMAS:
