@@ -74,13 +74,13 @@ class ExpectedPieceEvidence:
     width: float
     height: float
     allow_rotation: bool
-    # Shape freedom is distinct from manufacturing-envelope freedom. Special
-    # pieces may use any valid non-rectangular polygon, but their bbox must
-    # still match the persisted cut dimensions below.
+    # Shape freedom is distinct from manufacturing-envelope freedom. A Special
+    # bbox must still match the persisted cut dimensions below.
     arbitrary_outline: bool = False
     # Empty leaves the historical dimension-only match. Regular requires an
-    # axis-aligned rectangle. Special requires a non-rectangle. Glass and
-    # corner types keep their own geometric checks.
+    # axis-aligned rectangle and no through-cut opening. Special accepts a
+    # non-rectangle with or without openings, and a rectangle only after it
+    # owns at least one opening. Glass and corner types keep their own checks.
     piece_type: str = ""
     source_piece_no: int | None = None
     copy_no: int | None = None
@@ -103,6 +103,10 @@ class ExpectedPieceEvidence:
     glass_margin_bottom_mm: float | None = None
     glass_margin_right_mm: float | None = None
     glass_margin_left_mm: float | None = None
+    # Add-on paths already bound to the order row. Used only to separate
+    # geometrically identical Glass and Special candidates. Empty means the
+    # row has no liner, rear groove, or handle-recess evidence.
+    addon_signature: frozenset[str] = frozenset()
 
 
 @dataclass(frozen=True, slots=True)
@@ -353,11 +357,16 @@ def outline_compatible_with_piece_type(
     piece_type: str,
     *,
     tolerance: float,
+    holes: Sequence[Sequence[Point]] = (),
+    require_special_openings: bool = False,
 ) -> bool:
-    """Regular is a rectangle. Special is any other valid outer contour.
+    """Match an outer contour to Regular or Special once openings are known.
 
-    Glass and corner pieces are not reclassified here. Their geometric
-    contracts stay in the validators that already own those shapes.
+    Regular is an axis-aligned rectangle with no through-cut opening. Special
+    is any other valid outer contour, and a rectangle only when it owns at
+    least one opening. Callers that have not established hole ownership yet
+    pass ``require_special_openings=False`` so a rectangular Special candidate
+    is not rejected early. Glass and corner pieces are not reclassified here.
     """
 
     kind = str(piece_type or "")
@@ -365,8 +374,12 @@ def outline_compatible_with_piece_type(
         return True
     rectangular = is_axis_aligned_rectangle(polygon, tolerance)
     if kind == "Regular":
-        return rectangular
-    return not rectangular
+        return rectangular and not holes
+    if not rectangular:
+        return True
+    if not require_special_openings:
+        return True
+    return bool(holes)
 
 
 def _size_match(
@@ -408,6 +421,7 @@ def _dimensions_match(
         contour.polygon,
         expected.piece_type,
         tolerance=geometry_tolerance,
+        require_special_openings=False,
     )
 
 
@@ -429,6 +443,225 @@ def _matches_any_expected(
     )
 
 
+def _owned_hole_map(
+    selected: Sequence[ContourCandidate],
+    holes: Sequence[ContourCandidate],
+    *,
+    geometry_tolerance: float,
+) -> dict[int, tuple[ContourCandidate, ...]]:
+    """Attach leftovers that sit strictly inside exactly one selected outer."""
+
+    owned: dict[int, list[ContourCandidate]] = {contour.key: [] for contour in selected}
+    for hole in holes:
+        containers = [
+            owner
+            for owner in selected
+            if owner.key != hole.key
+            and polygon_strictly_contains_polygon(
+                owner.polygon,
+                hole.polygon,
+                tolerance=geometry_tolerance,
+            )
+        ]
+        tight = _innermost_owners(containers, geometry_tolerance=geometry_tolerance)
+        if len(tight) == 1:
+            owned[tight[0].key].append(hole)
+    return {
+        key: tuple(sorted(value, key=_contour_sort_key))
+        for key, value in owned.items()
+    }
+
+
+def _competes_as_non_glass(
+    contour: ContourCandidate,
+    piece: ExpectedPieceEvidence,
+    holes: Sequence[ContourCandidate],
+    *,
+    dimension_tolerance: float,
+    geometry_tolerance: float,
+) -> bool:
+    if piece.is_glass or str(piece.piece_type or "") == "Glass":
+        return False
+    if not _size_match(contour, piece, dimension_tolerance=dimension_tolerance):
+        return False
+    return outline_compatible_with_piece_type(
+        contour.polygon,
+        piece.piece_type,
+        tolerance=geometry_tolerance,
+        holes=tuple(hole.polygon for hole in holes),
+        require_special_openings=True,
+    )
+
+
+def _assignment_compatible(
+    contour: ContourCandidate,
+    piece: ExpectedPieceEvidence,
+    holes: Sequence[ContourCandidate],
+    expected: Sequence[ExpectedPieceEvidence],
+    *,
+    dimension_tolerance: float,
+    geometry_tolerance: float,
+) -> bool:
+    """Compatibility of one complete contour, including the openings it owns."""
+
+    if not _size_match(contour, piece, dimension_tolerance=dimension_tolerance):
+        return False
+    kind = str(piece.piece_type or "")
+    if kind == "Glass" or piece.is_glass:
+        competitors = [
+            other
+            for other in expected
+            if other is not piece
+            and _competes_as_non_glass(
+                contour,
+                other,
+                holes,
+                dimension_tolerance=dimension_tolerance,
+                geometry_tolerance=geometry_tolerance,
+            )
+        ]
+        if not competitors:
+            return True
+        if len(holes) != 1:
+            return False
+        return _proven_glass_opening_pair(
+            contour,
+            holes[0],
+            piece,
+            dimension_tolerance=dimension_tolerance,
+            geometry_tolerance=geometry_tolerance,
+        )
+    return outline_compatible_with_piece_type(
+        contour.polygon,
+        piece.piece_type,
+        tolerance=geometry_tolerance,
+        holes=tuple(hole.polygon for hole in holes),
+        require_special_openings=True,
+    )
+
+
+def _identity_rows(
+    selected: Sequence[ContourCandidate],
+    expected: Sequence[ExpectedPieceEvidence],
+    *,
+    holes_by_key: dict[int, tuple[ContourCandidate, ...]] | None,
+    dimension_tolerance: float,
+    geometry_tolerance: float,
+    excluded_edge: tuple[int, int] | None = None,
+) -> list[list[int]] | None:
+    rows: list[list[int]] = []
+    owned = holes_by_key or {}
+    for contour_index, contour in enumerate(selected):
+        holes = owned.get(contour.key, ())
+        matches = [
+            index
+            for index, expected_piece in enumerate(expected)
+            if (contour_index, index) != excluded_edge
+            and _assignment_compatible(
+                contour,
+                expected_piece,
+                holes,
+                expected,
+                dimension_tolerance=dimension_tolerance,
+                geometry_tolerance=geometry_tolerance,
+            )
+        ]
+        if not matches:
+            return None
+        rows.append(matches)
+    return rows
+
+
+def _assign_identity_rows(rows: Sequence[Sequence[int]]) -> tuple[int, ...] | None:
+    """Injective assignment. Free expected rows are tried before occupied ones."""
+
+    if any(not options for options in rows):
+        return None
+    expected_owner: dict[int, int] = {}
+
+    def assign(contour_index: int, visited: set[int]) -> bool:
+        options = rows[contour_index]
+        for expected_index in sorted(options, key=lambda index: index in expected_owner):
+            if expected_index in visited:
+                continue
+            visited.add(expected_index)
+            previous_contour = expected_owner.get(expected_index)
+            if previous_contour is None or assign(previous_contour, visited):
+                expected_owner[expected_index] = contour_index
+                return True
+        return False
+
+    order = sorted(range(len(rows)), key=lambda index: (len(rows[index]), index))
+    if not all(assign(contour_index, set()) for contour_index in order):
+        return None
+    contour_to_expected = {
+        contour_index: expected_index
+        for expected_index, contour_index in expected_owner.items()
+    }
+    return tuple(contour_to_expected[index] for index in range(len(rows)))
+
+
+def _piece_type_assignment_ambiguous(
+    rows: Sequence[Sequence[int]],
+    expected: Sequence[ExpectedPieceEvidence],
+) -> bool:
+    """True when another perfect matching would change a contour's piece type.
+
+    Interchangeable copies of one piece type are not ambiguous. Entity order
+    is not used to pick between Glass and Special.
+    """
+
+    assignment = _assign_identity_rows(rows)
+    if assignment is None:
+        return False
+    for contour_index, expected_index in enumerate(assignment):
+        assigned_type = str(expected[expected_index].piece_type or "")
+        if expected[expected_index].is_glass:
+            assigned_type = "Glass"
+        alternatives = []
+        for index in rows[contour_index]:
+            other_type = "Glass" if expected[index].is_glass else str(expected[index].piece_type or "")
+            if other_type != assigned_type:
+                alternatives.append(index)
+        if not alternatives:
+            continue
+        reduced = [list(row) for row in rows]
+        reduced[contour_index] = alternatives
+        if _assign_identity_rows(reduced) is not None:
+            return True
+    return False
+
+
+def _narrow_identity_rows(
+    selected: Sequence[ContourCandidate],
+    rows: Sequence[Sequence[int]],
+    expected: Sequence[ExpectedPieceEvidence],
+    *,
+    contour_signatures: dict[int, frozenset[str]] | None,
+    identity_locks: dict[int, int] | None,
+) -> list[list[int]]:
+    """Apply trusted locks and add-on signatures without inventing a priority."""
+
+    narrowed: list[list[int]] = [list(row) for row in rows]
+    signatures = contour_signatures or {}
+    if signatures:
+        for contour_index, contour in enumerate(selected):
+            signature = signatures.get(contour.key, frozenset())
+            filtered = [
+                index
+                for index in narrowed[contour_index]
+                if frozenset(expected[index].addon_signature) == signature
+            ]
+            if filtered:
+                narrowed[contour_index] = filtered
+    locks = identity_locks or {}
+    for contour_index, contour in enumerate(selected):
+        lock = locks.get(contour.key)
+        if lock in narrowed[contour_index]:
+            narrowed[contour_index] = [int(lock)]
+    return narrowed
+
+
 def _inventory_assignment(
     selected: Sequence[ContourCandidate],
     expected: Sequence[ExpectedPieceEvidence],
@@ -436,31 +669,57 @@ def _inventory_assignment(
     dimension_tolerance: float,
     geometry_tolerance: float = EPSILON,
     excluded_edge: tuple[int, int] | None = None,
+    holes_by_key: dict[int, tuple[ContourCandidate, ...]] | None = None,
+    contour_signatures: dict[int, frozenset[str]] | None = None,
+    identity_locks: dict[int, int] | None = None,
+    reject_type_ambiguity: bool = False,
 ) -> tuple[int, ...] | None:
     """Return one expected-piece index per selected contour, if injective.
 
-    Every piece, including Special, is bound to its persisted manufacturing
-    envelope. Regular also requires a rectangle, and Special requires any
-    other valid outer contour. Glass and corner pieces keep their own checks.
+    Every piece is bound to its persisted manufacturing envelope. Regular also
+    requires a rectangle without openings. Special requires a non-rectangle, or
+    a rectangle that already owns at least one opening. Glass competes with
+    those candidates only when its configured opening is proven. A Glass/Special
+    assignment that can still be swapped is rejected instead of picking a winner.
     """
     if len(selected) > len(expected):
         return None
 
-    candidate_indexes: list[list[int]] = []
-    for contour_index, contour in enumerate(selected):
-        matches = [
-            index
-            for index, expected_piece in enumerate(expected)
-            if (contour_index, index) != excluded_edge and _dimensions_match(
-                contour,
-                expected_piece,
-                dimension_tolerance=dimension_tolerance,
-                geometry_tolerance=geometry_tolerance,
-            )
-        ]
-        if not matches:
+    candidate_indexes = _identity_rows(
+        selected,
+        expected,
+        holes_by_key=holes_by_key,
+        dimension_tolerance=dimension_tolerance,
+        geometry_tolerance=geometry_tolerance,
+        excluded_edge=excluded_edge,
+    )
+    if candidate_indexes is None:
+        return None
+    if identity_locks:
+        candidate_indexes = _narrow_identity_rows(
+            selected,
+            candidate_indexes,
+            expected,
+            contour_signatures=None,
+            identity_locks=identity_locks,
+        )
+        if any(not row for row in candidate_indexes):
             return None
-        candidate_indexes.append(matches)
+    if reject_type_ambiguity and _piece_type_assignment_ambiguous(candidate_indexes, expected):
+        candidate_indexes = _narrow_identity_rows(
+            selected,
+            candidate_indexes,
+            expected,
+            contour_signatures=contour_signatures,
+            identity_locks=None,
+        )
+        if any(not row for row in candidate_indexes) or _piece_type_assignment_ambiguous(
+            candidate_indexes,
+            expected,
+        ):
+            raise DxfTopologyError("PIECE_IDENTITY_AMBIGUOUS")
+    if any(not row for row in candidate_indexes):
+        return None
 
     expected_owner: dict[int, int] = {}
 
@@ -1141,6 +1400,11 @@ def _demote_proven_glass_openings(
             expected,
             dimension_tolerance=dimension_tolerance,
             geometry_tolerance=geometry_tolerance,
+            holes_by_key=_owned_hole_map(
+                next_selected,
+                (*leftovers, *chosen),
+                geometry_tolerance=geometry_tolerance,
+            ),
         )
         is None
     ):
@@ -1315,9 +1579,11 @@ def _outline_class_mismatch(
     *,
     dimension_tolerance: float,
     geometry_tolerance: float,
+    holes_by_key: dict[int, tuple[ContourCandidate, ...]] | None = None,
 ) -> DxfTopologyError | None:
-    """Report a size match rejected only because Regular/Special outline differs."""
+    """Report a size match rejected only because Regular/Special geometry differs."""
 
+    owned = holes_by_key or {}
     for contour in contours:
         dimension_hits = [
             piece
@@ -1330,22 +1596,36 @@ def _outline_class_mismatch(
         ]
         if not dimension_hits:
             continue
+        holes = owned.get(contour.key, ())
         if any(
-            outline_compatible_with_piece_type(
-                contour.polygon,
-                piece.piece_type,
-                tolerance=geometry_tolerance,
+            _assignment_compatible(
+                contour,
+                piece,
+                holes,
+                expected,
+                dimension_tolerance=dimension_tolerance,
+                geometry_tolerance=geometry_tolerance,
             )
             for piece in dimension_hits
         ):
             continue
         kinds = {str(piece.piece_type or "") for piece in dimension_hits}
+        if any(piece.is_glass for piece in dimension_hits):
+            kinds.add("Glass")
         min_x, min_y, max_x, max_y = bbox(contour.polygon)
         actual_width = max_x - min_x
         actual_height = max_y - min_y
         sample = dimension_hits[0]
         rectangular = is_axis_aligned_rectangle(contour.polygon, geometry_tolerance)
-        if rectangular and "Special" in kinds and "Regular" not in kinds:
+        if rectangular and holes and kinds == {"Regular"}:
+            return DxfTopologyError(
+                "REGULAR_OPENING_UNEXPECTED",
+                actual_width=actual_width,
+                actual_height=actual_height,
+                expected_width=sample.width,
+                expected_height=sample.height,
+            )
+        if rectangular and not holes and "Special" in kinds and "Regular" not in kinds and "Glass" not in kinds:
             return DxfTopologyError(
                 "SPECIAL_OUTLINE_IS_RECTANGLE",
                 actual_width=actual_width,
@@ -1353,7 +1633,7 @@ def _outline_class_mismatch(
                 expected_width=sample.width,
                 expected_height=sample.height,
             )
-        if not rectangular and "Regular" in kinds and "Special" not in kinds:
+        if not rectangular and "Regular" in kinds and "Special" not in kinds and "Glass" not in kinds:
             return DxfTopologyError(
                 "REGULAR_OUTLINE_NOT_RECTANGLE",
                 actual_width=actual_width,
@@ -1370,6 +1650,8 @@ def resolve_contour_ownership(
     *,
     dimension_tolerance: float,
     geometry_tolerance: float = EPSILON,
+    contour_signatures: dict[int, frozenset[str]] | None = None,
+    identity_locks: dict[int, int] | None = None,
 ) -> ResolvedTopology:
     """Resolve actual DCO contours and owned holes from expected-piece evidence.
 
@@ -1378,18 +1660,26 @@ def resolve_contour_ownership(
     * a contour not contained by another contour must be an actual piece;
     * every actual piece, including Special, must match the persisted cut-width
       and cut-length envelope (or its allowed rotation);
-    * a Regular outer must be an axis-aligned rectangle, and a Special outer
-      must not be one; Glass and corner pieces are not reclassified by that rule;
+    * hole ownership is established before Regular/Special shape-class checks;
+    * a Regular outer must be an axis-aligned rectangle with no opening;
+    * a Special outer may be non-rectangular with or without openings, and a
+      rectangle only when it owns at least one opening;
+    * Glass is not inferred from a rectangle alone. It competes with Special
+      only when the single opening matches that Glass row's margins;
     * a nested contour matching expected piece dimensions remains an actual piece
       candidate (supporting pieces placed inside proven holes);
     * a nested contour without piece evidence can be considered a hole only when
       it is strictly contained by exactly one selected outer contour;
+    * if Glass and Special both remain possible after add-on signatures and
+      validated identity locks, the assignment is rejected;
     * if there are more piece-like contours than expected pieces, ownership is
       ambiguous and the DXF is rejected instead of guessing from contour order,
       nesting parity, or size.
 
     This avoids combinatorial contour-subset searches on plans with many internal
     openings while preserving exact order-piece identity as the source of truth.
+    ``identity_locks`` maps a contour key to an expected-piece index that a
+    caller has already validated. DXF text is not a lock.
     """
     ordered_contours = tuple(sorted(contours, key=_contour_sort_key))
     expected = tuple(expected_pieces)
@@ -1433,6 +1723,11 @@ def resolve_contour_ownership(
     leftovers = tuple(
         contour for contour in ordered_contours if contour.key not in selected_keys
     )
+    owned_holes = _owned_hole_map(
+        selected,
+        leftovers,
+        geometry_tolerance=geometry_tolerance,
+    )
 
     if len(selected) < len(expected):
         diagnostic = _forbidden_rotation_error(
@@ -1447,6 +1742,7 @@ def resolve_contour_ownership(
             expected,
             dimension_tolerance=dimension_tolerance,
             geometry_tolerance=geometry_tolerance,
+            holes_by_key=owned_holes,
         )
         if outline_error is not None:
             raise outline_error
@@ -1469,11 +1765,20 @@ def resolve_contour_ownership(
                 raise DxfTopologyError("UNRESOLVED_CONTOUR_OWNERSHIP")
             raise DxfTopologyError("AMBIGUOUS_CONTOUR_OWNERSHIP")
         selected, leftovers = demoted
+        owned_holes = _owned_hole_map(
+            selected,
+            leftovers,
+            geometry_tolerance=geometry_tolerance,
+        )
     assignment = _inventory_assignment(
         selected,
         expected,
         dimension_tolerance=dimension_tolerance,
         geometry_tolerance=geometry_tolerance,
+        holes_by_key=owned_holes,
+        contour_signatures=contour_signatures,
+        identity_locks=identity_locks,
+        reject_type_ambiguity=True,
     )
     if assignment is None:
         diagnostic = _forbidden_rotation_error(
@@ -1484,10 +1789,11 @@ def resolve_contour_ownership(
         if diagnostic is not None:
             raise diagnostic
         outline_error = _outline_class_mismatch(
-            ordered_contours,
+            selected,
             expected,
             dimension_tolerance=dimension_tolerance,
             geometry_tolerance=geometry_tolerance,
+            holes_by_key=owned_holes,
         )
         if outline_error is not None:
             raise outline_error

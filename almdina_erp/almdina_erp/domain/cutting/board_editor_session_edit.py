@@ -139,6 +139,20 @@ def _placement_rect_mm(piece: Mapping[str, Any]) -> dict[str, float]:
 def piece_footprint_mm(piece: Mapping[str, Any]) -> dict[str, Any]:
     """Footprint in usable-sheet millimetres (or world mm when outside boards)."""
 
+    reserved = piece.get("reservation_mm")
+    if piece.get("reserves_blank") and isinstance(reserved, list) and len(reserved) >= 3:
+        xs = [num(point[0]) for point in reserved]
+        ys = [num(point[1]) for point in reserved]
+        return {
+            "kind": "polygon",
+            "points": [[num(point[0]), num(point[1])] for point in reserved],
+            "bounds": {
+                "x": min(xs),
+                "y": min(ys),
+                "w": max(xs) - min(xs),
+                "h": max(ys) - min(ys),
+            },
+        }
     outline = piece.get("outline_mm")
     if isinstance(outline, list) and len(outline) >= 3:
         xs = [num(point[0]) for point in outline]
@@ -546,6 +560,22 @@ def _reframe_piece_geometry(
         world_dx=world_dx,
         world_dy=world_dy,
     )
+    piece["reservation_mm"] = _reframe_points(
+        piece.get("reservation_mm"),
+        boards,
+        from_sheet=from_sheet,
+        to_sheet=to_sheet,
+        world_dx=world_dx,
+        world_dy=world_dy,
+    )
+    piece["base_reservation_mm"] = _reframe_points(
+        piece.get("base_reservation_mm"),
+        boards,
+        from_sheet=from_sheet,
+        to_sheet=to_sheet,
+        world_dx=world_dx,
+        world_dy=world_dy,
+    )
     piece["glass_hole_local_mm"] = _reframe_points(
         piece.get("glass_hole_local_mm"),
         boards,
@@ -562,6 +592,22 @@ def _reframe_piece_geometry(
         world_dx=world_dx,
         world_dy=world_dy,
     )
+    for field in ("opening_rings_mm", "base_opening_rings_mm"):
+        rings = piece.get(field)
+        if not isinstance(rings, list):
+            continue
+        piece[field] = [
+            _reframe_points(
+                ring,
+                boards,
+                from_sheet=from_sheet,
+                to_sheet=to_sheet,
+                world_dx=world_dx,
+                world_dy=world_dy,
+            )
+            for ring in rings
+            if isinstance(ring, list)
+        ]
     pivot = piece.get("pivot_mm")
     if isinstance(pivot, Mapping):
         from_x, from_y = _sheet_origin_mm(boards, from_sheet)
@@ -700,6 +746,10 @@ def _translate_outline(piece: dict[str, Any], dx: float, dy: float) -> None:
     base = piece.get("base_outline_mm")
     if isinstance(base, list):
         piece["base_outline_mm"] = [[num(p[0]) + num(dx), num(p[1]) + num(dy)] for p in base]
+    for key in ("reservation_mm", "base_reservation_mm"):
+        ring = piece.get(key)
+        if isinstance(ring, list):
+            piece[key] = [[num(p[0]) + num(dx), num(p[1]) + num(dy)] for p in ring]
     pivot = piece.get("pivot_mm")
     if isinstance(pivot, Mapping):
         piece["pivot_mm"] = {

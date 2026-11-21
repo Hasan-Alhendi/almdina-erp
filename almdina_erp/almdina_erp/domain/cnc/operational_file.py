@@ -201,7 +201,15 @@ def catalog_sheet(
         pending.append(
             (operation.sequence, SHEET_PERIMETER_PATH_KEY, SHEET_PERIMETER_OPERATION_KEY, "")
         )
-    pending.sort(key=lambda item: (item[0], item[3], item[1]))
+    def _cut_release_rank(path_key: str) -> tuple[int, str]:
+        # Through-cut openings are released before the outer profile that owns them.
+        if ":hole:" in path_key:
+            return (0, path_key)
+        if path_key.endswith(":outer"):
+            return (1, path_key)
+        return (2, path_key)
+
+    pending.sort(key=lambda item: (item[0], item[3], _cut_release_rank(item[1])))
     paths = tuple(
         OperationalPath(
             path_key=key,

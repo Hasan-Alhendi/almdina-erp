@@ -597,9 +597,9 @@ def compile_sheet_program(
         if use_generated:
             rings: list[tuple[str, str, str, str]] = []
             for host in hosts:
-                rings.append(("outer", host["piece_id"], host["label"], host["outer_key"]))
                 for key in host["hole_keys"]:
                     rings.append(("hole", host["piece_id"], host["label"], key))
+                rings.append(("outer", host["piece_id"], host["label"], host["outer_key"]))
             if generated and all(path.closed for path in generated) and len(generated) == len(rings):
                 for path, (ring, piece_id, label, path_key) in zip(generated, rings):
                     entities.append(

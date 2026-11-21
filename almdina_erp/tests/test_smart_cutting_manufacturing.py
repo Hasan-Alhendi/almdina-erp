@@ -94,7 +94,9 @@ def test_real_243_discovery_snapshot_reload_export_strict_import(trim_mm, tmp_pa
     assert {p["piece_instance_id"] for s in imported["sheets"] for p in s["pieces"]} == {
         p["piece_instance_id"] for s in snapshot["sheets"] for p in s["pieces"]}
     for before, after in zip(snapshot["sheets"], imported["sheets"], strict=True):
-        geometry = lambda sheet: sorted(tuple(p[k] for k in ("x", "y", "w", "h")) for p in sheet["pieces"])
+        # DXF normalizes tiny float tails. Quantize well below the existing
+        # comparison tolerance so equal X coordinates cannot reorder rows.
+        geometry = lambda sheet: sorted(tuple(round(p[k], 6) for k in ("x", "y", "w", "h")) for p in sheet["pieces"])
         assert len(before["pieces"]) == len(after["pieces"])
         for expected, actual in zip(geometry(before), geometry(after), strict=True):
             assert actual == pytest.approx(expected, abs=.0001)

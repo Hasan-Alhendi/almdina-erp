@@ -172,6 +172,15 @@
             });
         }
 
+        function distributionGesturesAllowed() {
+            const snap = store && store.snapshot ? store.snapshot() : null;
+            const EditorMode = window.AlmdinaBoardEditor && window.AlmdinaBoardEditor.EditorMode;
+            if (EditorMode && typeof EditorMode.distributionGesturesAllowed === "function") {
+                return EditorMode.distributionGesturesAllowed(snap);
+            }
+            return !snap || snap.editorMode !== "drawing";
+        }
+
         function updateFromWorld(world, shiftKey) {
             if (!gesture || !world) return;
             const RotationGeometry = window.AlmdinaBoardEditor.RotationGeometry;
@@ -200,6 +209,7 @@
         }
 
         function beginHandleGesture(pieceKey, event) {
+            if (!distributionGesturesAllowed()) return false;
             if (!event || event.button === 1) return false;
             if (isPanKey && isPanKey()) return false;
             if (event.pointerType === "mouse" && event.button !== 0) return false;
@@ -272,6 +282,10 @@
 
         function onPointerMove(event) {
             if (!gesture || event.pointerId !== gesture.pointerId) return;
+            if (!distributionGesturesAllowed()) {
+                reset();
+                return;
+            }
             const world = clientToWorld(event.clientX, event.clientY);
             updateFromWorld(world, Boolean(event.shiftKey));
         }
@@ -297,6 +311,10 @@
 
         function onPointerUp(event) {
             if (!gesture || event.pointerId !== gesture.pointerId) return;
+            if (!distributionGesturesAllowed()) {
+                reset();
+                return;
+            }
             const world = clientToWorld(event.clientX, event.clientY);
             if (world) {
                 updateFromWorld(world, Boolean(event.shiftKey));
@@ -339,6 +357,7 @@
         }
 
         function applyNumericAngle(pieceKey, rawValue) {
+            if (!distributionGesturesAllowed()) return false;
             const RotationGeometry = window.AlmdinaBoardEditor.RotationGeometry;
             const parsed = Number(String(rawValue == null ? "" : rawValue).trim());
             if (!Number.isFinite(parsed)) {

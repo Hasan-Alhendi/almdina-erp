@@ -175,10 +175,20 @@ def trusted_model_from_projection(
                     [local_x, local_y + length],
                 ]
         # Review pose stores the opening in usable-sheet mm (same frame as outline_mm).
-        session_hole = resolve_trusted_glass_hole_mm(
-            piece=piece,
-            geometry_holes=outline_holes.get(instance),
-        )
+        geometry_holes = outline_holes.get(instance)
+        if piece_type == "Special":
+            session_hole = None
+            opening_rings = [
+                ring
+                for ring in (geometry_holes or [])
+                if isinstance(ring, list) and len(ring) >= 3
+            ]
+        else:
+            session_hole = resolve_trusted_glass_hole_mm(
+                piece=piece,
+                geometry_holes=geometry_holes,
+            )
+            opening_rings = []
         pieces[instance] = {
             "piece_instance_id": instance,
             "piece_id": piece.get("piece_id"),
@@ -190,6 +200,7 @@ def trusted_model_from_projection(
             "length_mm": length,
             "outline_mm": outline,
             "glass_hole_local_mm": session_hole,
+            "opening_rings_mm": deepcopy(opening_rings),
             "glass_host_piece_id": piece.get("glass_host_piece_id"),
             "allow_rotation": piece.get("allow_rotation") is True,
             "allow_rotation_proven": piece.get("allow_rotation_proven") is True,
@@ -200,6 +211,7 @@ def trusted_model_from_projection(
             "geometry_source": geometry_source,
             "exact_geometry": exact_geometry,
             "special_representation": special_representation,
+            "reserves_blank": piece.get("reserves_blank") is True,
             "clipped_corner_position": piece.get("clipped_corner_position"),
             "clipped_corner_width_cm": piece.get("clipped_corner_width_cm"),
             "clipped_corner_length_cm": piece.get("clipped_corner_length_cm"),
@@ -651,6 +663,10 @@ def _entry_piece(instance: str, info: Mapping[str, Any]) -> dict[str, Any]:
         "allow_rotation_proven": info.get("allow_rotation_proven") is True,
         "outline_mm": deepcopy(outline) if isinstance(outline, list) else None,
         "glass_hole_local_mm": deepcopy(hole) if isinstance(hole, list) else None,
+        "opening_rings_mm": deepcopy(info.get("opening_rings_mm"))
+        if isinstance(info.get("opening_rings_mm"), list)
+        else [],
+        "reserves_blank": info.get("reserves_blank") is True,
         "piece_type": info.get("piece_type") or "Regular",
         "placement_cm": {
             "x": local_x / 10.0,
@@ -660,6 +676,17 @@ def _entry_piece(instance: str, info: Mapping[str, Any]) -> dict[str, Any]:
         },
         "machining_paths": [],
     }
+    width = num(info.get("width_mm"))
+    length = num(info.get("length_mm"))
+    if info.get("reserves_blank") and width > 0 and length > 0:
+        reservation = [
+            [local_x, local_y],
+            [local_x + width, local_y],
+            [local_x + width, local_y + length],
+            [local_x, local_y + length],
+        ]
+        piece["reservation_mm"] = reservation
+        piece["base_reservation_mm"] = [list(point) for point in reservation]
     return piece
 
 
@@ -983,9 +1010,15 @@ def _addon_rules(
             if not footprint.get("points"):
                 continue
             holes = []
-            hole = piece.get("glass_hole_local_mm")
-            if isinstance(hole, list) and len(hole) >= 3:
-                holes.append([(float(point[0]), float(point[1])) for point in hole])
+            rings = piece.get("opening_rings_mm")
+            if isinstance(rings, list) and rings:
+                for ring in rings:
+                    if isinstance(ring, list) and len(ring) >= 3:
+                        holes.append([(float(point[0]), float(point[1])) for point in ring])
+            else:
+                hole = piece.get("glass_hole_local_mm")
+                if isinstance(hole, list) and len(hole) >= 3:
+                    holes.append([(float(point[0]), float(point[1])) for point in hole])
             obstacles_by_instance[str(piece["piece_instance_id"])] = {
                 "outer": [(float(point[0]), float(point[1])) for point in footprint["points"]],
                 "holes": holes,
@@ -1209,9 +1242,15 @@ def _material_rules(
             if not footprint.get("points"):
                 continue
             holes = []
-            hole = piece.get("glass_hole_local_mm")
-            if isinstance(hole, list) and len(hole) >= 3:
-                holes.append(tuple((float(point[0]), float(point[1])) for point in hole))
+            rings = piece.get("opening_rings_mm")
+            if isinstance(rings, list) and rings:
+                for ring in rings:
+                    if isinstance(ring, list) and len(ring) >= 3:
+                        holes.append(tuple((float(point[0]), float(point[1])) for point in ring))
+            else:
+                hole = piece.get("glass_hole_local_mm")
+                if isinstance(hole, list) and len(hole) >= 3:
+                    holes.append(tuple((float(point[0]), float(point[1])) for point in hole))
             parts.append(
                 PlacedPartGeometry(
                     key=piece["piece_instance_id"],

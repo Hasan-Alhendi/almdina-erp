@@ -196,36 +196,100 @@ def consistent_directed_rings(
     return rings
 
 
-def simplify_polygon(points: Sequence[Point], tolerance: float) -> list[Point]:
-    if not points:
-        return []
+# Identical repeated vertices, not the manufacturing tolerance. Curve samples
+# closer than the manufacturing tolerance must survive until the chord test.
+_DUPLICATE_VERTEX_MM = 1e-6
+
+
+def _dedupe_ring(points: Sequence[Point], tolerance: float) -> list[Point]:
+    """Drop exact repeated vertices and one closing repeat.
+
+    Consecutive samples of a curve are not duplicates, even when a later chord
+    test may remove truly collinear points within ``tolerance``.
+    """
+
     clean: list[Point] = []
     for point in points:
-        if not clean or not points_close(clean[-1], point, tolerance):
-            clean.append(point)
-    if len(clean) > 1 and points_close(clean[0], clean[-1], tolerance):
+        current = (float(point[0]), float(point[1]))
+        if not clean or not points_close(clean[-1], current, _DUPLICATE_VERTEX_MM):
+            clean.append(current)
+    if len(clean) > 1 and points_close(clean[0], clean[-1], max(tolerance, _DUPLICATE_VERTEX_MM)):
         clean.pop()
+    return clean
+
+
+def _chord_key(start: Point, end: Point, distance: float) -> tuple[float, float, float, float, float]:
+    left, right = (start, end) if (start[0], start[1]) <= (end[0], end[1]) else (end, start)
+    return (distance, left[0], left[1], right[0], right[1])
+
+
+def _douglas_peucker(points: Sequence[Point], tolerance: float) -> list[Point]:
+    """Keep endpoints and every point farther than ``tolerance`` from its chord."""
+
+    if len(points) <= 2:
+        return [(float(point[0]), float(point[1])) for point in points]
+    start = points[0]
+    end = points[-1]
+    max_distance = -1.0
+    index = 1
+    for candidate in range(1, len(points) - 1):
+        distance = _point_segment_distance(points[candidate], (start, end))
+        if distance > max_distance:
+            max_distance = distance
+            index = candidate
+    if max_distance <= tolerance:
+        return [(float(start[0]), float(start[1])), (float(end[0]), float(end[1]))]
+    left = _douglas_peucker(points[: index + 1], tolerance)
+    right = _douglas_peucker(points[index:], tolerance)
+    return left[:-1] + right
+
+
+def simplify_polygon(points: Sequence[Point], tolerance: float) -> list[Point]:
+    """Normalize a closed ring without destroying sampled curvature.
+
+    Exact duplicate vertices are removed. A vertex is removed only when it lies
+    within ``tolerance`` of the chord that replaces it, measured against the
+    original ring (Douglas–Peucker). Deviation from the source polyline is
+    therefore bounded by ``tolerance`` and does not accumulate. Locally
+    near-collinear samples on a circle or ellipse are kept while that chord
+    would move the curve by more than ``tolerance``.
+    """
+
+    if not points:
+        return []
+    clean = _dedupe_ring(points, tolerance)
     if len(clean) < 3:
         return clean
 
-    changed = True
-    while changed and len(clean) >= 3:
-        changed = False
-        result: list[Point] = []
-        count = len(clean)
-        for i, current in enumerate(clean):
-            prev = clean[(i - 1) % count]
-            nxt = clean[(i + 1) % count]
-            cross = (current[0] - prev[0]) * (nxt[1] - current[1]) - (current[1] - prev[1]) * (nxt[0] - current[0])
-            scale = max(math.dist(prev, current), math.dist(current, nxt), 1.0)
-            if abs(cross) <= tolerance * scale:
-                changed = True
-                continue
-            result.append(current)
-        if len(result) == len(clean):
-            break
-        clean = result
-    return clean
+    count = len(clean)
+    best_key: tuple[float, float, float, float, float] | None = None
+    split = (0, 1)
+    for start_index in range(count):
+        start = clean[start_index]
+        for end_index in range(start_index + 1, count):
+            end = clean[end_index]
+            key = _chord_key(start, end, math.dist(start, end))
+            if best_key is None or key > best_key:
+                best_key = key
+                split = (start_index, end_index)
+    first_index, second_index = split
+
+    def _chain(start_index: int, end_index: int) -> list[Point]:
+        ring: list[Point] = []
+        index = start_index
+        while True:
+            ring.append(clean[index])
+            if index == end_index:
+                return ring
+            index = (index + 1) % count
+
+    simplified = (
+        _douglas_peucker(_chain(first_index, second_index), tolerance)[:-1]
+        + _douglas_peucker(_chain(second_index, first_index), tolerance)[:-1]
+    )
+    if len(simplified) > 1 and points_close(simplified[0], simplified[-1], _DUPLICATE_VERTEX_MM):
+        simplified.pop()
+    return simplified
 
 
 def polygon_area(points: Sequence[Point]) -> float:

@@ -18,4 +18,6 @@ class TestTranslationCatalogParser(FrappeTestCase):
         self.assertIn("The selected user language is not supported.", parsed)
         self.assertTrue(parsed["The selected user language is not supported."])
         self.assertGreater(len(parsed), 100)
+        self.assertEqual(parsed["Horizontal edge protection (mm)"], "هامش حماية أفقي (مم)")
+        self.assertEqual(parsed["Vertical edge protection (mm)"], "هامش حماية عمودي (مم)")
         frappe.logger().debug("arabic catalog keys=%s", len(parsed))

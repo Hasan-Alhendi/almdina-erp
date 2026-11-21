@@ -71,6 +71,20 @@
     }
 
     function footprint(piece) {
+        if (piece.reserves_blank && Array.isArray(piece.reservation_mm) && piece.reservation_mm.length >= 3) {
+            const xs = piece.reservation_mm.map((point) => num(point[0]));
+            const ys = piece.reservation_mm.map((point) => num(point[1]));
+            return {
+                kind: "polygon",
+                points: piece.reservation_mm.map((point) => [num(point[0]), num(point[1])]),
+                bounds: {
+                    x: Math.min(...xs),
+                    y: Math.min(...ys),
+                    w: Math.max(...xs) - Math.min(...xs),
+                    h: Math.max(...ys) - Math.min(...ys),
+                },
+            };
+        }
         if (Array.isArray(piece.outline_mm) && piece.outline_mm.length >= 3) {
             const xs = piece.outline_mm.map((point) => num(point[0]));
             const ys = piece.outline_mm.map((point) => num(point[1]));
@@ -177,6 +191,22 @@
             worldDx,
             worldDy
         );
+        piece.reservation_mm = reframePoints(
+            piece.reservation_mm,
+            boards,
+            fromSheet,
+            toSheet,
+            worldDx,
+            worldDy
+        );
+        piece.base_reservation_mm = reframePoints(
+            piece.base_reservation_mm,
+            boards,
+            fromSheet,
+            toSheet,
+            worldDx,
+            worldDy
+        );
         piece.glass_hole_local_mm = reframePoints(
             piece.glass_hole_local_mm,
             boards,
@@ -193,6 +223,12 @@
             worldDx,
             worldDy
         );
+        ["opening_rings_mm", "base_opening_rings_mm"].forEach((field) => {
+            if (!Array.isArray(piece[field])) return;
+            piece[field] = piece[field].map((ring) => (
+                reframePoints(ring, boards, fromSheet, toSheet, worldDx, worldDy)
+            ));
+        });
         if (piece.pivot_mm && typeof piece.pivot_mm === "object") {
             const from = sheetOriginMm(boards, fromSheet);
             const to = sheetOriginMm(boards, toSheet);

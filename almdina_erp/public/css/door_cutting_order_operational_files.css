@@ -154,6 +154,28 @@ html[dir="rtl"] .dco-operational-sheet-dialog .dco-operational-sheet__preview {
     gap: 0.35rem;
 }
 
+.dco-operational-sheet__stops {
+    display: grid;
+    gap: 0.5rem;
+}
+
+.dco-operational-sheet__stop-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1.4fr) minmax(5.5rem, 0.8fr);
+    gap: 0.5rem;
+    align-items: end;
+}
+
+.dco-operational-sheet__stop-row label {
+    display: grid;
+    gap: 0.25rem;
+    min-inline-size: 0;
+}
+
+.dco-operational-sheet__stops button {
+    justify-self: start;
+}
+
 .dco-cnc-cut-preview__machine {
     vector-effect: non-scaling-stroke;
 }

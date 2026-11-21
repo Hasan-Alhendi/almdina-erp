@@ -152,6 +152,8 @@ class TestFactoryMasterDataIntegration(FrappeTestCase):
             {"target_name": ["in", [ROUTING_NAME, EDGE_NAME, "Almdina ERP Settings"]]},
         )
         self.original_settings = {
+            "edge_protection_horizontal_mm": frappe.db.get_single_value("Almdina ERP Settings", "edge_protection_horizontal_mm") or 0,
+            "edge_protection_vertical_mm": frappe.db.get_single_value("Almdina ERP Settings", "edge_protection_vertical_mm") or 0,
             "default_kerf_mm": frappe.db.get_single_value("Almdina ERP Settings", "default_kerf_mm"),
             "default_cutting_cost_per_board_usd": frappe.db.get_single_value(
                 "Almdina ERP Settings", "default_cutting_cost_per_board_usd"
@@ -171,6 +173,8 @@ class TestFactoryMasterDataIntegration(FrappeTestCase):
         )
 
         restore = {
+            "edge_protection_horizontal_mm": self.original_settings["edge_protection_horizontal_mm"],
+            "edge_protection_vertical_mm": self.original_settings["edge_protection_vertical_mm"],
             "default_kerf_mm": self.original_settings["default_kerf_mm"],
             "default_cutting_cost_per_board_usd": self.original_settings[
                 "default_cutting_cost_per_board_usd"
@@ -187,6 +191,28 @@ class TestFactoryMasterDataIntegration(FrappeTestCase):
         )
         frappe.clear_cache()
         super().tearDown()
+
+    def test_edge_protection_persistence_validation_and_existing_capability(self) -> None:
+        from almdina_erp.almdina_erp.services.production_settings_service import (
+            get_production_settings, update_production_settings,
+        )
+        fields = {"edge_protection_horizontal_mm": 5.5, "edge_protection_vertical_mm": 10.25}
+        frappe.set_user(VIEWER_USER)
+        with self.assertRaises(frappe.PermissionError):
+            update_production_settings(fields)
+        frappe.set_user(CUTTING_USER)
+        update_production_settings(fields)
+        frappe.clear_cache(doctype="Almdina ERP Settings")
+        reloaded = get_production_settings()
+        for key, value in fields.items():
+            self.assertAlmostEqual(reloaded[key], value)
+            self.assertAlmostEqual(frappe.db.get_single_value("Almdina ERP Settings", key), value)
+            for invalid in (-1, "nan", "inf", "invalid"):
+                with self.assertRaises(frappe.ValidationError):
+                    update_production_settings({key: invalid})
+        update_production_settings(dict.fromkeys(fields, 0))
+        for key in fields:
+            self.assertEqual(frappe.db.get_single_value("Almdina ERP Settings", key), 0)
 
     def test_settings_are_readable_but_updated_only_by_owned_section(self) -> None:
         from almdina_erp.almdina_erp.services.production_settings_service import (

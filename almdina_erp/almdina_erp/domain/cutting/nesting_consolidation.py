@@ -16,7 +16,7 @@ from itertools import combinations, permutations
 from typing import Any, Mapping, Sequence
 
 from .dxf_geometry import polygon_distance, polygons_overlap
-from .glass_opening_nesting import material_outline_cm
+from .glass_opening_nesting import occupancy_outline_cm
 from .primitives import num
 
 
@@ -234,7 +234,7 @@ def best_rigid_translation(
     width, height = _block_size(pieces)
     local_outlines = []
     for piece in pieces:
-        outline = material_outline_cm(piece)
+        outline = occupancy_outline_cm(piece)
         if outline is None:
             return None
         local_outlines.append(
@@ -242,7 +242,7 @@ def best_rigid_translation(
         )
     occupied = []
     for other in sheet.get("pieces") or []:
-        outline = material_outline_cm(other)
+        outline = occupancy_outline_cm(other)
         if outline is None:
             return None
         occupied.append(outline)
@@ -1133,7 +1133,7 @@ def _relative_signature(kind: str, pieces: Sequence[Mapping[str, Any]]) -> tuple
     origin_x, origin_y = _origin(pieces)
     rows = []
     for piece in sorted(pieces, key=lambda item: int(item["id"])):
-        outline = material_outline_cm(piece)
+        outline = occupancy_outline_cm(piece)
         relative = ()
         if outline is not None:
             relative = tuple(

@@ -771,10 +771,26 @@ def present_issue(issue: DxfValidationIssue) -> PresentedDxfError:
             issue.category,
         )
     if code == codes.CUT_INVALID_GEOMETRY:
+        layer = str(params.get("outline_layer") or issue.target.layer or "CUT_PATH")
+        reasons = [
+            _GEOMETRY_ERROR_AR.get(str(error), "سبب هندسي إضافي")
+            for error in (params.get("geometry_errors") or ())
+        ]
+        if layer == "GEOMETRY":
+            reason = "، ".join(reasons) if reasons else _("invalid geometry")
+            problem = _("The finished contour on GEOMETRY is not valid. {0}").format(reason)
+            action = _("Correct the finished contour on GEOMETRY, then upload the file again.")
+            if issue.target.contour_no is not None:
+                target_text = _("Contour {0} on layer {1}.").format(issue.target.contour_no, layer)
+        else:
+            problem = "هندسة مسار القص غير صالحة."
+            action = "صحح المحيط على CUT_PATH ثم أعد الرفع."
+            if reasons:
+                problem += " السبب: " + "، ".join(reasons) + "."
         return PresentedDxfError(
-            "هندسة مسار القص غير صالحة.",
+            problem,
             target_text,
-            "صحح المحيط على CUT_PATH ثم أعد الرفع.",
+            action,
             code,
             issue.category,
         )
@@ -963,9 +979,25 @@ def present_issue(issue: DxfValidationIssue) -> PresentedDxfError:
         )
     if code == codes.SPECIAL_OUTLINE_IS_RECTANGLE:
         return PresentedDxfError(
-            _("A special door could not be matched because the DXF contour is a rectangle."),
+            _("A special door could not be matched because the rectangular contour has no internal opening."),
             target_text,
-            _("Use a non-rectangular contour whose outer dimensions match the ordered special door."),
+            _("Use a non-rectangular contour, or add at least one internal through-cut opening inside the rectangle."),
+            code,
+            issue.category,
+        )
+    if code == codes.REGULAR_OPENING_UNEXPECTED:
+        return PresentedDxfError(
+            _("A regular door cannot contain an internal through-cut opening."),
+            target_text,
+            _("Remove the opening from the regular door contour."),
+            code,
+            issue.category,
+        )
+    if code == codes.OPENING_UNMANUFACTURABLE:
+        return PresentedDxfError(
+            _("An internal opening cannot be cut with the selected cutter."),
+            target_text,
+            _("Enlarge the opening or choose a cutter that fits inside it."),
             code,
             issue.category,
         )
@@ -1092,6 +1124,14 @@ def present_issue(issue: DxfValidationIssue) -> PresentedDxfError:
         return PresentedDxfError("هوية القطعة لا تطابق هوية الطلب المحفوظة.", target_text, "أعد حساب الخطة أو استورد DXF من الطلب الحالي.", code, issue.category)
 
     if code == codes.PIECE_IDENTITY_AMBIGUOUS:
+        if params.get("reason") == "glass_special_geometry":
+            return PresentedDxfError(
+                _("Glass and special doors with the same opening cannot be told apart."),
+                target_text,
+                _("Add manufacturing evidence that identifies each door, then import again."),
+                code,
+                issue.category,
+            )
         candidate_rows = tuple(
             sorted({
                 int(row)

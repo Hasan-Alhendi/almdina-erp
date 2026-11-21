@@ -7,7 +7,8 @@ unrotated order AABB outlines.
 
 from __future__ import annotations
 
-from typing import Any, Mapping, Sequence
+from collections.abc import Callable, Sequence
+from typing import Any, Mapping
 
 from almdina_erp.almdina_erp.domain.cutting.board_editor_rotation import (
     angles_equivalent,
@@ -26,6 +27,50 @@ class BoardEditorManufacturingError(ValueError):
         super().__init__(code)
         self.code = code
         self.detail = detail
+
+
+_APPROVE_MISSING_GEOMETRY = (
+    "The cutting plan cannot be approved because the finished outline is incomplete for these doors:"
+)
+_EXPORT_MISSING_GEOMETRY = (
+    "The cutting plan cannot be exported because the finished outline is incomplete for these doors:"
+)
+_MISSING_GEOMETRY_DOOR = "- Door {0} — sheet {1}."
+_MISSING_GEOMETRY_NEXT = (
+    "Finish and approve the cut outline in the editor then create a new plan copy."
+)
+
+
+def format_missing_geometry_message(
+    detail: Any,
+    *,
+    action: str,
+    translate: Callable[[str], str],
+) -> str:
+    """Name the doors and sheets already listed on the manufacturing error.
+
+    ``translate`` is the caller's localization function. This module stays
+    framework-free and does not choose a language.
+    """
+
+    pieces: Sequence[Any] = ()
+    if isinstance(detail, Mapping):
+        raw = detail.get("pieces")
+        if isinstance(raw, Sequence) and not isinstance(raw, (str, bytes)):
+            pieces = raw
+    bullets: list[str] = []
+    for row in pieces:
+        if not isinstance(row, Mapping):
+            continue
+        label = str(row.get("label") or row.get("piece_instance_id") or "").strip()
+        sheet_no = row.get("sheet_no")
+        if isinstance(sheet_no, bool) or not isinstance(sheet_no, (int, float)):
+            sheet = str(sheet_no or "").strip()
+        else:
+            sheet = str(int(sheet_no))
+        bullets.append(translate(_MISSING_GEOMETRY_DOOR).format(label, sheet))
+    intro = _EXPORT_MISSING_GEOMETRY if action == "export" else _APPROVE_MISSING_GEOMETRY
+    return "\n".join([translate(intro), *bullets, translate(_MISSING_GEOMETRY_NEXT)])
 
 
 def _piece_rows(snapshot: Mapping[str, Any]) -> list[tuple[int, Mapping[str, Any]]]:

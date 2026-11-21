@@ -9,6 +9,8 @@ copied from editor payloads.
 
 from __future__ import annotations
 
+import json
+import math
 from copy import deepcopy
 from typing import Any, Mapping, Sequence
 
@@ -25,6 +27,7 @@ from almdina_erp.almdina_erp.domain.cutting.board_editor_draft_review import (
     trusted_model_from_projection,
 )
 from almdina_erp.almdina_erp.domain.cutting.dxf_geometry import polygon_area
+from almdina_erp.almdina_erp.domain.cutting.glass_opening_nesting import geometry_reserves_blank
 from almdina_erp.almdina_erp.domain.cutting.dxf_geometry_snapshot import (
     serialize_geometry_mm,
     serialize_overlay_geometry_mm,
@@ -109,6 +112,7 @@ def materialize_plan_snapshot(
     expected_draft_version: int,
     source_content_revision: str,
     source_input_fingerprint: str,
+    adopted_geometry: Mapping[str, str] | None = None,
 ) -> dict[str, Any]:
     """Build a sanitized operational snapshot for one Board Editor plan copy."""
 
@@ -152,6 +156,7 @@ def materialize_plan_snapshot(
         source_plan_name=source_plan_name,
         draft_version=int(expected_draft_version),
         distribution_fingerprint=distribution_fingerprint(normalized),
+        adopted_geometry=adopted_geometry,
     )
     return snapshot
 
@@ -181,6 +186,7 @@ def _build_snapshot(
     source_plan_name: str,
     draft_version: int,
     distribution_fingerprint: str,
+    adopted_geometry: Mapping[str, str] | None = None,
 ) -> dict[str, Any]:
     source_index = _index_source_pieces(source_snapshot)
     source_sheets = {
@@ -205,6 +211,7 @@ def _build_snapshot(
                 posed=posed,
                 source_piece=source_index.get(str(posed.get("piece_instance_id") or "")),
                 trusted_piece=(trusted.get("pieces") or {}).get(str(posed.get("piece_instance_id") or "")),
+                adopted_geometry=(adopted_geometry or {}).get(str(posed.get("piece_instance_id") or "")),
             )
         )
 
@@ -366,6 +373,7 @@ def _materialize_piece(
     posed: Mapping[str, Any],
     source_piece: Mapping[str, Any] | None,
     trusted_piece: Mapping[str, Any] | None,
+    adopted_geometry: str | None = None,
 ) -> dict[str, Any]:
     source = dict(source_piece or {})
     for key in _DERIVED_PIECE_KEYS:
@@ -388,9 +396,15 @@ def _materialize_piece(
     # Posed glass_hole_local_mm is usable-sheet (review frame). Use it only for
     # geometry.holes. Manufacturing glass_hole_local_mm stays piece-local from source.
     holes = []
-    hole = posed.get("glass_hole_local_mm")
-    if isinstance(hole, list) and len(hole) >= 3:
-        holes.append(hole)
+    posed_rings = posed.get("opening_rings_mm")
+    if isinstance(posed_rings, list) and posed_rings:
+        for ring in posed_rings:
+            if isinstance(ring, list) and len(ring) >= 3:
+                holes.append(ring)
+    else:
+        hole = posed.get("glass_hole_local_mm")
+        if isinstance(hole, list) and len(hole) >= 3:
+            holes.append(hole)
     manufacturing_hole = source.get("glass_hole_local_mm")
     piece_type = str(trusted.get("piece_type") or source.get("piece_type") or "")
     geometry_source = str(
@@ -400,13 +414,30 @@ def _materialize_piece(
     source_geometry = (
         source.get("geometry") if isinstance(source.get("geometry"), Mapping) else None
     )
-    # Never promote CNC-raw stock rectangles (or blank Special JSON) into a
-    # persisted DXF ``geometry`` contour. Exact DXF source keeps posed outline.
+    # A CNC-raw stock rectangle is not a manufacturing contour. An adopted
+    # drawing is different: its posed outline is the contour, even when the
+    # door was classified as raw stock before that drawing existed.
     promote_outline = False
     if source_geometry is not None and isinstance(outline, list) and len(outline) >= 3:
         promote_outline = True
     elif piece_type == "Special":
-        promote_outline = False
+        # An adopted drawing is posed once here, including a full-span contour
+        # whose source piece has no persisted geometry. The door-local polygon
+        # stays in special_shape_geometry_json. Historical specials without an
+        # adopted drawing still use that JSON unless they reserve the blank.
+        adopted = adopted_geometry not in (None, "")
+        promote_outline = (
+            adopted
+            or geometry_reserves_blank(
+                {
+                    "special_shape_geometry_json": (
+                        adopted_geometry
+                        if adopted
+                        else source.get("special_shape_geometry_json")
+                    )
+                }
+            )
+        ) and isinstance(outline, list) and len(outline) >= 3
     elif isinstance(outline, list) and len(outline) >= 3:
         promote_outline = True
 
@@ -421,8 +452,17 @@ def _materialize_piece(
                 ),
             )
         )
+    reserves_blank = geometry_reserves_blank(
+        {
+            "special_shape_geometry_json": (
+                adopted_geometry
+                if adopted_geometry not in (None, "")
+                else source.get("special_shape_geometry_json")
+            )
+        }
+    )
     area_m2 = _area_m2(outline, holes)
-    if area_m2 <= 0:
+    if reserves_blank or area_m2 <= 0:
         area_m2 = abs(width_mm * length_mm) / 1_000_000.0
 
     piece = {
@@ -437,7 +477,10 @@ def _materialize_piece(
         "h": length_mm / 10.0,
         "original_w": num(original_w),
         "original_h": num(original_h),
-        "rotated": False,
+        # The optimizer stores a swapped footprint with rotated=true. The posed
+        # outline is already in that orientation, so the flag stays a dimension
+        # contract only. apply_rotated_to_geometry remains false.
+        "rotated": bool(source.get("rotated")),
         "rotation_deg": num(posed.get("rotation_deg")),
         "apply_rotated_to_geometry": False,
         "area_m2": area_m2,
@@ -445,17 +488,17 @@ def _materialize_piece(
         "overlays": _overlays_from_machining(posed.get("machining_paths") or []),
         "piece_type": piece_type or source.get("piece_type") or "Regular",
     }
-    # Nesting's 90° swap is already in the posed outline, and `rotated` is
-    # cleared so that outline is not spun again. Keep one quarter turn so
-    # edge bands follow the same physical sides as the system plan when the
-    # editor has not added a further angle.
+    # Nesting's 90° swap is already in the posed outline. `rotated` stays as
+    # the dimension contract and apply_rotated_to_geometry stays false, so the
+    # outline is not spun again. Edge bands must not infer that same quarter
+    # turn from `rotated`: record it explicitly, and record 0 once the editor
+    # adds its own angle.
     if (
         bool(source.get("rotated"))
-        and abs(num(posed.get("rotation_deg"))) <= 1e-6
         and not isinstance(piece.get("rotation_quarter_turns"), int)
         and not isinstance(piece.get("corner_rotation_quarter_turns"), int)
     ):
-        piece["rotation_quarter_turns"] = 1
+        piece["rotation_quarter_turns"] = 0 if abs(num(posed.get("rotation_deg"))) > 1e-6 else 1
     classification = decision_from_values(
         posed.get("resource_kind") or source.get("resource_kind"),
         posed.get("offcut_source_party")
@@ -477,14 +520,106 @@ def _materialize_piece(
     else:
         piece.pop("glass_hole_local_mm", None)
     # Preserve manufacturing Special contracts from source; layout pose is x/y/w/h.
+    # An adopted drawing replaces that contract on this copy only.
     if piece_type == "Special":
-        if source.get("special_shape_geometry_json") not in (None, ""):
+        if adopted_geometry not in (None, ""):
+            piece["special_shape_geometry_json"] = adopted_geometry
+            piece.pop("placement_outline_cm", None)
+        elif source.get("special_shape_geometry_json") not in (None, ""):
             piece["special_shape_geometry_json"] = source.get("special_shape_geometry_json")
-        if geometry_source == "cnc_raw_rect" or (
-            not exact_geometry and not source_geometry and not source.get("special_shape_geometry_json")
+        if geometry_reserves_blank(piece):
+            reservation = posed.get("reservation_mm")
+            if isinstance(reservation, list) and len(reservation) >= 3:
+                piece["blank_reservation_cm"] = [
+                    [num(point[0]) / 10.0, num(point[1]) / 10.0] for point in reservation
+                ]
+        # The pre-adoption classification must not delete a contour that was
+        # just posed. The stock rectangle is still not a substitute: an
+        # interior adoption whose outline is still the blank is removed.
+        # Owned through-cut openings stay even when the outer matches that blank.
+        posed_outer = None
+        if isinstance(piece.get("geometry"), Mapping):
+            posed_outer = piece["geometry"].get("outer")
+        blank_pose = posed.get("reservation_mm") if geometry_reserves_blank(piece) else None
+        keep_posed_contour = (
+            _verified_adopted_contour(adopted_geometry)
+            and isinstance(posed_outer, list)
+            and len(posed_outer) >= 3
+            and not _same_ring(posed_outer, blank_pose)
+        )
+        kept_openings = (
+            bool((piece.get("geometry") or {}).get("holes"))
+            if isinstance(piece.get("geometry"), Mapping)
+            else False
+        )
+        if not kept_openings and not keep_posed_contour and (
+            geometry_source == "cnc_raw_rect"
+            or (
+                not exact_geometry
+                and not source_geometry
+                and not piece.get("special_shape_geometry_json")
+            )
         ):
             piece.pop("geometry", None)
     return piece
+
+
+def _verified_adopted_contour(payload: str | None) -> bool:
+    """True when adopted JSON is the compiler's exact manufacturing polygon."""
+
+    if not isinstance(payload, str) or not payload.strip():
+        return False
+    try:
+        data = json.loads(payload)
+    except json.JSONDecodeError:
+        return False
+    if not isinstance(data, dict) or data.get("exact") is not True:
+        return False
+    if str(data.get("kind") or "polygon") != "polygon":
+        return False
+    points = data.get("points")
+    if not isinstance(points, list) or len(points) < 3:
+        return False
+    for point in points:
+        if isinstance(point, (str, bytes)) or not isinstance(point, Sequence) or len(point) < 2:
+            return False
+        if isinstance(point[0], bool) or isinstance(point[1], bool):
+            return False
+        try:
+            x = float(point[0])
+            y = float(point[1])
+        except (TypeError, ValueError):
+            return False
+        if not math.isfinite(x) or not math.isfinite(y):
+            return False
+    return True
+
+
+def _same_ring(left: Any, right: Any, tolerance: float = 0.05) -> bool:
+    if not isinstance(left, list) or not isinstance(right, list):
+        return False
+    if len(left) != len(right) or len(left) < 3:
+        return False
+
+    def xy(point: Sequence[Any]) -> tuple[float, float]:
+        return (num(point[0]), num(point[1]))
+
+    try:
+        first = [xy(point) for point in left]
+        second = [xy(point) for point in right]
+    except (TypeError, ValueError, IndexError):
+        return False
+    count = len(first)
+
+    def aligned(shift: int, reverse: bool) -> bool:
+        for index, point in enumerate(first):
+            other_index = (shift - index) % count if reverse else (index + shift) % count
+            other = second[other_index]
+            if abs(point[0] - other[0]) > tolerance or abs(point[1] - other[1]) > tolerance:
+                return False
+        return True
+
+    return any(aligned(shift, reverse) for shift in range(count) for reverse in (False, True))
 
 
 def _overlays_from_machining(paths: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
