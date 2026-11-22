@@ -333,6 +333,11 @@ const pendingCard = ux.sheetCardActions({ sheet_no: 1, status: "Settings Saved",
 assert.ok(!pendingCard.includes("dco-operational-files__nc-ready"));
 assert.ok(pendingCard.includes("dco-board-focus-trigger"));
 assert.ok(translations.includes("تم توليد الملف التشغيلي"));
+assert.ok(panel.includes("dco-board-gallery"));
+assert.ok(panel.includes("dco-plan-context-chip is-boards"));
+assert.ok(panel.includes("layoutOperationalGallery("));
+assert.ok(css.includes('.dco-operational-files[data-board-columns="3"] .dco-board-gallery'));
+assert.ok(css.includes("operational_files_html"));
 assert.ok(panel.includes("requestSheetProgramPreview("));
 assert.ok(panel.includes("collectCutExecutions("));
 

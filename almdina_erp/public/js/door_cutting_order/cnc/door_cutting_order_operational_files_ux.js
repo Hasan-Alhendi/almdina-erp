@@ -930,10 +930,98 @@
                 if (piece.piece_instance_id) node.dataset.pieceInstanceId = String(piece.piece_instance_id);
                 if (piece.label != null && piece.label !== "") node.dataset.pieceLabel = String(piece.label);
             });
-            fitBoard(board);
-            boards.set(Number(sheet.sheet_no), board);
+            boards.set(Number(sheet.sheet_no), card);
         });
         return boards;
+    }
+
+    function uiDirection() {
+        const locale = window.AlmdinaLocale;
+        if (locale && typeof locale.direction === "function") {
+            const value = locale.direction();
+            if (value === "ltr" || value === "rtl") return value;
+        }
+        const root = typeof document !== "undefined" ? document.documentElement : null;
+        const dir = root && root.getAttribute("dir");
+        return dir === "ltr" ? "ltr" : "rtl";
+    }
+
+    // Same breakpoints and board caps as AlmdinaPlanBoardPresenter.layoutBoardGallery.
+    const OPERATIONAL_BOARD_GAP_PX = 8;
+    const OPERATIONAL_BOARD_CARD_CHROME_PX = 12;
+    const OPERATIONAL_BOARD_VIEWPORT_HEIGHT_RATIO = 0.68;
+
+    function operationalBoardColumns(width) {
+        const available = Number(width || 0);
+        const viewport = Number((typeof window !== "undefined" && window.innerWidth) || available || 0);
+        if (viewport <= 600 || available < 520) return 1;
+        if (viewport <= 1024 || available < 760) return 2;
+        if (available >= 1180) return 4;
+        return 3;
+    }
+
+    function layoutOperationalGallery(surface) {
+        if (!surface || typeof surface.querySelector !== "function") return;
+        const gallery = surface.querySelector(":scope > .dco-board-gallery");
+        if (!gallery) return;
+        const rootWidth = surface.clientWidth || gallery.clientWidth || 0;
+        const columns = operationalBoardColumns(rootWidth);
+        surface.dataset.boardColumns = String(columns);
+        const availableColumnWidth = rootWidth > 0
+            ? Math.max(150, (rootWidth - OPERATIONAL_BOARD_GAP_PX * Math.max(0, columns - 1)) / columns - OPERATIONAL_BOARD_CARD_CHROME_PX)
+            : 300;
+        const viewportHeight = Math.max(480, (typeof window !== "undefined" && window.innerHeight) || 720);
+        gallery.querySelectorAll(":scope > .dco-sheet-card").forEach(card => {
+            const board = card.querySelector(":scope > .dco-sheet-board");
+            if (!board || !board.style) return;
+            const width = parseFloat(board.style.width) || 0;
+            const height = parseFloat(board.style.height) || 0;
+            const aspect = width > 0 && height > 0 ? width / height : 0.5;
+            board.style.setProperty("--dco-board-aspect", `${aspect} / 1`);
+            if (columns === 1) {
+                board.style.removeProperty("--dco-board-screen-max-width");
+                return;
+            }
+            const viewportWidthCap = viewportHeight * OPERATIONAL_BOARD_VIEWPORT_HEIGHT_RATIO * aspect;
+            const widthCap = Math.max(145, Math.min(availableColumnWidth, viewportWidthCap));
+            board.style.setProperty("--dco-board-screen-max-width", `${Math.round(widthCap)}px`);
+        });
+    }
+
+    function bindOperationalGallery(root) {
+        const surface = root && typeof root.querySelector === "function"
+            ? root.querySelector(".dco-operational-files")
+            : null;
+        if (!surface) return;
+        const layout = () => layoutOperationalGallery(surface);
+        layout();
+        if (root.__operationalGalleryObserver && typeof root.__operationalGalleryObserver.disconnect === "function") {
+            root.__operationalGalleryObserver.disconnect();
+        }
+        if (typeof ResizeObserver !== "function") return;
+        const observer = new ResizeObserver(() => layout());
+        observer.observe(surface);
+        root.__operationalGalleryObserver = observer;
+    }
+
+    function approvedBoardCount(layout) {
+        const planSheets = Array.isArray(layout && layout.sheets) ? layout.sheets : [];
+        return planSheets.filter(sheet => String((sheet && sheet.resource_kind) || "FULL_BOARD").toUpperCase() === "FULL_BOARD").length;
+    }
+
+    function attachSheetTools(card, sheet) {
+        const title = card && typeof card.querySelector === "function"
+            ? card.querySelector(":scope > .dco-sheet-title")
+            : null;
+        const host = title || card;
+        if (!host || host.querySelector(".dco-operational-files__sheet-tools")) return;
+        const tools = document.createElement("span");
+        tools.className = "dco-operational-files__sheet-tools";
+        const status = sheet && sheet.status
+            ? `<span class="dco-operational-files__status" data-status="${escapeHtml(sheet.status)}">${escapeHtml(statusLabel(sheet.status))}</span>`
+            : "";
+        tools.innerHTML = `${status}${sheetCardActions(sheet)}`;
+        host.appendChild(tools);
     }
 
     function mountBoard(target, board, options = {}) {
@@ -993,25 +1081,37 @@
         const approval = workspace.machine_profile_production_approved
             ? translate("The stored machine profile is marked approved for production.")
             : translate("The stored machine profile is a sample and is not approved for production.");
-        const cards = sheets.map(sheet => `<article class="dco-operational-files__sheet" data-sheet-no="${escapeHtml(sheet.sheet_no)}">
-            <header class="dco-operational-files__sheet-head">
-                <h3>${escapeHtml(translate("Sheet {0}", [sheet.sheet_no]))}</h3>
-                <span class="dco-operational-files__sheet-tools">
-                    <span class="dco-operational-files__status" data-status="${escapeHtml(sheet.status || "")}">${escapeHtml(statusLabel(sheet.status))}</span>
-                    ${sheetCardActions(sheet)}
-                </span>
+        const boardCount = approvedBoardCount(workspace.layout);
+        const direction = uiDirection();
+        root.innerHTML = `<div class="dco-operational-files" dir="${direction}">
+            <header class="dco-operational-files__header">
+                <p class="dco-operational-files__meta">${escapeHtml(translate("Approved plan"))}: ${escapeHtml(workspace.cutting_plan || "")} · ${escapeHtml(translate("Plan revision"))} ${escapeHtml(workspace.plan_revision || "")} · ${sourceLabel(workspace.plan_source_type)}</p>
+                <span class="dco-plan-context-chip is-boards" role="status" aria-label="${escapeHtml(translate("{0} sheets", [boardCount]))}"><span class="dco-plan-context-boards-value" style="direction:ltr;">${escapeHtml(boardCount)}</span><span class="dco-plan-context-boards-label">${escapeHtml(translate("Sheets"))}</span></span>
             </header>
-            <div class="dco-operational-files__board" data-sheet-board="${escapeHtml(sheet.sheet_no)}"></div>
-        </article>`).join("");
-        root.innerHTML = `<div class="dco-operational-files">
-            <p class="dco-operational-files__banner" role="status">${escapeHtml(approval)}</p>
-            <p class="dco-operational-files__meta">${escapeHtml(translate("Approved plan"))}: ${escapeHtml(workspace.cutting_plan || "")} · ${escapeHtml(translate("Plan revision"))} ${escapeHtml(workspace.plan_revision || "")} · ${sourceLabel(workspace.plan_source_type)}</p>
-            <div class="dco-operational-files__gallery">${cards}</div>
+            <div class="alert alert-warning dco-operational-files__banner" role="status">${escapeHtml(approval)}</div>
+            <div class="dco-board-gallery"></div>
         </div>`;
-        const boards = boardsBySheet(frm, workspace.layout);
-        root.querySelectorAll("[data-sheet-board]").forEach(target => {
-            mountBoard(target, boards.get(Number(target.getAttribute("data-sheet-board"))));
+        const gallery = root.querySelector(".dco-board-gallery");
+        const cards = boardsBySheet(frm, workspace.layout);
+        const operationalBySheet = new Map(sheets.map(sheet => [Number(sheet.sheet_no), sheet]));
+        const planSheets = Array.isArray(workspace.layout && workspace.layout.sheets) ? workspace.layout.sheets : [];
+        planSheets.forEach(planSheet => {
+            const sheetNo = Number(planSheet && planSheet.sheet_no);
+            const card = cards.get(sheetNo);
+            if (!card || !gallery) return;
+            attachSheetTools(card, operationalBySheet.get(sheetNo) || { sheet_no: sheetNo });
+            gallery.appendChild(card);
         });
+        if (gallery && !gallery.childElementCount) {
+            sheets.forEach(sheet => {
+                const fallback = document.createElement("article");
+                fallback.className = "dco-sheet-card";
+                fallback.innerHTML = `<p class="dco-operational-files__note">${escapeHtml(translate("Board preview is not available."))}</p>`;
+                attachSheetTools(fallback, sheet);
+                gallery.appendChild(fallback);
+            });
+        }
+        bindOperationalGallery(root);
         root.querySelectorAll(".dco-operational-files__open").forEach(button => {
             button.addEventListener("click", () => {
                 const sheetNo = Number(button.getAttribute("data-sheet-no"));

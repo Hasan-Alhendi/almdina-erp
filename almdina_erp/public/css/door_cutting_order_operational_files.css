@@ -1,7 +1,22 @@
 .dco-operational-files {
     display: flex;
     flex-direction: column;
-    gap: 1rem;
+    gap: 8px;
+    inline-size: 100%;
+    max-inline-size: none;
+    min-inline-size: 0;
+    box-sizing: border-box;
+    padding: 8px;
+    border: 1px solid var(--border-color, var(--alm-border, #dfe3e8));
+    border-radius: 16px;
+    background: var(--alm-card, var(--card-bg, #fff));
+    box-shadow: 0 5px 18px rgba(15, 23, 42, 0.045);
+}
+.dco-operational-files__header {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
     min-inline-size: 0;
 }
 .dco-operational-files__banner,
@@ -10,7 +25,19 @@
     margin: 0;
     line-height: 1.5;
 }
-.dco-operational-files__banner,
+.dco-operational-files__meta {
+    min-inline-size: 0;
+    color: var(--alm-text-strong, var(--text-color, #101828));
+    font-size: 12px;
+    font-weight: 750;
+}
+.dco-operational-files__banner.alert {
+    padding: 6px 10px;
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1.45;
+}
 .dco-operational-sheet__warning {
     padding-block: 0.75rem;
     padding-inline: 1rem;
@@ -18,6 +45,106 @@
     border-radius: 12px;
     background: var(--alm-warning-bg, #fff7e8);
     color: var(--alm-text-strong, #101828);
+}
+.dco-operational-files .dco-plan-context-chip.is-boards {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    margin-inline-start: auto;
+    min-height: 30px;
+    padding: 5px 11px;
+    border: 0;
+    border-radius: 999px;
+    background: var(--alm-accent-soft, color-mix(in srgb, var(--alm-accent, #2563eb) 12%, transparent));
+    color: var(--alm-accent, #2563eb);
+    font-weight: 800;
+    white-space: nowrap;
+}
+.dco-operational-files .dco-plan-context-boards-value {
+    font-size: 14px;
+    line-height: 1;
+    font-weight: 850;
+}
+.dco-operational-files .dco-plan-context-boards-label {
+    font-size: 11px;
+    font-weight: 750;
+}
+.dco-operational-files .dco-board-gallery {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+    inline-size: 100%;
+    margin: 0;
+    padding: 0;
+    align-items: start;
+}
+.dco-operational-files[data-board-columns="2"] .dco-board-gallery {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.dco-operational-files[data-board-columns="3"] .dco-board-gallery {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.dco-operational-files[data-board-columns="4"] .dco-board-gallery {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+.dco-operational-files .dco-board-gallery > .dco-sheet-card {
+    min-inline-size: 0;
+    inline-size: 100% !important;
+    max-inline-size: 100% !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 5px !important;
+    border: 1px solid var(--border-color, var(--alm-border, #e2e6ea)) !important;
+    border-radius: 13px !important;
+    background: var(--alm-card, var(--card-bg, #fff)) !important;
+    box-shadow: 0 2px 8px rgba(15, 23, 42, 0.035) !important;
+    overflow: hidden;
+}
+.dco-operational-files .dco-board-gallery .dco-sheet-title {
+    display: grid !important;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center !important;
+    gap: 5px !important;
+    min-height: 27px;
+    margin: 0 0 4px !important;
+    padding: 0 0 5px !important;
+    border-bottom: 1px solid var(--alm-card-border, var(--border-color, #e4e8ee));
+    color: var(--alm-text-strong, #101828) !important;
+    font-size: 10.5px !important;
+    line-height: 1.3 !important;
+}
+.dco-operational-files .dco-board-gallery .dco-sheet-title > :first-child {
+    color: var(--alm-text-strong, #101828);
+    font-size: 11.5px;
+    font-weight: 900;
+    white-space: nowrap;
+}
+.dco-operational-files .dco-board-gallery .dco-sheet-title > :nth-child(2) {
+    min-inline-size: 0;
+    color: var(--alm-text-subtle, var(--text-muted, #667085));
+    font-size: 9px;
+    font-weight: 750;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.dco-operational-files .dco-board-gallery .dco-sheet-board {
+    inline-size: 100% !important;
+    width: 100% !important;
+    block-size: auto !important;
+    height: auto !important;
+    max-inline-size: none !important;
+    max-width: none !important;
+    aspect-ratio: var(--dco-board-aspect, 1 / 2) !important;
+    margin: 0 !important;
+}
+.dco-operational-files[data-board-columns="2"] .dco-board-gallery .dco-sheet-board,
+.dco-operational-files[data-board-columns="3"] .dco-board-gallery .dco-sheet-board,
+.dco-operational-files[data-board-columns="4"] .dco-board-gallery .dco-sheet-board {
+    inline-size: min(100%, var(--dco-board-screen-max-width, 100%)) !important;
+    width: min(100%, var(--dco-board-screen-max-width, 100%)) !important;
+    margin-inline: auto !important;
 }
 .dco-operational-files__gallery {
     display: grid;
@@ -57,6 +184,16 @@
     background: var(--alm-surface-muted, #f4f6f8);
     font-size: 12px;
     font-weight: 800;
+}
+.dco-operational-files .dco-board-gallery .dco-operational-files__status {
+    padding: 1px 6px;
+    border-radius: 999px;
+    background: var(--alm-surface-muted, var(--subtle-fg, #f4f6f8));
+    color: var(--alm-text-strong, var(--text-color, #101828));
+    font-size: 9px;
+    font-weight: 800;
+    line-height: 1.2;
+    white-space: nowrap;
 }
 .dco-operational-files__board,
 .dco-operational-sheet__preview {
@@ -1265,7 +1402,29 @@ body.dco-cnc-sheet-settings-active .layout-main-section {
 .dco-operational-files__sheet-tools {
     display: inline-flex;
     align-items: center;
-    gap: 0.4rem;
+    gap: 4px;
+    justify-self: end;
+    min-inline-size: 0;
+}
+body:not(.full-width) .std-form-layout .form-section:has([data-fieldname="operational_files_html"]) > .section-body,
+.form-section:has([data-fieldname="operational_files_html"]),
+.form-section:has([data-fieldname="operational_files_html"]) > .section-body,
+.form-section:has([data-fieldname="operational_files_html"]) .form-column,
+[data-fieldname="operational_files_html"],
+[data-fieldname="operational_files_html"] > .frappe-control,
+[data-fieldname="operational_files_html"] > .form-group,
+[data-fieldname="operational_files_html"] .control-input-wrapper,
+[data-fieldname="operational_files_html"] .dco-operational-files {
+    width: 100% !important;
+    max-width: none !important;
+    inline-size: 100%;
+    max-inline-size: none;
+    box-sizing: border-box;
+}
+body:not(.full-width) .std-form-layout .form-section:has([data-fieldname="operational_files_html"]) > .section-body,
+.form-section:has([data-fieldname="operational_files_html"]) > .section-body {
+    margin-inline: 0 !important;
+    padding: 0 var(--dco-tab-card-inset-inline, 44px) 8px !important;
 }
 .dco-operational-files__nc-ready {
     display: inline-flex;
