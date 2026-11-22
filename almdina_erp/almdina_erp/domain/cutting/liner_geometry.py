@@ -834,6 +834,7 @@ def compare_liner_path(
     start_sawn: bool | None = None,
     end_sawn: bool | None = None,
     obstacles: Sequence[Mapping[str, Any] | Sequence[Point]] | None = None,
+    addon_kind: str | None = None,
 ) -> LinerMeasurement:
     """Compare a canonical-frame path with the ordered liner band or toolpath.
 
@@ -858,6 +859,7 @@ def compare_liner_path(
             length_cm,
             start_sawn=start_sawn,
             end_sawn=end_sawn,
+            addon_kind=addon_kind,
         )
         if tool.ok:
             return tool
@@ -909,6 +911,7 @@ def compare_liner_path(
                     float(cutter_diameter_mm or 0),
                     start_cm,
                     length_cm,
+                    addon_kind=addon_kind,
                 ).ok
             ):
                 return LinerMeasurement(
@@ -976,6 +979,41 @@ def cutter_center_offsets_mm(
         if trailing[0] - leading[-1] > diameter_mm + 1e-9:
             trailing.insert(0, trailing[0] - diameter_mm)
     return leading + trailing
+
+
+def select_cutter_centers_mm(
+    width_mm: float,
+    diameter_mm: float,
+    *,
+    addon_kind: str | None = None,
+    offset_mm: float = 0.0,
+    stepover_mm: float | None = None,
+) -> tuple[list[float], bool]:
+    """Centers for one add-on band.
+
+    A rear groove that starts on the door edge may use a wider cutter. Its
+    single center is shifted outward by ``(D - W) / 2`` so the disk still
+    removes only the requested width and the rest of the disk stays outside
+    the door. Every other add-on keeps the historical refusal.
+    """
+
+    oversize = (
+        math.isfinite(width_mm)
+        and math.isfinite(diameter_mm)
+        and width_mm + GEOMETRY_TOLERANCE_MM < diameter_mm
+    )
+    at_edge = math.isfinite(offset_mm) and abs(float(offset_mm)) <= GEOMETRY_TOLERANCE_MM
+    if oversize and addon_kind == "back_groove" and at_edge and stepover_mm is None:
+        if (
+            diameter_mm <= GEOMETRY_TOLERANCE_MM
+            or width_mm <= GEOMETRY_TOLERANCE_MM
+        ):
+            raise LinerGeometryError("cutter_diameter_invalid")
+        return [width_mm - (diameter_mm / 2.0)], True
+    return (
+        cutter_center_offsets_mm(width_mm, diameter_mm, stepover_mm=stepover_mm),
+        False,
+    )
 
 
 def _polyline_length(path: Sequence[Point]) -> float:
@@ -1158,6 +1196,7 @@ def _cutter_passes(
     end_sawn: bool | None = None,
     flat_contour: bool = False,
     obstacles: Sequence[Mapping[str, Any] | Sequence[Point]] | None = None,
+    addon_kind: str | None = None,
 ) -> tuple[list[list[Point]], bool, bool]:
     """Parallel cutter passes for one liner span.
 
@@ -1172,9 +1211,11 @@ def _cutter_passes(
     error = validation_code(piece, side, offset_cm, width_cm)
     if error:
         raise LinerGeometryError(error)
-    centers = cutter_center_offsets_mm(
+    centers, edge_oversize = select_cutter_centers_mm(
         _mm(width_cm),
         float(cutter_diameter_mm),
+        addon_kind=addon_kind,
+        offset_mm=_mm(offset_cm),
         stepover_mm=stepover_mm,
     )
     polygon = piece_polygon_mm(piece)
@@ -1188,7 +1229,7 @@ def _cutter_passes(
     extend_start = boundary_start and not (flat_contour and not saw_start)
     extend_end = boundary_end and not (flat_contour and not saw_end)
     needs_flat = not saw_start or not saw_end
-    if needs_flat and len(centers) < 2:
+    if needs_flat and len(centers) < 2 and not edge_oversize:
         raise LinerGeometryError("liner_flat_end_unmachinable")
     lines = _span_cutter_lines(
         clipped,
@@ -1201,7 +1242,54 @@ def _cutter_passes(
         extend_end=extend_end,
         obstacles=obstacles,
     )
+    if edge_oversize:
+        _assert_rear_groove_oversize_safe(
+            lines,
+            clipped,
+            sign=sign,
+            polygon=polygon,
+            offset_mm=_mm(offset_cm),
+            width_mm=_mm(width_cm),
+            radius=radius,
+        )
     return lines, saw_start, saw_end
+
+
+def _nearest_line_distance(point: Point, lines: Sequence[Sequence[Point]]) -> float:
+    distances = [_path_distance(point, line) for line in lines if len(line) >= 2]
+    if not distances:
+        return math.inf
+    return min(distances)
+
+
+def _assert_rear_groove_oversize_safe(
+    lines: Sequence[Sequence[Point]],
+    clipped: Sequence[Point],
+    *,
+    sign: float,
+    polygon: Sequence[Point],
+    offset_mm: float,
+    width_mm: float,
+    radius: float,
+) -> None:
+    """The shifted disk must cover the requested band and nothing deeper in the door."""
+
+    band = _band_polygon(clipped, offset_mm, width_mm, sign)
+    samples = list(band)
+    for start, end in zip(band, band[1:]):
+        samples.append(((start[0] + end[0]) / 2.0, (start[1] + end[1]) / 2.0))
+    if band and math.dist(band[0], band[-1]) > GEOMETRY_TOLERANCE_MM:
+        samples.append(((band[0][0] + band[-1][0]) / 2.0, (band[0][1] + band[-1][1]) / 2.0))
+    for point in samples:
+        if _nearest_line_distance(point, lines) > radius + GEOMETRY_TOLERANCE_MM:
+            raise LinerGeometryError("rear_groove_oversize_unsafe")
+    gap = max(1.0, GEOMETRY_TOLERANCE_MM * 4)
+    deeper = _offset_polyline(clipped, offset_mm + width_mm + gap, sign)
+    for point in deeper:
+        if not point_in_polygon(point, polygon):
+            continue
+        if _nearest_line_distance(point, lines) <= radius - GEOMETRY_TOLERANCE_MM:
+            raise LinerGeometryError("rear_groove_oversize_unsafe")
 
 
 def _span_cutter_lines(
@@ -1330,6 +1418,7 @@ def liner_toolpath_mm(
     end_sawn: bool | None = None,
     flat_contour: bool = False,
     obstacles: Sequence[Mapping[str, Any] | Sequence[Point]] | None = None,
+    addon_kind: str | None = None,
 ) -> list[Point]:
     """Parallel cutter passes, with a straight close only where no saw finishes the end.
 
@@ -1355,6 +1444,7 @@ def liner_toolpath_mm(
         end_sawn=end_sawn,
         flat_contour=flat_contour,
         obstacles=obstacles,
+        addon_kind=addon_kind,
     )
     path: list[Point] = []
     for index, line in enumerate(lines):
@@ -1647,6 +1737,7 @@ def _measure_toolpath(
     end_sawn: bool | None = None,
     flat_contour: bool = False,
     obstacles: Sequence[Mapping[str, Any] | Sequence[Point]] | None = None,
+    addon_kind: str | None = None,
 ) -> LinerMeasurement:
     try:
         expected = liner_toolpath_mm(
@@ -1661,13 +1752,23 @@ def _measure_toolpath(
             end_sawn=end_sawn,
             flat_contour=flat_contour,
             obstacles=obstacles,
+            addon_kind=addon_kind,
         )
-        centers = cutter_center_offsets_mm(_mm(width_cm), cutter_diameter_mm)
+        centers, edge_oversize = select_cutter_centers_mm(
+            _mm(width_cm),
+            cutter_diameter_mm,
+            addon_kind=addon_kind,
+            offset_mm=_mm(offset_cm),
+        )
         reference, clipped, start_mm, end_mm, boundary_start, boundary_end = _prepared_reference(
             piece, side, start_cm, length_cm
         )
     except LinerGeometryError as error:
-        code = LINER_WIDTH_MISMATCH if error.code == "liner_narrower_than_cutter" else LINER_SHAPE_MISMATCH
+        code = (
+            LINER_WIDTH_MISMATCH
+            if error.code in {"liner_narrower_than_cutter", "rear_groove_oversize_unsafe"}
+            else LINER_SHAPE_MISMATCH
+        )
         return LinerMeasurement(
             False,
             code,
@@ -1687,6 +1788,9 @@ def _measure_toolpath(
     outside_gap = max(1.0, GEOMETRY_TOLERANCE_MM * 4)
     outside = _sample_width(clipped, polygon, offset_mm - outside_gap)
     outside.extend(_sample_width(clipped, polygon, offset_mm + width_mm + outside_gap))
+    if edge_oversize:
+        # Material outside the door is the allowed body extension, not door damage.
+        outside = [point for point in outside if point_in_polygon(point, polygon)]
     edge = _polyline_length(reference)
     beyond_start = []
     beyond_end = []
@@ -1736,6 +1840,7 @@ def _measure_toolpath(
         end_sawn=end_sawn,
         flat_contour=flat_contour,
         obstacles=obstacles,
+        addon_kind=addon_kind,
     )
     if not saw_start and not _span_present(path, [line[0] for line in passes]):
         return LinerMeasurement(False, LINER_SHAPE_MISMATCH, "start", side, "", "end_not_closed", side)
@@ -3327,7 +3432,11 @@ def compare_liner_set_paths(
             for spec in items
         ]
     except LinerGeometryError as error:
-        code = LINER_WIDTH_MISMATCH if error.code == "liner_narrower_than_cutter" else LINER_SHAPE_MISMATCH
+        code = (
+            LINER_WIDTH_MISMATCH
+            if error.code in {"liner_narrower_than_cutter", "rear_groove_oversize_unsafe"}
+            else LINER_SHAPE_MISMATCH
+        )
         return LinerMeasurement(False, code, "shape", "", "", error.code)
 
     unused = list(range(len(imported)))

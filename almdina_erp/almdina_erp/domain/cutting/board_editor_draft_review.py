@@ -1,8 +1,8 @@
 """Read-only readiness of one saved board-editor draft.
 
 The draft layout supplies pose and membership only. Geometry, rotation
-permission, kerf, trim, and machine type come from the trusted model.
-Nothing here writes the draft, the plan, or an approval.
+permission, kerf, layer tool diameters, trim, and machine type come from
+the trusted model. Nothing here writes the draft, the plan, or an approval.
 """
 
 from __future__ import annotations
@@ -62,6 +62,11 @@ from almdina_erp.almdina_erp.domain.cutting.offcut_policy import (
     decision_from_values,
     resource_kind_from_value,
     validate_source_resource_homogeneity,
+)
+from almdina_erp.almdina_erp.domain.cutting.tool_diameters import (
+    TOOL_DIAMETER_FIELDS,
+    diameter_for_kind,
+    diameters_for_record,
 )
 from almdina_erp.almdina_erp.domain.cutting.primitives import num, rect_intersects
 from almdina_erp.almdina_erp.domain.orders.liner_specs import (
@@ -289,9 +294,45 @@ def trusted_model_from_projection(
         "pieces": pieces,
         "sheets": sheets,
         "standard_full_board": standard,
-        "kerf_mm": num((projection.get("board") or {}).get("kerf_cm")) * 10.0,
+        "kerf_mm": num(board.get("kerf_cm")) * 10.0,
+        "liner_tool_diameter_mm": board.get("liner_tool_diameter_mm"),
+        "handle_recess_tool_diameter_mm": board.get("handle_recess_tool_diameter_mm"),
+        "rear_groove_tool_diameter_mm": board.get("rear_groove_tool_diameter_mm"),
         "machine_type": str(machine_type or ""),
     }
+
+
+def apply_plan_tool_diameters(
+    projection: Mapping[str, Any],
+    plan: Any,
+) -> dict[str, Any]:
+    """Attach the source plan's resolved layer diameters to a projection copy.
+
+    ``diameters_for_record`` is the only resolver. A missing layer diameter
+    inherits that plan's kerf. The caller's projection and plan are not mutated.
+    """
+
+    resolved = diameters_for_record(plan)
+    source_board = projection.get("board") if isinstance(projection.get("board"), Mapping) else {}
+    board = dict(source_board)
+    for field in TOOL_DIAMETER_FIELDS:
+        board[field] = resolved[field]
+    updated = dict(projection)
+    updated["board"] = board
+    return updated
+
+
+def _resolved_tool_diameters(trusted: Mapping[str, Any]) -> dict[str, float]:
+    """Layer diameters for one review. Blank values inherit this plan's kerf."""
+
+    return diameters_for_record(
+        {
+            "kerf_mm": trusted.get("kerf_mm"),
+            "liner_tool_diameter_mm": trusted.get("liner_tool_diameter_mm"),
+            "handle_recess_tool_diameter_mm": trusted.get("handle_recess_tool_diameter_mm"),
+            "rear_groove_tool_diameter_mm": trusted.get("rear_groove_tool_diameter_mm"),
+        }
+    )
 
 
 def review_saved_draft(
@@ -443,7 +484,7 @@ def _posed_pieces(
     by_layout = {row["piece_instance_id"]: row for row in layout.get("pieces") or []}
     posed: list[dict[str, Any]] = []
     session_pieces: dict[str, dict[str, Any]] = {}
-    kerf_mm = num(trusted.get("kerf_mm"))
+    diameters = _resolved_tool_diameters(trusted)
     for instance, info in (trusted.get("pieces") or {}).items():
         row = by_layout[str(instance)]
         piece = _entry_piece(str(instance), info)
@@ -459,7 +500,7 @@ def _posed_pieces(
         board = sheets.get(str(info.get("sheet_no"))) or {}
         paths, path_issues = _entry_machining_paths(
             info,
-            kerf_mm=kerf_mm,
+            diameters=diameters,
             board_width_mm=num(board.get("usable_width_mm")),
             board_length_mm=num(board.get("usable_length_mm")),
         )
@@ -702,11 +743,17 @@ def _place_local_toolpath(
 def _entry_machining_paths(
     info: Mapping[str, Any],
     *,
-    kerf_mm: float,
+    diameters: Mapping[str, Any],
     board_width_mm: float,
     board_length_mm: float,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    """Build cutter-center paths once in the entry usable-sheet frame."""
+    """Build cutter-center paths once in the entry usable-sheet frame.
+
+    Each add-on uses the diameter resolved for its layer. A cutter wider than
+    its add-on has no center path and blocks readiness. A rear groove that
+    starts on the door edge is the only wider-cutter path, and only after the
+    outward center shift stays inside the requested width.
+    """
 
     issues: list[dict[str, Any]] = []
     try:
@@ -726,17 +773,6 @@ def _entry_machining_paths(
 
     enabled = [addon for addon in MACHINING_ADDONS if (values.get(addon.kind) or {}).get("enabled")]
     if not enabled:
-        return [], issues
-    if kerf_mm <= 0:
-        issues.append(
-            _issue(
-                "geometry_unproven",
-                piece_instance_ids=[str(info.get("piece_instance_id") or "")],
-                piece_ids=_ids(info),
-                reason="cutter_diameter_unavailable",
-                addon_kind=enabled[0].kind,
-            )
-        )
         return [], issues
     liner = _liner_piece_from_trusted(info)
     if liner is None:
@@ -762,6 +798,18 @@ def _entry_machining_paths(
     for addon in enabled:
         kind = addon.kind
         spec = values.get(kind) or {}
+        diameter = diameter_for_kind(kind, diameters)
+        if diameter is None:
+            issues.append(
+                _issue(
+                    "geometry_unproven",
+                    piece_instance_ids=[str(info.get("piece_instance_id") or "")],
+                    piece_ids=_ids(info),
+                    reason="cutter_diameter_unavailable",
+                    addon_kind=kind,
+                )
+            )
+            continue
         try:
             if kind == "liner":
                 liners = list(spec.get("liners") or ())
@@ -803,7 +851,7 @@ def _entry_machining_paths(
                         piece=liner,
                         specs=specs,
                         width_cm=width_cm,
-                        cutter_diameter_mm=kerf_mm,
+                        cutter_diameter_mm=diameter,
                         start_sawn=start_flags,
                         end_sawn=end_flags,
                     )
@@ -842,7 +890,7 @@ def _entry_machining_paths(
                             length_cm=float(spec.get("length_cm") or 0)
                             if spec.get("length_cm") not in (None, "")
                             else None,
-                            cutter_diameter_mm=kerf_mm,
+                            cutter_diameter_mm=diameter,
                             start_sawn=start_sawn,
                             end_sawn=end_sawn,
                         )
@@ -882,7 +930,7 @@ def _entry_machining_paths(
                         length_cm=float(spec.get("length_cm") or 0)
                         if spec.get("length_cm") not in (None, "")
                         else None,
-                        cutter_diameter_mm=kerf_mm,
+                        cutter_diameter_mm=diameter,
                         start_sawn=start_sawn,
                         end_sawn=end_sawn,
                     )
@@ -912,7 +960,12 @@ def _entry_machining_paths(
                     )
                 )
                 continue
-            paths.append({"kind": kind, "path_index": index, "path_mm": placed})
+            paths.append({
+                "kind": kind,
+                "path_index": index,
+                "path_mm": placed,
+                "cutter_diameter_mm": diameter,
+            })
     return paths, issues
 
 
@@ -924,9 +977,10 @@ def _addon_rules(
 ) -> None:
     """Reuse liner extension clearance against neighbouring material.
 
-    ``kerf_mm`` is the plan blade/cutter diameter already used by
-    ``generate_toolpath`` / DXF liner export. It is not a second gap on top of
-    piece-to-piece kerf, and it is not a substitute for the add-on strip width.
+    A path names the layer bit in ``cutter_diameter_mm``. ``kerf_mm`` is only
+    the fallback for a path that has no layer diameter, which is the historical
+    shared blade. It is not a second gap on top of piece-to-piece kerf, and it
+    is not a substitute for the add-on strip width.
     ``extension_conflict_details`` ignores board bounds on purpose: historical
     policy allows a contour-end tip past the usable sheet, while piece material
     outside the usable sheet remains a separate placement fault.
@@ -978,9 +1032,12 @@ def _addon_rules(
                     for instance, obstacle in obstacles_by_instance.items()
                     if instance != owner
                 ]
+                diameter = num(item.get("cutter_diameter_mm"))
+                if diameter <= 0:
+                    diameter = kerf_mm
                 details = extension_conflict_details(
                     [(float(point[0]), float(point[1])) for point in path],
-                    kerf_mm,
+                    diameter,
                     board_bounds,
                     obstacles,
                 )

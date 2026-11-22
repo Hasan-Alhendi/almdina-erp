@@ -312,6 +312,31 @@
         [data-fieldname="cutting_plan_html"] .dco-special-raw-coverage {
             margin-top:0 !important;
         }
+        [data-fieldname="cutting_plan_html"] .dco-addon-cutter-warning {
+            display:block !important;
+            width:100% !important;
+            box-sizing:border-box !important;
+            margin:0 0 12px !important;
+            padding:8px !important;
+            border:1px solid #d9534f !important;
+            border-radius:8px !important;
+            background:#fff5f5 !important;
+            color:#a94442 !important;
+        }
+        [data-theme="light"] [data-fieldname="cutting_plan_html"] .dco-addon-cutter-warning {
+            border-color:#d9534f !important;
+            background:#fff5f5 !important;
+            color:#a94442 !important;
+        }
+        [data-theme="dark"] [data-fieldname="cutting_plan_html"] .dco-addon-cutter-warning {
+            border-color:var(--alm-status-danger-border, rgba(248, 113, 113, 0.28)) !important;
+            background:var(--alm-danger-soft, rgba(185, 28, 28, 0.18)) !important;
+            color:var(--alm-status-danger-fg, #f87171) !important;
+        }
+        [data-fieldname="cutting_plan_html"] .dco-addon-cutter-warning__items {
+            margin:6px 0 0 !important;
+            padding-inline-start:18px !important;
+        }
         [data-fieldname="cutting_plan_html"] .dco-margin-policy-alert {
             display:flex !important;
             align-items:flex-start !important;

@@ -190,6 +190,10 @@
             }
             if (section === "cnc") {
                 return [
+                    { fieldname: "cnc_default_preset_cut_path", fieldtype: "Link", options: "CNC Tool Preset", label: t("Cut Between Pieces Preset"), description: t("DXF layer CUT_PATH. Leave empty when this operation has no factory default."), default: values.cnc_default_preset_cut_path || "" },
+                    { fieldname: "cnc_default_preset_liner", fieldtype: "Link", options: "CNC Tool Preset", label: t("Liner Preset"), description: t("DXF layer Liner. Leave empty when this operation has no factory default."), default: values.cnc_default_preset_liner || "" },
+                    { fieldname: "cnc_default_preset_rear_groove", fieldtype: "Link", options: "CNC Tool Preset", label: t("Rear Groove Preset"), description: t("DXF layer Rear Groove. Leave empty when this operation has no factory default."), default: values.cnc_default_preset_rear_groove || "" },
+                    { fieldname: "cnc_default_preset_handle_recess", fieldtype: "Link", options: "CNC Tool Preset", label: t("Handle Recess Preset"), description: t("DXF layer Handle Recess. Leave empty when this operation has no factory default."), default: values.cnc_default_preset_handle_recess || "" },
                     { fieldname: "cnc_machine_tool_number", fieldtype: "Data", label: t("Sample tool number"), description: t("Example from a previous file, such as T9. This is not a confirmed tool for every job."), default: values.cnc_machine_tool_number || "" },
                     { fieldname: "cnc_machine_spindle_speed_rpm", fieldtype: "Int", label: t("Sample spindle speed (RPM)"), default: values.cnc_machine_spindle_speed_rpm, reqd: 1 },
                     { fieldname: "cnc_machine_cutting_feed_mm_min", fieldtype: "Float", label: t("Sample cutting feed (mm/min)"), default: values.cnc_machine_cutting_feed_mm_min, reqd: 1 },

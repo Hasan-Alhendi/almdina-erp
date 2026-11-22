@@ -807,16 +807,21 @@ class TestDxfCutSizeDiagnostics(unittest.TestCase):
         self.assertIn("FORBIDDEN_ROTATION", annotated.codes)
         self.assertIn(PERSISTED_CUT_SPECS, annotated.codes)
 
-    def test_nested_hole_is_not_reported_as_an_extra_when_a_piece_is_missing(self) -> None:
+    def test_nested_hole_is_rejected_on_regular_piece_before_count_diagnostics(self) -> None:
         order = self._order((500, 600, 0), (300, 400, 0))
         contours = [
             _rect(500, 600),
             _rect(100, 100, x_mm=100, y_mm=100),
         ]
-
         with self.assertRaises(DxfImportError) as exc_info:
             _resolve_cut_topology(contours, order)
+        self.assertIn("REGULAR_OPENING_UNEXPECTED", exc_info.exception.codes)
+        self.assertNotIn("EXTRA_CUT_PATH", exc_info.exception.codes)
 
+    def test_missing_regular_piece_reports_only_the_missing_size(self) -> None:
+        order = self._order((500, 600, 0), (300, 400, 0))
+        with self.assertRaises(DxfImportError) as exc_info:
+            _resolve_cut_topology([_rect(500, 600)], order)
         issue = exc_info.exception.issues[0]
         self.assertIn("PIECE_MISSING", exc_info.exception.codes)
         self.assertEqual(issue.params["actual_count"], 1)
@@ -825,7 +830,6 @@ class TestDxfCutSizeDiagnostics(unittest.TestCase):
         self.assertEqual(issue.params["extra_count"], 0)
         self.assertEqual(issue.params["missing_sizes"], ["30 × 40 سم"])
         self.assertEqual(issue.params["extra_sizes"], [])
-        self.assertNotIn("10 × 10 سم", _present_error(exc_info.exception))
 
     def test_clear_independent_extra_path_reports_only_its_residual_size(self) -> None:
         with self.assertRaises(DxfImportError) as exc_info:

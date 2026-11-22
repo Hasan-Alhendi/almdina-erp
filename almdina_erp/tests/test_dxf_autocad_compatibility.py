@@ -33,11 +33,12 @@ def test_secure_export_uses_r12_ascii_and_simple_line_entities():
     assert 'pair(31, 0)' in src
 
 
-def test_secure_export_avoids_legacy_polyline_and_r12_insunits_mix():
+def test_secure_export_declares_mm_units_for_ac1015_without_legacy_polylines():
     src = _source(SECURE_DXF)
+    assert 'const DXF_VERSION = "AC1015"' in src
     assert 'pair(0, "POLYLINE")' not in src
     assert 'pair(0, "VERTEX")' not in src
-    assert '$INSUNITS' not in src
+    assert 'pair(9, "$INSUNITS") + pair(70, 4)' in src
 
 
 def test_secure_export_has_minimal_sections_layers_and_eof_self_check():
@@ -149,7 +150,7 @@ def test_dxf_import_service_is_wired_for_round_trip():
 def test_secure_export_declares_exact_layer_table_count():
     src = _source(SECURE_DXF)
     assert "const DXF_LAYER_COUNT = 9" in src
-    assert 'pair(2, "LAYER") + pair(70, DXF_LAYER_COUNT)' in src
+    assert 'pair(2, "LAYER") + pair(70, DXF_LAYER_COUNT + (textOutlineLayer ? 1 : 0))' in src
 
 
 

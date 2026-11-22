@@ -397,6 +397,7 @@
         const messages = {
             cutter_diameter_invalid: "Specify a tool diameter above zero before exporting {0} toolpaths.",
             liner_narrower_than_cutter: "The width of {0} is less than its tool diameter.",
+            rear_groove_oversize_unsafe: "The rear groove cutter would cut {0} outside the requested width.",
             liner_extension_hits_piece: "The {0} cutter extension overlaps an adjacent piece.",
             liner_extension_unsafe: "Could not extend the {0} toolpath to the cutting line.",
             strip_outside: "The {0} strip extends beyond the door.",

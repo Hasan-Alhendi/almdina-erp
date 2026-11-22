@@ -182,12 +182,36 @@ def _piece_from_snapshot(piece: Mapping[str, Any]) -> LinerPiece:
     )
 
 
+def _display_only_mark(overlay: Mapping[str, Any]) -> bool:
+    """A visual centerline is not a cutter center, even if it carries a path."""
+
+    if overlay.get("display_only") is True:
+        return True
+    if str(overlay.get("geometry_source") or "") == "parametric_visual":
+        return True
+    payload = overlay.get("payload")
+    if isinstance(payload, Mapping):
+        if payload.get("display_only") is True:
+            return True
+        if str(payload.get("geometry_source") or "") == "parametric_visual":
+            return True
+    geometry = overlay.get("geometry")
+    if isinstance(geometry, Mapping):
+        if geometry.get("display_only") is True:
+            return True
+        if str(geometry.get("geometry_source") or "") == "parametric_visual":
+            return True
+    return False
+
+
 def _persisted_toolpath(piece: Mapping[str, Any], kind: str) -> bool:
     overlays = piece.get("overlays") or ()
     if not isinstance(overlays, Sequence) or isinstance(overlays, (str, bytes)):
         return False
     for overlay in overlays:
         if not isinstance(overlay, Mapping) or str(overlay.get("kind") or "") != kind:
+            continue
+        if _display_only_mark(overlay):
             continue
         geometry = overlay.get("geometry") or {}
         if not isinstance(geometry, Mapping):
@@ -234,9 +258,11 @@ def export_tool_errors(
         spec = values.get(kind) or {}
         if not _layer_active(spec):
             continue
-        if _persisted_toolpath(piece, kind):
-            continue
         diameter = diameter_for_kind(kind, diameters)
+        width_mm = float(spec.get("width_cm") or 0) * 10.0
+        wider = diameter is not None and width_mm + 0.25 < diameter
+        if _persisted_toolpath(piece, kind) and not wider:
+            continue
         if diameter is None:
             errors.append({
                 "code": "cutter_diameter_invalid",

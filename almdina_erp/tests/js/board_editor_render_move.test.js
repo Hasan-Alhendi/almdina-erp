@@ -398,6 +398,32 @@ assert.match(lHtml, /fill="#fff0c7"/);
 assert.match(lHtml, /stroke="#8a5700"/);
 assert.match(lHtml, /stroke="#1d6fbf"/);
 assert.match(lHtml, /class="abe-piece-size"/);
+{
+    const flipped = JSON.parse(JSON.stringify(lSession));
+    flipped.pieces[lKey].flip_h = true;
+    const flipHost = makeHost();
+    const flipStore = createStore({ projection: lProjection, orderName: "ORD", planName: "PLAN" });
+    flipStore.attachSession(flipped, History.create(flipped));
+    flipStore.setViewport({
+        scale: 0.5,
+        scrollX: 0,
+        scrollY: 0,
+        columns: 1,
+        opened: true,
+        userAdjusted: true,
+        fitted: false,
+        cameraToken: 2,
+    });
+    CanvasRenderer.render(flipHost, flipStore.snapshot(), {});
+    function linerStartX(html) {
+        const match = html.match(/stroke="#1d6fbf"[^>]*\sd="([^"]+)"/)
+            || html.match(/\sd="([^"]+)"[^>]*stroke="#1d6fbf"/);
+        assert.ok(match, "liner path missing");
+        return Number(match[1].replace(/[ML]/g, " ").trim().split(/\s+/)[0]);
+    }
+    const reflected = linerStartX(flipHost.innerHTML) - linerStartX(lHtml);
+    assert.ok(Math.abs(Math.abs(reflected) - 360) < 1, `liner mirror delta ${reflected}`);
+}
 assert.match(lHtml, /abe-board-waste-hatch/);
 const lBefore = parsePathBounds(lHtml, lKey);
 lSession = RotationGeometry.applyPieceRotation(lSession, lKey, 15);

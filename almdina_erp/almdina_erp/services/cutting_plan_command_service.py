@@ -329,6 +329,27 @@ def _assert_board_editor_manufacturing_ready(plan: Any) -> None:
         )
 
 
+def _assert_addon_cutter_approval(plan: Any) -> None:
+    from almdina_erp.almdina_erp.domain.cutting.dxf_issue import ADDON_CUTTER_REJECTED
+    from almdina_erp.almdina_erp.presentation.cutting.dxf_error_presenter import (
+        render_error_cards_html,
+    )
+    from almdina_erp.almdina_erp.services.export_validation_service import (
+        validate_cutting_plan_issues,
+    )
+
+    issues = [
+        item
+        for item in validate_cutting_plan_issues(plan)
+        if item.code == ADDON_CUTTER_REJECTED
+    ]
+    if issues:
+        frappe.throw(
+            render_error_cards_html(issues, context="save"),
+            title=_("تعذر اعتماد خطة القص"),
+        )
+
+
 def _assert_plan_ready_for_approval(order: Any, plan: Any) -> None:
     if str(plan.status or "") != DRAFT:
         frappe.throw(_("يمكن اعتماد خطة قص في حالة المسودة فقط."), frappe.ValidationError)
@@ -392,6 +413,8 @@ def _assert_plan_ready_for_approval(order: Any, plan: Any) -> None:
                 _("مسارات القص في ملف DXF غير صالحة ولا يمكن اعتماد خطة تصنيع غير مضمونة."),
                 frappe.ValidationError,
             )
+
+    _assert_addon_cutter_approval(plan)
 
     if str(plan.source_type or "") == BOARD_EDITOR:
         # Re-validate posed geometry on the server. Browser review is not authority.
@@ -728,7 +751,21 @@ def recalculate_system_plan(
             _sync_saved_cut_policy(order, updates["deduct_edge_thickness"])
 
     backfill_piece_instance_ids(order)
-    calculate_system_plan(order, plan)
+    from almdina_erp.almdina_erp.domain.cutting.addon_cutter_rules import (
+        AddonCutterRejected,
+        as_dxf_issues,
+    )
+    from almdina_erp.almdina_erp.presentation.cutting.dxf_error_presenter import (
+        render_error_cards_html,
+    )
+
+    try:
+        calculate_system_plan(order, plan)
+    except AddonCutterRejected as rejected:
+        frappe.throw(
+            render_error_cards_html(as_dxf_issues(rejected.findings), context="save"),
+            title=_("تعذر حساب خطة القص"),
+        )
     apply_plan_costs(plan, edge_cost_usd=factory_execution_edge_cost(order, plan))
     repository.save_document(plan)
     refresh_order_commercial_totals(order, plan)

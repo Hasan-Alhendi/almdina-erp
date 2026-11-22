@@ -165,7 +165,10 @@ def test_export_skips_special_pieces_and_persisted_centers():
             "geometry": {"path": [[0, 0], [10, 0]]},
         }],
     }
-    assert export_tool_errors(persisted, {"kerf_mm": 6, "liner": 12}) == []
+    persisted_errors = export_tool_errors(persisted, {"kerf_mm": 6, "liner": 12})
+    assert persisted_errors
+    assert persisted_errors[0]["code"] == "liner_narrower_than_cutter"
+    assert persisted_errors[0]["kind"] == "liner"
 
 
 def test_export_rejects_a_generated_pocket_narrower_than_its_bit():

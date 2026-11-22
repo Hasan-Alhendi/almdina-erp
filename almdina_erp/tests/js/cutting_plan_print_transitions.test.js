@@ -307,9 +307,11 @@ test("frozen A print keeps localized machining error without plan name or revisi
     assert.match(finalHtml, /OWNED-A-CUT/);
     assert.doesNotMatch(finalHtml, /SYSTEM-OWNED-A/);
     assert.doesNotMatch(finalHtml, /إصدار الخطة|Plan revision/);
-    assert.ok(finalHtml.includes('data-liner-toolpath-error="liner_narrower_than_cutter"'),
-        `machining error markers: ${JSON.stringify(finalHtml.match(/data-liner-toolpath-error[^>]*|data-overlay-kind="liner"[^>]*/g))}`);
-    assert.match(finalHtml, /عرض اللاينر أصغر من سماكة الشفرة/);
+    assert.equal((finalHtml.match(/class="dco-addon-cutter-warning"/g) || []).length >= 1, true);
+    const printedBody = finalHtml.slice(finalHtml.indexOf("</head>"));
+    assert.ok(printedBody.indexOf("dco-addon-cutter-warning") < printedBody.indexOf("dco-sheet-card"));
+    assert.doesNotMatch(finalHtml, /data-liner-toolpath-error="liner_narrower_than_cutter"/);
+    assert.match(finalHtml, /18|1\.8|25/);
     assert.doesNotMatch(finalHtml, /The width of|\{0\}|SYSTEM-B/);
 });
 

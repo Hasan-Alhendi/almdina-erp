@@ -51,11 +51,13 @@ from almdina_erp.almdina_erp.domain.cutting.glass_opening_nesting import (
     geometry_reserves_blank,
     material_outline_cm,
 )
+from almdina_erp.almdina_erp.domain.cutting.board_editor_rotation import rotate_point
 from almdina_erp.almdina_erp.domain.cutting.liner_geometry import (
     LinerGeometryError,
     LinerPiece,
     liner_centerline_mm,
     obstacle_geometry_mm,
+    piece_polygon_mm,
     piece_quarter_turns,
     transform_point,
 )
@@ -659,6 +661,229 @@ def _append_outline_elements(
         )
 
 
+_VISUAL_POSE_TOLERANCE_MM = 0.75
+
+
+def _open_ring(points: Sequence[Any]) -> list[tuple[float, float]]:
+    ring: list[tuple[float, float]] = []
+    for point in points:
+        if isinstance(point, (str, bytes)) or not isinstance(point, Sequence) or len(point) < 2:
+            continue
+        ring.append((float(point[0]), float(point[1])))
+    if len(ring) >= 2:
+        dx = ring[0][0] - ring[-1][0]
+        dy = ring[0][1] - ring[-1][1]
+        if (dx * dx + dy * dy) <= _VISUAL_POSE_TOLERANCE_MM * _VISUAL_POSE_TOLERANCE_MM:
+            ring = ring[:-1]
+    return ring
+
+
+def _aabb(points: Sequence[tuple[float, float]]) -> tuple[float, float, float, float]:
+    xs = [point[0] for point in points]
+    ys = [point[1] for point in points]
+    return min(xs), min(ys), max(xs), max(ys)
+
+
+def _translate(points: Sequence[tuple[float, float]], dx: float, dy: float) -> list[tuple[float, float]]:
+    return [(point[0] + dx, point[1] + dy) for point in points]
+
+
+def _reflect_horizontal(
+    points: Sequence[tuple[float, float]],
+    center_x: float,
+) -> list[tuple[float, float]]:
+    return [((2.0 * center_x) - point[0], point[1]) for point in points]
+
+
+def _reflect_vertical(
+    points: Sequence[tuple[float, float]],
+    center_y: float,
+) -> list[tuple[float, float]]:
+    return [(point[0], (2.0 * center_y) - point[1]) for point in points]
+
+
+def _rotate_ring(
+    points: Sequence[tuple[float, float]],
+    pivot: tuple[float, float],
+    angle_deg: float,
+) -> list[tuple[float, float]]:
+    origin = {"x": pivot[0], "y": pivot[1]}
+    return [tuple(rotate_point(point, origin, angle_deg)) for point in points]
+
+
+def _rings_match(
+    left: Sequence[tuple[float, float]],
+    right: Sequence[tuple[float, float]],
+) -> bool:
+    if len(left) != len(right):
+        return False
+    return all(
+        abs(a[0] - b[0]) <= _VISUAL_POSE_TOLERANCE_MM
+        and abs(a[1] - b[1]) <= _VISUAL_POSE_TOLERANCE_MM
+        for a, b in zip(left, right)
+    )
+
+
+def _local_liner_centerlines(
+    piece: Mapping[str, Any],
+    liner: LinerPiece,
+) -> list[list[tuple[float, float]]]:
+    """Door-local visual centerlines. Independent of tool diameter."""
+
+    values = machining_values(piece)
+    spec = values.get("liner") or {}
+    if not spec.get("enabled"):
+        return []
+    liners = [row for row in (spec.get("liners") or ()) if isinstance(row, Mapping)]
+    width_cm = float(spec.get("width_cm") or 0)
+    if liners and width_cm > 0:
+        rows = liners
+    else:
+        rows = [spec]
+        width_cm = float(spec.get("width_cm") or 0)
+    paths: list[list[tuple[float, float]]] = []
+    for row in rows:
+        local = liner_centerline_mm(
+            liner,
+            str(row.get("side") or ""),
+            float(row.get("offset_cm") or 0),
+            width_cm,
+            float(row.get("start_cm") or 0) if row.get("start_cm") not in (None, "") else None,
+            float(row.get("length_cm") or 0) if row.get("length_cm") not in (None, "") else None,
+        )
+        if len(local) >= 2:
+            paths.append([(float(point[0]), float(point[1])) for point in local])
+    return paths
+
+
+def _visual_liner_paths_mm(piece: Mapping[str, Any]) -> list[list[tuple[float, float]]]:
+    """Place saved liner centerlines in the persisted outline's frame, once.
+
+    An empty result means the outline does not prove the placement. Callers
+    then keep any uploaded liner mark. The result is display geometry and is
+    never written onto machining overlays.
+    """
+
+    if str(piece.get("piece_type") or "") == "Special":
+        return []
+    geometry = piece.get("geometry")
+    outer = geometry.get("outer") if isinstance(geometry, Mapping) else None
+    if not isinstance(outer, Sequence) or isinstance(outer, (str, bytes)):
+        return []
+    sheet = _open_ring(outer)
+    if len(sheet) < 3:
+        return []
+    liner = _liner_piece_from_placed(piece)
+    if liner is None:
+        return []
+    try:
+        local_paths = _local_liner_centerlines(piece, liner)
+    except (DoorLinerError, LinerGeometryError, TypeError, ValueError):
+        return []
+    if not local_paths:
+        return []
+
+    angle = float(piece.get("rotation_deg") or 0)
+    min_x, min_y, max_x, max_y = _aabb(sheet)
+    pivot = ((min_x + max_x) / 2.0, (min_y + max_y) / 2.0)
+    base = _rotate_ring(sheet, pivot, -angle) if abs(angle) > 1e-6 else list(sheet)
+    base_min_x, base_min_y, base_max_x, base_max_y = _aabb(base)
+    turns = piece_quarter_turns(piece)
+    mirrored = bool(piece.get("corner_mirrored"))
+    width = float(liner.width_cm) * 10.0
+    height = float(liner.length_cm) * 10.0
+    local_outline = list(piece_polygon_mm(liner))
+    if str(piece.get("piece_type") or "") in {CLIPPED_CORNER_TYPE, L_SHAPED_CORNER_TYPE}:
+        local_outline = [
+            transform_point(
+                point,
+                mirrored=mirrored,
+                quarter_turns=turns,
+                width=width,
+                height=height,
+            )
+            for point in local_outline
+        ]
+    outline_min_x, outline_min_y, _, _ = _aabb(local_outline)
+    shift_x = base_min_x - outline_min_x
+    shift_y = base_min_y - outline_min_y
+    canonical = _translate(local_outline, shift_x, shift_y)
+    center_x = (base_min_x + base_max_x) / 2.0
+    center_y = (base_min_y + base_max_y) / 2.0
+    candidates = (
+        ("", canonical),
+        ("h", _reflect_horizontal(canonical, center_x)),
+        ("v", _reflect_vertical(canonical, center_y)),
+        ("hv", _reflect_vertical(_reflect_horizontal(canonical, center_x), center_y)),
+    )
+    chosen = next((name for name, ring in candidates if _rings_match(ring, base)), None)
+    if chosen is None:
+        return []
+
+    posed: list[list[tuple[float, float]]] = []
+    for local in local_paths:
+        turned = [
+            transform_point(
+                point,
+                mirrored=mirrored,
+                quarter_turns=turns,
+                width=width,
+                height=height,
+            )
+            for point in local
+        ]
+        shifted = _translate(turned, shift_x, shift_y)
+        if chosen == "h":
+            shifted = _reflect_horizontal(shifted, center_x)
+        elif chosen == "v":
+            shifted = _reflect_vertical(shifted, center_y)
+        elif chosen == "hv":
+            shifted = _reflect_vertical(_reflect_horizontal(shifted, center_x), center_y)
+        if abs(angle) > 1e-6:
+            shifted = _rotate_ring(shifted, pivot, angle)
+        if len(shifted) >= 2:
+            posed.append(shifted)
+    return posed
+
+
+def _visual_liner_elements(
+    piece: Mapping[str, Any],
+    paths: Sequence[Sequence[tuple[float, float]]],
+    *,
+    token: str,
+    sheet_no: int,
+    piece_id: int | None,
+    instance_id: str | None,
+) -> list[dict[str, Any]]:
+    elements: list[dict[str, Any]] = []
+    layer_name = extra_overlay_layer_for_kind("liner")
+    for index, path in enumerate(paths):
+        elements.append(
+            _element(
+                element_id=f"{token}:overlay-visual:liner:{index}",
+                kind=ELEMENT_KIND_OVERLAY,
+                layer_original_name=layer_name,
+                affiliation_status=AFFILIATION_BOUND,
+                sheet_no=sheet_no,
+                piece_id=piece_id,
+                piece_instance_id=instance_id,
+                geometry=serialize_overlay_geometry_mm(
+                    tuple((float(point[0]), float(point[1])) for point in path),
+                    closed=False,
+                ),
+                payload={
+                    "kind": "liner",
+                    "overlay_index": index,
+                    "apply_rotated": False,
+                    "geometry_source": "parametric_visual",
+                    "display_only": True,
+                    "synthetic": True,
+                },
+            )
+        )
+    return elements
+
+
 def _synthetic_overlay_elements(
     piece: Mapping[str, Any],
     *,
@@ -916,12 +1141,20 @@ def _elements_for_piece(
             )
 
     existing_kinds: set[str] = set()
+    # Persisted geometry already contains the piece pose. Rebuild the liner
+    # picture from saved liner fields in that frame. A proven picture replaces
+    # a stored liner machining path so the two are not drawn together.
+    visual_liner_paths = (
+        _visual_liner_paths_mm(piece) if isinstance(geometry, Mapping) else []
+    )
     overlays = piece.get("overlays")
     if isinstance(overlays, list):
         for overlay_index, overlay in enumerate(overlays):
             if not isinstance(overlay, Mapping):
                 continue
             kind = str(overlay.get("kind") or "").strip()
+            if kind == "liner" and visual_liner_paths:
+                continue
             if kind not in EXTRA_OVERLAY_LAYER_BY_KIND:
                 elements.append(
                     _element(
@@ -957,6 +1190,18 @@ def _elements_for_piece(
                     },
                 )
             )
+    if visual_liner_paths:
+        elements.extend(
+            _visual_liner_elements(
+                piece,
+                visual_liner_paths,
+                token=token,
+                sheet_no=sheet_no,
+                piece_id=piece_id,
+                instance_id=instance_id,
+            )
+        )
+        existing_kinds.add("liner")
     # Persisted DXF overlays are physical evidence — do not re-synthesize them.
     # System/parametric pieces usually omit overlays; derive visual marks here.
     if not isinstance(geometry, Mapping):

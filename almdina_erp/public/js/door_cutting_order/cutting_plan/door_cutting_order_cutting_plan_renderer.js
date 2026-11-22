@@ -1041,6 +1041,198 @@
         </div>`;
     }
 
+    const ADDON_CUTTER_BANNER_CODES = new Set([
+        "liner_narrower_than_cutter",
+        "rear_groove_oversize_unsafe",
+        "rear_groove_neighbor_conflict",
+        "liner_extension_hits_piece",
+    ]);
+
+    function addonKindLabel(kind) {
+        if (kind === "back_groove") return translate("rear groove");
+        if (kind === "recessed_handle_cutout") return translate("plunge handle");
+        if (kind === "liner") return translate("liner");
+        return translate("add-on");
+    }
+
+    function millimetreText(value) {
+        const number = Number(value);
+        if (!Number.isFinite(number)) return "—";
+        const rounded = Math.round(number * 100) / 100;
+        return String(rounded);
+    }
+
+    function addonCutterLine(finding) {
+        const door = finding.door_no == null || finding.door_no === "" ? "—" : finding.door_no;
+        const width = millimetreText(finding.width_mm);
+        const diameter = millimetreText(finding.diameter_mm);
+        const code = String(finding.code || "");
+        const neighbor = finding.neighbor_piece_no;
+        if (code === "rear_groove_neighbor_conflict" && neighbor != null && neighbor !== "") {
+            return [
+                translate(
+                    "Door {0}: the rear groove is {1} mm wide and its cutter is {2} mm. The cutter body enters door {3}. The cutting plan cannot be calculated or approved.",
+                    [door, width, diameter, neighbor]
+                ),
+                translate("Separate the two doors along that edge, or turn the grooved door so the groove faces an open edge, then calculate again. The groove width and the cutter are not changed automatically."),
+            ].join(" ");
+        }
+        if (code === "liner_extension_hits_piece") {
+            return [
+                translate(
+                    "Door {0}: the {1} cutter extension overlaps another piece. The cutting plan cannot be calculated or approved.",
+                    [door, addonKindLabel(finding.kind)]
+                ),
+                translate("Move the doors apart along that edge, or change the add-on so its cutter stays clear of the neighboring piece, then calculate again."),
+            ].join(" ");
+        }
+        if (code === "rear_groove_oversize_unsafe") {
+            return [
+                translate(
+                    "Door {0}: the rear groove is {1} mm wide and its cutter is {2} mm. A wider cutter is allowed only when the groove starts at the door edge and the cutter covers that width without cutting the rest of the door.",
+                    [door, width, diameter]
+                ),
+                translate("Run the rear groove along the open door edge, or choose a cutter whose diameter is less than or equal to the groove width, then calculate again."),
+            ].join(" ");
+        }
+        return [
+            translate(
+                "Door {0}: the {1} is {2} mm wide and its cutter is {3} mm. The cutter is wider than the add-on, so the cutting plan cannot be calculated or approved.",
+                [door, addonKindLabel(finding.kind), width, diameter]
+            ),
+            translate("Choose a cutter whose diameter is less than or equal to the add-on width, or increase the add-on width, then calculate again. Values are not changed automatically."),
+        ].join(" ");
+    }
+
+    function renderAddonCutterBanner(findings, source) {
+        const rows = Array.isArray(findings) ? findings.filter(Boolean) : [];
+        if (!rows.length) return "";
+        const items = rows.map(finding => `<li>${escape_html(addonCutterLine(finding))}</li>`).join("");
+        const origin = source ? ` data-addon-cutter-source="${escape_html(source)}"` : "";
+        return `<div class="dco-addon-cutter-warning" role="alert"${origin} dir="${escape_html(uiDirection())}"><b>${htmlText("Warning:")}</b><ul class="dco-addon-cutter-warning__items">${items}</ul></div>`;
+    }
+
+    let addonGuardCache = null;
+
+    function doorNoForPiece(piece) {
+        const head = String((piece && piece.label) || "").split(".")[0];
+        return piece && piece.source_piece_no != null && piece.source_piece_no !== ""
+            ? piece.source_piece_no
+            : (head || "—");
+    }
+
+    function rememberGuardedOverlays(frm, piece, sheet, frame, overlays) {
+        const guarded = () => guardLinerToolpath(frm, piece, sheet, frame, overlays);
+        if (!addonGuardCache) return guarded();
+        const key = [
+            sheet && sheet.sheet_no,
+            piece && (piece.id != null && piece.id !== "" ? piece.id : piece.label),
+            piece && piece.x,
+            piece && piece.y,
+            piece && piece.source_piece_no,
+        ].join(":");
+        if (!addonGuardCache.has(key)) addonGuardCache.set(key, guarded());
+        return addonGuardCache.get(key);
+    }
+
+    function extensionFindingsFromGuard(frm, plan) {
+        const geometry = window.AlmdinaCuttingPlanPieceGeometry;
+        const findings = [];
+        (plan.sheets || []).forEach(sheet => {
+            const frame = sheetBoardFrame(plan, sheet, frm);
+            (sheet.pieces || []).forEach(raw => {
+                const piece = pieceWithEdgeTypeSpec(
+                    frm,
+                    pieceWithDoubleSpec(frm, pieceWithLinerSpec(frm, raw))
+                );
+                if (String(piece.piece_type || "") === "Special") return;
+                const model = geometry && typeof geometry.resolve === "function"
+                    ? geometry.resolve(piece)
+                    : null;
+                if (model && model.source === "dxf") return;
+                const overlays = rememberGuardedOverlays(
+                    frm,
+                    piece,
+                    sheet,
+                    frame,
+                    drawingOverlays(piece)
+                );
+                (overlays || []).forEach(overlay => {
+                    if (!overlay || overlay.error !== "liner_extension_hits_piece") return;
+                    findings.push({
+                        door_no: doorNoForPiece(piece),
+                        kind: overlay.kind || "liner",
+                        code: "liner_extension_hits_piece",
+                    });
+                });
+            });
+        });
+        return findings;
+    }
+
+    function mergeAddonFindings(primary, extra) {
+        const rows = (primary || []).slice();
+        (extra || []).forEach(item => {
+            const known = rows.some(existing => existing
+                && String(existing.code || "") === String(item.code || "")
+                && String(existing.door_no) === String(item.door_no)
+                && String(existing.kind || "") === String(item.kind || ""));
+            if (!known) rows.push(item);
+        });
+        return rows;
+    }
+
+    function collectAddonCutterFindings(frm, plan) {
+        const extensionFindings = extensionFindingsFromGuard(frm, plan);
+        if (plan && Array.isArray(plan.addon_cutter_rejections)) {
+            return mergeAddonFindings(plan.addon_cutter_rejections, extensionFindings);
+        }
+        const diameters = layerToolDiameters(plan, frm, planCutterDiameterMm(plan, frm));
+        const specs = [
+            ["liner", "extra_liner", "liner_width_cm", "liner_offset_cm"],
+            ["back_groove", "extra_back_groove", "back_groove_width_cm", "back_groove_offset_cm"],
+            ["recessed_handle_cutout", "extra_recessed_handle_cutout", "recessed_handle_width_cm", "recessed_handle_offset_cm"],
+        ];
+        const findings = [];
+        (plan.sheets || []).forEach(sheet => {
+            (sheet.pieces || []).forEach(raw => {
+                const piece = pieceWithLinerSpec(frm, raw);
+                if (String(piece.piece_type || "") === "Special") return;
+                specs.forEach(([kind, enabled, widthField, offsetField]) => {
+                    if (!num(piece[enabled]) || !(num(piece[widthField]) > 0)) return;
+                    const widthMm = num(piece[widthField]) * 10;
+                    const diameter = diameters[kind];
+                    if (!(diameter > 0) || widthMm + 0.25 >= diameter) return;
+                    if (kind === "back_groove" && Math.abs(num(piece[offsetField]) * 10) <= 0.25) return;
+                    findings.push({
+                        door_no: doorNoForPiece(piece),
+                        kind,
+                        width_mm: widthMm,
+                        diameter_mm: diameter,
+                        code: "liner_narrower_than_cutter",
+                    });
+                });
+            });
+        });
+        return mergeAddonFindings(findings, extensionFindings);
+    }
+
+    function mountAddonCutterBanner(planRoot, findings) {
+        if (!planRoot || typeof planRoot.querySelector !== "function") return;
+        const previous = planRoot.querySelector(".dco-addon-cutter-warning[data-addon-cutter-source='server']");
+        if (previous) previous.remove();
+        const rows = Array.isArray(findings) ? findings.filter(Boolean) : [];
+        if (!rows.length) return;
+        planRoot.querySelectorAll(".dco-addon-cutter-warning").forEach(node => node.remove());
+        const markup = renderAddonCutterBanner(rows, "server");
+        const gallery = planRoot.querySelector(".dco-board-gallery") || planRoot.querySelector(".dco-sheet-card");
+        if (gallery && typeof gallery.insertAdjacentHTML === "function") {
+            gallery.insertAdjacentHTML("beforebegin", markup);
+            return;
+        }
+        if (typeof planRoot.insertAdjacentHTML === "function") planRoot.insertAdjacentHTML("afterbegin", markup);
+    }
+
     function render_unplaced_pieces_warning(plan) {
         const unplaced = plan && Array.isArray(plan.unplaced) ? plan.unplaced : [];
         if (!unplaced.length) return "";
@@ -1241,6 +1433,7 @@
     const LINER_TOOLPATH_MESSAGES = Object.freeze({
         cutter_diameter_invalid: "Specify a tool diameter above zero for {0} toolpaths",
         liner_narrower_than_cutter: "The width of {0} is less than its tool diameter",
+        rear_groove_oversize_unsafe: "The rear groove cutter would cut {0} outside the requested width",
         liner_extension_hits_piece: "The {0} extension overlaps another piece",
         liner_extension_unsafe: "Could not extend the {0} toolpath safely",
         strip_outside: "The {0} strip extends beyond the door",
@@ -1447,13 +1640,23 @@
         return kept.concat(tool);
     }
 
+    function dxfDisplayOverlays(piece) {
+        const persisted = Array.isArray(piece && piece.overlays) ? piece.overlays : [];
+        const liner = window.AlmdinaLinerGeometry;
+        const visuals = liner && typeof liner.visualDisplayOverlays === "function"
+            ? liner.visualDisplayOverlays(piece)
+            : [];
+        if (!visuals.length) return persisted;
+        return persisted.filter(item => !(item && item.kind === "liner")).concat(visuals);
+    }
+
     function render_piece_overlays(frm, piece, geometryModel, sheet, frame) {
         const spec = pieceWithLinerSpec(frm, piece);
         // DXF paths are imported physical evidence. A synthetic redraw from
         // order-side settings can reverse their orientation after a half-turn.
         const overlays = geometryModel && geometryModel.source === "dxf"
-            ? (Array.isArray(piece.overlays) ? piece.overlays : [])
-            : guardLinerToolpath(
+            ? dxfDisplayOverlays(piece)
+            : rememberGuardedOverlays(
                 frm,
                 spec,
                 sheet,
@@ -1469,6 +1672,7 @@
         const paths = overlays.map((overlay, index) => {
             const kind = String((overlay && overlay.kind) || "").trim();
             const geometry = overlay && overlay.geometry;
+            if (overlay && overlay.error && ADDON_CUTTER_BANNER_CODES.has(overlay.error)) return "";
             if (overlay && overlay.error) {
                 const engine = window.AlmdinaMachiningOverlay;
                 const addon = engine && typeof engine.addon === "function" ? engine.addon(kind) : null;
@@ -1730,6 +1934,15 @@
 
     function build_cutting_plan_html(frm, plan) {
         if (!plan || !plan.sheets || !plan.sheets.length) return "";
+        addonGuardCache = new Map();
+        try {
+        return buildCuttingPlanMarkup(frm, plan);
+        } finally {
+            addonGuardCache = null;
+        }
+    }
+
+    function buildCuttingPlanMarkup(frm, plan) {
 
         const board_w_cm = num(plan.usable_board_width_cm);
         const board_h_cm = num(plan.usable_board_length_cm);
@@ -1762,6 +1975,7 @@
                 ${render_plan_meta_strip(frm, plan)}
 
                 <div class="dco-plan-method-line" style="font-size:12px;margin-bottom:8px;"><b>${htmlText("Layout method:")}</b> ${escape_html(knownStrategyText(plan.method_key, plan.method_label || frm.doc.packing_method || ""))}</div>
+                ${renderAddonCutterBanner(collectAddonCutterFindings(frm, plan))}
                 ${render_unplaced_pieces_warning(plan)}
         `;
 
@@ -2091,6 +2305,7 @@
                 ${printOrderMetaHtml(frm, plan, totalSheets, source)}
                 ${render_edge_band_legend()}
                 ${render_extra_addon_legend()}
+                ${pageIndex === 0 ? renderAddonCutterBanner(collectAddonCutterFindings(frm, plan)) : ""}
                 <div class="dco-print-sheets-grid">${gridRows}</div>
             </section>`;
         }).join("");
@@ -2229,6 +2444,17 @@ ${printHeaderCss()}
     justify-content: center;
     align-items: flex-start;
     gap: 2.2mm;
+}
+.dco-addon-cutter-warning {
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
+    border: 1px solid #d9534f;
+    background: #fff5f5;
+    color: #a94442;
+    padding: 8px;
+    border-radius: 8px;
+    margin: 0 0 12px 0;
 }
 .dco-sheet-card {
     flex: 0 0 var(--print-card-width, auto);
@@ -2569,6 +2795,8 @@ ${printHeaderCss()}
 
     window.AlmdinaCuttingPlanRender = {
         build: build_cutting_plan_html,
+        addonCutterBanner: renderAddonCutterBanner,
+        mountAddonCutterBanner,
         parse: parse_plan,
         print: print_cutting_plan,
         physicalMarginsMm,

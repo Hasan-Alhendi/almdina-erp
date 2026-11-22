@@ -29,8 +29,7 @@ piece_instance_id width_cm length_cm final_width_cm final_length_cm qty
 allow_rotation edge_long_right edge_long_left edge_width_top edge_width_bottom
 edge_break edge_break_only piece_type clipped_corner_position
 clipped_corner_width_cm clipped_corner_length_cm special_shape_geometry_json
-glass_margin_mm glass_margin_mode glass_margin_top_mm glass_margin_bottom_mm
-glass_margin_right_mm glass_margin_left_mm extra_double extra_double_reference_sides
+glass_margin_mm extra_double extra_double_reference_sides
 edge_long_thickness_mm edge_width_thickness_mm liner_specs_json
 extra_liner liner_reference_side liner_offset_cm liner_width_cm liner_start_cm liner_length_cm
 extra_back_groove back_groove_reference_side back_groove_offset_cm back_groove_width_cm back_groove_start_cm back_groove_length_cm
@@ -51,10 +50,17 @@ qty allow_rotation edge_long_right edge_long_left edge_width_top edge_width_bott
 edge_break edge_break_only extra_double extra_liner extra_back_groove extra_recessed_handle_cutout
 """.split())
 _STRING_PIECE_KEYS = frozenset("""
-piece_instance_id piece_type extra_double_reference_sides glass_margin_mode clipped_corner_position
+piece_instance_id piece_type extra_double_reference_sides clipped_corner_position
 special_shape_geometry_json liner_specs_json liner_reference_side
 back_groove_reference_side recessed_handle_reference_side
 """.split())
+# Individual Glass margins were introduced after V3 was deployed. They are
+# permitted only in the existing V4 manufacturing baseline, never in V2/V3.
+_V4_GLASS_KEYS = frozenset({
+    "glass_margin_mode", "glass_margin_top_mm", "glass_margin_bottom_mm",
+    "glass_margin_right_mm", "glass_margin_left_mm",
+})
+
 _MACHINING_GROUPS = tuple(
     frozenset((enabled, *(f"{prefix}_{suffix}" for suffix in (
         "reference_side", "offset_cm", "width_cm", "start_cm", "length_cm",
@@ -160,7 +166,7 @@ def validate_v4_baseline(value: Any) -> None:
     for piece in pieces:
         if not isinstance(piece, dict):
             raise PlanFingerprintContractError('invalid_v4_baseline_piece')
-        freeze_geometry_piece(piece)
+        freeze_geometry_piece(piece, version=MANUFACTURING_BASELINE_VERSION)
 
 
 @dataclass(frozen=True)
@@ -175,22 +181,28 @@ class FingerprintCompatibility:
         return self.state in {'MATCH', 'COMPATIBLE'}
 
 
-def freeze_geometry_piece(piece: Mapping[str, Any]) -> dict[str, Any]:
-    if set(piece) - GEOMETRY_PIECE_KEYS:
+def freeze_geometry_piece(
+    piece: Mapping[str, Any], *, version: int = FINGERPRINT_CONTRACT_VERSION,
+) -> dict[str, Any]:
+    # V2 shares V3's frozen piece representation; only its known historical
+    # omitted fields differ. The caller removes those fields after projection.
+    if version not in (2, FINGERPRINT_CONTRACT_VERSION, MANUFACTURING_BASELINE_VERSION):
+        raise PlanFingerprintContractError('unsupported_fingerprint_schema')
+    allowed_keys = (
+        GEOMETRY_PIECE_KEYS | _V4_GLASS_KEYS
+        if version == MANUFACTURING_BASELINE_VERSION else GEOMETRY_PIECE_KEYS
+    )
+    if set(piece) - allowed_keys:
         raise PlanFingerprintContractError('unknown_fingerprint_piece_fields')
     if _REQUIRED_PIECE_KEYS - set(piece):
         raise PlanFingerprintContractError('missing_fingerprint_piece_fields')
     if piece['piece_type'] == 'Glass':
-        individual = piece.get('glass_margin_mode') == 'Individual Sides'
+        individual = (
+            version == MANUFACTURING_BASELINE_VERSION
+            and piece.get('glass_margin_mode') == 'Individual Sides'
+        )
         if individual:
-            required = {
-                'glass_margin_mode',
-                'glass_margin_top_mm',
-                'glass_margin_bottom_mm',
-                'glass_margin_right_mm',
-                'glass_margin_left_mm',
-            }
-            if required - set(piece):
+            if _V4_GLASS_KEYS - set(piece):
                 raise PlanFingerprintContractError('missing_fingerprint_glass_margin')
         elif 'glass_margin_mm' not in piece:
             raise PlanFingerprintContractError('missing_fingerprint_glass_margin')
@@ -199,7 +211,12 @@ def freeze_geometry_piece(piece: Mapping[str, Any]) -> dict[str, Any]:
         if present and present != group:
             raise PlanFingerprintContractError('incomplete_fingerprint_machining_fields')
     for key, value in piece.items():
-        expected = int if key in _INTEGER_PIECE_KEYS else str if key in _STRING_PIECE_KEYS else float
+        expected = (
+            int if key in _INTEGER_PIECE_KEYS
+            else str if key in _STRING_PIECE_KEYS or (
+                version == MANUFACTURING_BASELINE_VERSION and key == 'glass_margin_mode'
+            ) else float
+        )
         if type(value) is not expected:
             raise PlanFingerprintContractError('noncanonical_fingerprint_piece_type')
     return dict(piece)

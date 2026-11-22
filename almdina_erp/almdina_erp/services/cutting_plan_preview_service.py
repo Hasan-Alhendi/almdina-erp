@@ -44,6 +44,10 @@ from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_preview_commit i
 from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_preview_store import (
     FrappeCuttingPlanPreviewStore,
 )
+from almdina_erp.almdina_erp.domain.cutting.addon_cutter_rules import (
+    AddonCutterRejected,
+    public_addon_findings,
+)
 from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_workspace import (
     calculate_system_plan,
     apply_calculation_outcome,
@@ -333,6 +337,18 @@ def _build_session(order,source,settings,*,previous=None):
     return session
 
 
+def _rejected_addon_preview(order: Any, findings: list[dict[str, Any]]) -> dict[str, Any]:
+    """Structured refusal. No preview is stored and the saved plan stays put."""
+
+    return {
+        "accepted": False,
+        "calculation_rejected": True,
+        "order_name": order.name,
+        "plan": None,
+        "addon_cutter_rejections": public_addon_findings(findings),
+    }
+
+
 @frappe.whitelist()
 def preview_cutting_plan(
     order_name: str,
@@ -393,7 +409,10 @@ def preview_cutting_plan(
     )
 
     _settings_authority(order,source_plan,settings)
-    session = _build_session(order,source_plan,settings)
+    try:
+        session = _build_session(order,source_plan,settings)
+    except AddonCutterRejected as rejected:
+        return _rejected_addon_preview(order, rejected.findings)
     return _response(session,source_plan,order)
 
 
@@ -426,7 +445,10 @@ def continue_cutting_plan_search(order_name: str,preview_id: str):
     previous,source = _session(order,preview_id)
     if previous.search_round>=2:
         frappe.throw(_("The search batch limit was reached. Create a new preview."),frappe.ValidationError)
-    session = _build_session(order,source,previous.settings,previous=previous)
+    try:
+        session = _build_session(order,source,previous.settings,previous=previous)
+    except AddonCutterRejected as rejected:
+        return _rejected_addon_preview(order, rejected.findings)
     FrappeCuttingPlanPreviewStore().discard(previous.preview_id)
     return _response(session,source,order)
 
