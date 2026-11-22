@@ -93,6 +93,10 @@
         if (warning && warning.nextElementSibling !== gallery) {
             planRoot.insertBefore(warning, gallery);
         }
+        const cutterWarning = planRoot.querySelector(":scope > .dco-addon-cutter-warning");
+        if (cutterWarning && cutterWarning.nextElementSibling !== gallery) {
+            planRoot.insertBefore(cutterWarning, gallery);
+        }
         return gallery;
     }
 

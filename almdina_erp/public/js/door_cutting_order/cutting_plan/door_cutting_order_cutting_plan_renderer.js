@@ -1041,6 +1041,118 @@
         </div>`;
     }
 
+    const ADDON_CUTTER_BANNER_CODES = new Set([
+        "liner_narrower_than_cutter",
+        "rear_groove_oversize_unsafe",
+        "rear_groove_neighbor_conflict",
+    ]);
+
+    function addonKindLabel(kind) {
+        if (kind === "back_groove") return translate("rear groove");
+        if (kind === "recessed_handle_cutout") return translate("plunge handle");
+        if (kind === "liner") return translate("liner");
+        return translate("add-on");
+    }
+
+    function millimetreText(value) {
+        const number = Number(value);
+        if (!Number.isFinite(number)) return "—";
+        const rounded = Math.round(number * 100) / 100;
+        return String(rounded);
+    }
+
+    function addonCutterLine(finding) {
+        const door = finding.door_no == null || finding.door_no === "" ? "—" : finding.door_no;
+        const width = millimetreText(finding.width_mm);
+        const diameter = millimetreText(finding.diameter_mm);
+        const code = String(finding.code || "");
+        const neighbor = finding.neighbor_piece_no;
+        if (code === "rear_groove_neighbor_conflict" && neighbor != null && neighbor !== "") {
+            return [
+                translate(
+                    "Door {0}: the rear groove is {1} mm wide and its cutter is {2} mm. The cutter body enters door {3}. The cutting plan cannot be calculated or approved.",
+                    [door, width, diameter, neighbor]
+                ),
+                translate("Separate the two doors along that edge, or turn the grooved door so the groove faces an open edge, then calculate again. The groove width and the cutter are not changed automatically."),
+            ].join(" ");
+        }
+        if (code === "rear_groove_oversize_unsafe") {
+            return [
+                translate(
+                    "Door {0}: the rear groove is {1} mm wide and its cutter is {2} mm. A wider cutter is allowed only when the groove starts at the door edge and the cutter covers that width without cutting the rest of the door.",
+                    [door, width, diameter]
+                ),
+                translate("Run the rear groove along the open door edge, or choose a cutter whose diameter is less than or equal to the groove width, then calculate again."),
+            ].join(" ");
+        }
+        return [
+            translate(
+                "Door {0}: the {1} is {2} mm wide and its cutter is {3} mm. The cutter is wider than the add-on, so the cutting plan cannot be calculated or approved.",
+                [door, addonKindLabel(finding.kind), width, diameter]
+            ),
+            translate("Choose a cutter whose diameter is less than or equal to the add-on width, or increase the add-on width, then calculate again. Values are not changed automatically."),
+        ].join(" ");
+    }
+
+    function renderAddonCutterBanner(findings, source) {
+        const rows = Array.isArray(findings) ? findings.filter(Boolean) : [];
+        if (!rows.length) return "";
+        const items = rows.map(finding => `<li>${escape_html(addonCutterLine(finding))}</li>`).join("");
+        const origin = source ? ` data-addon-cutter-source="${escape_html(source)}"` : "";
+        return `<div class="dco-addon-cutter-warning" role="alert"${origin} dir="${escape_html(uiDirection())}"><b>${htmlText("Warning:")}</b><ul class="dco-addon-cutter-warning__items">${items}</ul></div>`;
+    }
+
+    function collectAddonCutterFindings(frm, plan) {
+        if (plan && Array.isArray(plan.addon_cutter_rejections)) return plan.addon_cutter_rejections;
+        const diameters = layerToolDiameters(plan, frm, planCutterDiameterMm(plan, frm));
+        const specs = [
+            ["liner", "extra_liner", "liner_width_cm", "liner_offset_cm"],
+            ["back_groove", "extra_back_groove", "back_groove_width_cm", "back_groove_offset_cm"],
+            ["recessed_handle_cutout", "extra_recessed_handle_cutout", "recessed_handle_width_cm", "recessed_handle_offset_cm"],
+        ];
+        const findings = [];
+        (plan.sheets || []).forEach(sheet => {
+            (sheet.pieces || []).forEach(raw => {
+                const piece = pieceWithLinerSpec(frm, raw);
+                if (String(piece.piece_type || "") === "Special") return;
+                specs.forEach(([kind, enabled, widthField, offsetField]) => {
+                    if (!num(piece[enabled]) || !(num(piece[widthField]) > 0)) return;
+                    const widthMm = num(piece[widthField]) * 10;
+                    const diameter = diameters[kind];
+                    if (!(diameter > 0) || widthMm + 0.25 >= diameter) return;
+                    if (kind === "back_groove" && Math.abs(num(piece[offsetField]) * 10) <= 0.25) return;
+                    const head = String(piece.label || "").split(".")[0];
+                    findings.push({
+                        door_no: piece.source_piece_no != null && piece.source_piece_no !== ""
+                            ? piece.source_piece_no
+                            : (head || "—"),
+                        kind,
+                        width_mm: widthMm,
+                        diameter_mm: diameter,
+                        code: "liner_narrower_than_cutter",
+                    });
+                });
+            });
+        });
+        return findings;
+    }
+
+    function mountAddonCutterBanner(planRoot, findings) {
+        if (!planRoot || typeof planRoot.querySelector !== "function") return;
+        const previous = planRoot.querySelector(".dco-addon-cutter-warning[data-addon-cutter-source='server']");
+        if (previous) previous.remove();
+        const rows = Array.isArray(findings) ? findings.filter(Boolean) : [];
+        if (!rows.length) return;
+        planRoot.querySelectorAll(".dco-addon-cutter-warning").forEach(node => node.remove());
+        const markup = renderAddonCutterBanner(rows, "server");
+        const gallery = planRoot.querySelector(".dco-board-gallery") || planRoot.querySelector(".dco-sheet-card");
+        if (gallery && typeof gallery.insertAdjacentHTML === "function") {
+            gallery.insertAdjacentHTML("beforebegin", markup);
+            return;
+        }
+        if (typeof planRoot.insertAdjacentHTML === "function") planRoot.insertAdjacentHTML("afterbegin", markup);
+    }
+
     function render_unplaced_pieces_warning(plan) {
         const unplaced = plan && Array.isArray(plan.unplaced) ? plan.unplaced : [];
         if (!unplaced.length) return "";
@@ -1480,6 +1592,7 @@
         const paths = overlays.map((overlay, index) => {
             const kind = String((overlay && overlay.kind) || "").trim();
             const geometry = overlay && overlay.geometry;
+            if (overlay && overlay.error && ADDON_CUTTER_BANNER_CODES.has(overlay.error)) return "";
             if (overlay && overlay.error) {
                 const engine = window.AlmdinaMachiningOverlay;
                 const addon = engine && typeof engine.addon === "function" ? engine.addon(kind) : null;
@@ -1773,6 +1886,7 @@
                 ${render_plan_meta_strip(frm, plan)}
 
                 <div class="dco-plan-method-line" style="font-size:12px;margin-bottom:8px;"><b>${htmlText("Layout method:")}</b> ${escape_html(knownStrategyText(plan.method_key, plan.method_label || frm.doc.packing_method || ""))}</div>
+                ${renderAddonCutterBanner(collectAddonCutterFindings(frm, plan))}
                 ${render_unplaced_pieces_warning(plan)}
         `;
 
@@ -2102,6 +2216,7 @@
                 ${printOrderMetaHtml(frm, plan, totalSheets, source)}
                 ${render_edge_band_legend()}
                 ${render_extra_addon_legend()}
+                ${pageIndex === 0 ? renderAddonCutterBanner(collectAddonCutterFindings(frm, plan)) : ""}
                 <div class="dco-print-sheets-grid">${gridRows}</div>
             </section>`;
         }).join("");
@@ -2240,6 +2355,17 @@ ${printHeaderCss()}
     justify-content: center;
     align-items: flex-start;
     gap: 2.2mm;
+}
+.dco-addon-cutter-warning {
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
+    border: 1px solid #d9534f;
+    background: #fff5f5;
+    color: #a94442;
+    padding: 8px;
+    border-radius: 8px;
+    margin: 0 0 12px 0;
 }
 .dco-sheet-card {
     flex: 0 0 var(--print-card-width, auto);
@@ -2580,6 +2706,8 @@ ${printHeaderCss()}
 
     window.AlmdinaCuttingPlanRender = {
         build: build_cutting_plan_html,
+        addonCutterBanner: renderAddonCutterBanner,
+        mountAddonCutterBanner,
         parse: parse_plan,
         print: print_cutting_plan,
         physicalMarginsMm,

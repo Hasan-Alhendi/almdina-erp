@@ -379,7 +379,10 @@
                 }, 5);
             } else if (!ok) {
                 const snapshot = typeof previews.snapshot === "function" ? previews.snapshot(frm) : null;
-                if (snapshot && snapshot.error) frappe.msgprint(translate(snapshot.error));
+                const banner = snapshot && Array.isArray(snapshot.addonCutterRejections)
+                    ? snapshot.addonCutterRejections
+                    : [];
+                if (!banner.length && snapshot && snapshot.error) frappe.msgprint(translate(snapshot.error));
             }
             return Boolean(ok);
         } catch (error) {

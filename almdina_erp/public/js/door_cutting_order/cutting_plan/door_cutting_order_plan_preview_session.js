@@ -135,6 +135,7 @@
             previewId: null,
             payload: null,
             error: null,
+            addonCutterRejections: [],
             generation: 0,
             activeRequestGeneration: null,
             requestedSettings: null,
@@ -165,6 +166,9 @@
             previewId: state.previewId,
             payload: state.payload ? JSON.parse(JSON.stringify(state.payload)) : null,
             error: state.error,
+            addonCutterRejections: Array.isArray(state.addonCutterRejections)
+                ? state.addonCutterRejections.map(item => ({ ...item }))
+                : [],
             candidateBusy: state.candidateBusy,
             requestedSettings: state.requestedSettings ? { ...state.requestedSettings } : null,
         });
@@ -205,6 +209,7 @@
         state.previewId = null;
         state.payload = null;
         state.error = null;
+        state.addonCutterRejections = [];
         dispatch(frm);
         return true;
     }
@@ -309,10 +314,24 @@
         state.previewId = null;
         state.payload = null;
         state.error = null;
+        state.addonCutterRejections = [];
         dispatch(frm);
         try {
             const payload = await api.preview(orderName, { ...requested });
             if (!current()) return false;
+            if (payload && payload.calculation_rejected) {
+                state.status = "error";
+                state.previewId = null;
+                state.payload = null;
+                state.addonCutterRejections = Array.isArray(payload.addon_cutter_rejections)
+                    ? payload.addon_cutter_rejections
+                    : [];
+                state.error = state.addonCutterRejections.length
+                    ? "The cutting plan was not calculated. Correct the cutter and the add-on, then calculate again."
+                    : "No manufacturing-valid cutting plan was found.";
+                dispatch(frm);
+                return false;
+            }
             if (!payload || !payload.preview_id || !payload.plan
                 || payload.order_name !== orderName
                 || !payload.source_plan_name
@@ -330,6 +349,7 @@
             state.expiresAt = payload.expires_in_sec == null ? null : Date.now() + Number(payload.expires_in_sec) * 1000;
             armExpiry(frm, state);
             state.error = null;
+            state.addonCutterRejections = [];
             dispatch(frm);
             return true;
         } catch (error) {

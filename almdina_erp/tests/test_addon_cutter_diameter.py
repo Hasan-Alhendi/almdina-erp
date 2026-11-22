@@ -11,6 +11,7 @@ from almdina_erp.tests.frappe_test_stub import install_if_unavailable
 install_if_unavailable()
 
 from almdina_erp.almdina_erp.domain.cutting.addon_cutter_rules import (
+    AddonCutterRejected,
     as_dxf_issues,
     assess_piece_addons,
     layout_conflicts,
@@ -291,6 +292,124 @@ def test_neighbor_conflict_is_repaired_only_along_the_groove():
     assert placed["clear"]["x"] == clear["x"]
     assert placed["clear"]["y"] == clear["y"]
     assert layout_conflicts(repaired, DIAMETERS) == []
+
+
+def test_an_l_shaped_notch_is_not_treated_as_solid_material():
+    host = _door(
+        id="host",
+        label="4.1",
+        source_piece_no=4,
+        extra_back_groove=1,
+        back_groove_reference_side="edge_long_right",
+        back_groove_offset_cm=0,
+        back_groove_width_cm=0.5,
+        x=0,
+        y=0,
+        w=40,
+        h=30,
+        width_cm=40,
+        length_cm=30,
+    )
+    neighbor = _door(
+        id="neighbor",
+        label="5.1",
+        source_piece_no=5,
+        piece_type="L-Shaped Corner",
+        clipped_corner_position="Top Left",
+        clipped_corner_width_cm=12,
+        clipped_corner_length_cm=40,
+        x=40.15,
+        y=0,
+        w=20,
+        h=50,
+        width_cm=20,
+        length_cm=50,
+    )
+    plan = {"sheets": [{"sheet_no": 1, "w": 120, "h": 80, "pieces": [host, neighbor]}]}
+    assert layout_conflicts(plan, DIAMETERS) == []
+
+
+def test_a_shift_moves_the_sheet_outline_with_the_door():
+    host = _door(
+        id="host",
+        label="4.1",
+        source_piece_no=4,
+        extra_back_groove=1,
+        back_groove_reference_side="edge_long_right",
+        back_groove_offset_cm=0,
+        back_groove_width_cm=0.5,
+        x=0,
+        y=0,
+        w=40,
+        h=50,
+        width_cm=40,
+        length_cm=50,
+    )
+    neighbor = _door(
+        id="neighbor",
+        label="5.1",
+        source_piece_no=5,
+        x=40.2,
+        y=0,
+        w=20,
+        h=50,
+        width_cm=20,
+        length_cm=50,
+        geometry={"outer": [[402, 0], [602, 0], [602, 500], [402, 500]], "holes": []},
+    )
+    plan = {"sheets": [{"sheet_no": 1, "w": 120, "h": 80, "pieces": [host, neighbor]}]}
+    repaired, remaining = resolve_exceptional_groove_layout(plan, DIAMETERS, kerf_cm=0.2)
+    assert remaining == []
+    placed = next(piece for piece in repaired["sheets"][0]["pieces"] if piece["id"] == "neighbor")
+    assert placed["x"] > neighbor["x"]
+    assert placed["geometry"]["outer"][0][0] > 402
+
+
+def test_width_mismatch_is_refused_before_the_nesting_engine(monkeypatch):
+    from types import SimpleNamespace
+
+    from almdina_erp.almdina_erp.domain.cutting.plan_settings import PlanSettings
+    from almdina_erp.almdina_erp.infrastructure.frappe import cutting_plan_workspace as workspace
+
+    called = []
+    monkeypatch.setattr(
+        workspace.frappe, "get_cached_doc",
+        lambda *args: SimpleNamespace(
+            optimal_search_piece_limit=40,
+            min_remnant_width_mm=10,
+            min_remnant_length_mm=10,
+            min_remnant_area_m2=0.0001,
+            alignment_search_budget_sec=0,
+            max_centerable_edge_gap_cm=5,
+        ),
+        raising=False,
+    )
+    monkeypatch.setattr(workspace, "_board_dimensions_mm", lambda order: (1220, 2440))
+    monkeypatch.setattr(
+        workspace, "_validated_plan_settings",
+        lambda plan: PlanSettings("smart", "CNC Router", 4, 0, 0),
+    )
+    monkeypatch.setattr(workspace, "plan_input_fingerprint", lambda *args, **kwargs: "fp")
+    monkeypatch.setattr(workspace, "_piece_rows", lambda order, plan=None: ({
+        "piece_type": "Regular",
+        "source_piece_no": 3,
+        "width_cm": 40,
+        "length_cm": 80,
+        "extra_liner": 1,
+        "liner_reference_side": "edge_width_top",
+        "liner_offset_cm": 0,
+        "liner_width_cm": 0.5,
+    },))
+    monkeypatch.setattr(workspace, "optimize_order_plan", lambda *args, **kwargs: called.append(True))
+    plan = SimpleNamespace(liner_tool_diameter_mm=8, kerf_mm=4)
+    try:
+        workspace.calculate_system_plan(SimpleNamespace(), plan)
+    except AddonCutterRejected as rejected:
+        assert called == []
+        assert rejected.findings[0]["source_piece_no"] == 3
+        assert rejected.findings[0]["code"] == "liner_narrower_than_cutter"
+    else:
+        raise AssertionError("the nesting engine was allowed to run")
 
 
 def test_cards_name_the_door_addon_width_and_correction():

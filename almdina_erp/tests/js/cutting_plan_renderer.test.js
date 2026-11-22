@@ -1327,3 +1327,72 @@ assert.match(warningTag(ltrWarningHtml), /dir="ltr"/);
 assert.match(ltrWarningHtml, /2 pieces were not placed on the boards/);
 assert.equal(ltrWarningHtml.indexOf("dco-unplaced-pieces-warning") < ltrWarningHtml.indexOf('class="dco-sheet-card"'), true);
 delete fakeWindow.AlmdinaLocale;
+
+function addonPlan(pieces) {
+    return {
+        ...plan,
+        kerf_mm: 4,
+        liner_tool_diameter_mm: 8,
+        handle_recess_tool_diameter_mm: 8,
+        rear_groove_tool_diameter_mm: 8,
+        sheets: [{ sheet_no: 1, pieces }, { sheet_no: 2, pieces: [] }],
+    };
+}
+const wideLiner = {
+    x: 0, y: 0, w: 40, h: 80, original_w: 40, original_h: 80,
+    piece_type: "Regular", source_piece_no: 4, label: "4.1",
+    extra_liner: 1, liner_reference_side: "edge_width_top",
+    liner_offset_cm: 0, liner_width_cm: 0.5,
+};
+const wideHandle = {
+    ...wideLiner, source_piece_no: 9, label: "9.1", extra_liner: 0,
+    extra_recessed_handle_cutout: 1,
+    recessed_handle_reference_side: "edge_width_bottom",
+    recessed_handle_width_cm: 0.4,
+};
+const bannerHtml = renderer.build(frm, addonPlan([wideLiner, wideHandle]));
+const bannerAt = bannerHtml.indexOf("dco-addon-cutter-warning");
+const boardAt = bannerHtml.indexOf('class="dco-sheet-card"');
+assert.ok(bannerAt >= 0 && bannerAt < boardAt);
+assert.equal((bannerHtml.match(/class="dco-addon-cutter-warning"/g) || []).length, 1);
+assert.doesNotMatch(bannerHtml, /data-liner-toolpath-error="liner_narrower_than_cutter"/);
+assert.match(bannerHtml, /Door 4:/);
+assert.match(bannerHtml, /Door 9:/);
+assert.match(bannerHtml, /5 mm/);
+assert.match(bannerHtml, /4 mm/);
+assert.match(bannerHtml, /8 mm/);
+assert.match(bannerHtml, /Choose a cutter whose diameter is less than or equal to the add-on width/);
+const fitting = renderer.build(frm, addonPlan([{
+    ...wideLiner, liner_width_cm: 1.8,
+}]));
+assert.doesNotMatch(fitting, /dco-addon-cutter-warning/);
+fakeWindow.AlmdinaLocale = {
+    direction: () => "rtl",
+    translate(message, values) {
+        const arabic = {
+            "Warning:": "تنبيه:",
+            "liner": "لاينر",
+            "plunge handle": "مسكة الغطس",
+            "Door {0}: the {1} is {2} mm wide and its cutter is {3} mm. The cutter is wider than the add-on, so the cutting plan cannot be calculated or approved.": "الدرفة {0}: عرض {1} {2} مم وقطر ريشتها {3} مم.",
+            "Choose a cutter whose diameter is less than or equal to the add-on width, or increase the add-on width, then calculate again. Values are not changed automatically.": "اختر ريشة لا تتجاوز عرض الإضافة.",
+        };
+        let text = arabic[message] || String(message);
+        if (Array.isArray(values)) values.forEach((value, index) => {
+            text = text.split("{" + index + "}").join(String(value));
+        });
+        return text;
+    },
+};
+const arabicBanner = renderer.build(frm, addonPlan([wideLiner]));
+assert.match(arabicBanner, /dir="rtl"/);
+assert.match(arabicBanner, /تنبيه:/);
+assert.match(arabicBanner, /الدرفة 4: عرض لاينر 5 مم/);
+delete fakeWindow.AlmdinaLocale;
+const styles = fs.readFileSync(
+    path.resolve(__dirname, "../../public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_content_styles.js"),
+    "utf8"
+);
+assert.match(styles, /\[data-theme="light"\] \[data-fieldname="cutting_plan_html"\] \.dco-addon-cutter-warning/);
+assert.match(styles, /\[data-theme="dark"\] \[data-fieldname="cutting_plan_html"\] \.dco-addon-cutter-warning/);
+assert.match(styles, /#fff5f5/);
+assert.match(styles, /--alm-status-danger-fg/);

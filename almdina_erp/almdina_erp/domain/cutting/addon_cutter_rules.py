@@ -27,11 +27,38 @@ from almdina_erp.almdina_erp.domain.cutting.liner_geometry import (
     CM_TO_MM,
     LinerGeometryError,
     LinerPiece,
+    _point_in_material,
     extension_conflict_details,
+    obstacle_geometry_mm,
+    piece_polygon_mm,
     piece_quarter_turns,
     liner_parameters_active,
     transform_point,
 )
+
+
+class AddonCutterRejected(Exception):
+    """Width or placement rejection. Calculation must not keep this layout."""
+
+    def __init__(self, findings: Sequence[Mapping[str, Any]]):
+        self.findings = [dict(item) for item in findings]
+        super().__init__("addon cutter rejected")
+
+
+def public_addon_findings(findings: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    """JSON findings for the plan banner. Widths stay in millimetres."""
+
+    rows = []
+    for item in findings:
+        rows.append({
+            "door_no": item.get("source_piece_no"),
+            "kind": str(item.get("kind") or ""),
+            "width_mm": item.get("width_mm"),
+            "diameter_mm": item.get("diameter_mm"),
+            "code": str(item.get("code") or ""),
+            "neighbor_piece_no": item.get("neighbor_piece_no"),
+        })
+    return rows
 from almdina_erp.almdina_erp.domain.cutting.machining_overlay import (
     MACHINING_ADDONS,
     generate_toolpath,
@@ -234,8 +261,56 @@ def assess_piece_addons(
     return found
 
 
+def _map_onto_outer(
+    local_outline: Sequence[Sequence[float]],
+    outer: Sequence[Sequence[float]],
+    points: Sequence[Sequence[float]],
+) -> list[tuple[float, float]] | None:
+    """Place a local path on the persisted outline, including free rotation."""
+
+    if len(local_outline) < 2 or len(outer) < 2:
+        return None
+    origin = (float(local_outline[0][0]), float(local_outline[0][1]))
+    source = (
+        float(local_outline[1][0]) - origin[0],
+        float(local_outline[1][1]) - origin[1],
+    )
+    destination_origin = (float(outer[0][0]), float(outer[0][1]))
+    destination = (
+        float(outer[1][0]) - destination_origin[0],
+        float(outer[1][1]) - destination_origin[1],
+    )
+    source_length = math.hypot(*source)
+    destination_length = math.hypot(*destination)
+    if source_length <= 1e-6 or destination_length <= 1e-6:
+        return None
+    if abs(destination_length - source_length) > max(1.0, source_length * 0.02):
+        return None
+    cosine = (source[0] * destination[0] + source[1] * destination[1]) / (
+        source_length * destination_length
+    )
+    sine = (source[0] * destination[1] - source[1] * destination[0]) / (
+        source_length * destination_length
+    )
+    mapped = []
+    for point in points:
+        vector_x = float(point[0]) - origin[0]
+        vector_y = float(point[1]) - origin[1]
+        mapped.append((
+            destination_origin[0] + vector_x * cosine - vector_y * sine,
+            destination_origin[1] + vector_x * sine + vector_y * cosine,
+        ))
+    return mapped
+
+
 def _sheet_path(piece: Mapping[str, Any], local: Sequence[Sequence[float]]) -> list[tuple[float, float]]:
     host = _piece_host(piece)
+    geometry = piece.get("geometry") if isinstance(piece.get("geometry"), Mapping) else None
+    outer = geometry.get("outer") if geometry else None
+    if isinstance(outer, Sequence) and len(outer) >= 2:
+        mapped = _map_onto_outer(piece_polygon_mm(host), outer, local)
+        if mapped:
+            return mapped
     width = float(host.width_cm) * CM_TO_MM
     height = float(host.length_cm) * CM_TO_MM
     turns = piece_quarter_turns(piece)
@@ -256,13 +331,10 @@ def _sheet_path(piece: Mapping[str, Any], local: Sequence[Sequence[float]]) -> l
 
 
 def _obstacle(piece: Mapping[str, Any]) -> dict[str, Any]:
-    x = num(piece.get("x")) * CM_TO_MM
-    y = num(piece.get("y")) * CM_TO_MM
-    width = num(piece.get("w")) * CM_TO_MM
-    height = num(piece.get("h")) * CM_TO_MM
+    geometry = obstacle_geometry_mm(piece)
     return {
-        "outer": [(x, y), (x + width, y), (x + width, y + height), (x, y + height)],
-        "holes": [],
+        "outer": list(geometry.get("outer") or ()),
+        "holes": list(geometry.get("holes") or ()),
         "diagnostic": {
             "label": str(piece.get("label") or ""),
             "piece_id": piece.get("id"),
@@ -356,14 +428,48 @@ def _rect(piece: Mapping[str, Any]) -> dict[str, float]:
     }
 
 
+def _sheet_span_cm(sheet: Mapping[str, Any]) -> tuple[float, float]:
+    return (
+        num(sheet.get("w") or sheet.get("full_width_cm") or sheet.get("usable_width_cm")),
+        num(sheet.get("h") or sheet.get("full_length_cm") or sheet.get("usable_length_cm")),
+    )
+
+
 def _inside_sheet(piece: Mapping[str, Any], sheet: Mapping[str, Any]) -> bool:
     rect = _rect(piece)
+    width, height = _sheet_span_cm(sheet)
     return (
         rect["x"] >= -1e-6
         and rect["y"] >= -1e-6
-        and rect["x"] + rect["w"] <= num(sheet.get("w")) + 1e-6
-        and rect["y"] + rect["h"] <= num(sheet.get("h")) + 1e-6
+        and rect["x"] + rect["w"] <= width + 1e-6
+        and rect["y"] + rect["h"] <= height + 1e-6
     )
+
+
+def _translate_sheet_geometry(piece: dict[str, Any], dx_cm: float, dy_cm: float) -> None:
+    """Move placement and any sheet-space outline by the same amount."""
+
+    piece["x"] = num(piece.get("x")) + dx_cm
+    piece["y"] = num(piece.get("y")) + dy_cm
+    geometry = piece.get("geometry")
+    if not isinstance(geometry, dict):
+        return
+    dx_mm = dx_cm * CM_TO_MM
+    dy_mm = dy_cm * CM_TO_MM
+
+    def move(ring: Sequence[Any]) -> list[list[float]]:
+        return [
+            [float(point[0]) + dx_mm, float(point[1]) + dy_mm]
+            for point in ring
+            if isinstance(point, Sequence) and len(point) >= 2
+        ]
+
+    if isinstance(geometry.get("outer"), list):
+        geometry["outer"] = move(geometry["outer"])
+    if isinstance(geometry.get("holes"), list):
+        geometry["holes"] = [
+            move(hole) for hole in geometry["holes"] if isinstance(hole, Sequence)
+        ]
 
 
 def _shift_pair(
@@ -383,17 +489,28 @@ def _shift_pair(
     key = "x" if axis == "x" else "y"
 
     def apply(target: dict[str, Any], delta: float) -> bool:
-        original = num(target.get(key))
-        target[key] = original + delta
+        original_x = num(target.get("x"))
+        original_y = num(target.get("y"))
+        original_geometry = deepcopy(target.get("geometry")) if isinstance(target.get("geometry"), dict) else None
+        dx_cm = delta if key == "x" else 0.0
+        dy_cm = delta if key == "y" else 0.0
+        _translate_sheet_geometry(target, dx_cm, dy_cm)
+        def restore() -> None:
+            target["x"] = original_x
+            target["y"] = original_y
+            if original_geometry is None:
+                target.pop("geometry", None)
+            else:
+                target["geometry"] = original_geometry
         if not _inside_sheet(target, sheet):
-            target[key] = original
+            restore()
             return False
         rect = _rect(target)
         for other in pieces:
             if other is target:
                 continue
             if not rects_have_clearance(rect, _rect(other), kerf_cm):
-                target[key] = original
+                restore()
                 return False
         return True
 
@@ -418,42 +535,64 @@ def _path_samples(path: Sequence[Sequence[float]]) -> list[tuple[float, float]]:
     return samples or [(float(path[0][0]), float(path[0][1]))]
 
 
-def _neighbor_rect_mm(neighbor: Mapping[str, Any]) -> tuple[float, float, float, float]:
-    x0 = num(neighbor.get("x")) * CM_TO_MM
-    y0 = num(neighbor.get("y")) * CM_TO_MM
-    return (x0, y0, x0 + num(neighbor.get("w")) * CM_TO_MM, y0 + num(neighbor.get("h")) * CM_TO_MM)
-
-
-def _push_from_body(
-    path: Sequence[Sequence[float]],
-    rect: tuple[float, float, float, float],
+def _closest_on_segment(
+    point: tuple[float, float],
+    start: tuple[float, float],
+    end: tuple[float, float],
 ) -> tuple[float, float]:
-    """Direction that moves the touched door off the cutter body."""
+    span_x = end[0] - start[0]
+    span_y = end[1] - start[1]
+    length_sq = span_x * span_x + span_y * span_y
+    if length_sq <= 1e-9:
+        return start
+    ratio = ((point[0] - start[0]) * span_x + (point[1] - start[1]) * span_y) / length_sq
+    ratio = min(1.0, max(0.0, ratio))
+    return (start[0] + ratio * span_x, start[1] + ratio * span_y)
 
-    x0, y0, x1, y1 = rect
-    inside = [
-        point for point in _path_samples(path)
-        if x0 <= point[0] <= x1 and y0 <= point[1] <= y1
-    ]
-    if inside:
-        point = inside[0]
-        edges = (
-            (point[0] - x0, 1.0, 0.0),
-            (x1 - point[0], -1.0, 0.0),
-            (point[1] - y0, 0.0, 1.0),
-            (y1 - point[1], 0.0, -1.0),
-        )
-        _distance, sign_x, sign_y = min(edges, key=lambda item: item[0])
-        return sign_x, sign_y
+
+def _push_from_polygon(
+    path: Sequence[Sequence[float]],
+    outer: Sequence[Sequence[float]],
+) -> tuple[float, float]:
+    """Push toward the real outline, not its bounding rectangle."""
+
+    ring = [(float(point[0]), float(point[1])) for point in outer]
+    if len(ring) < 3:
+        return (0.0, 0.0)
+    samples = _path_samples(path)
+    inside = next((point for point in samples if _point_in_material(point, ring, [])), None)
+    if inside is not None:
+        best_distance = float("inf")
+        best_edge = (ring[0], ring[1])
+        for index, start in enumerate(ring):
+            end = ring[(index + 1) % len(ring)]
+            closest = _closest_on_segment(inside, start, end)
+            distance = (closest[0] - inside[0]) ** 2 + (closest[1] - inside[1]) ** 2
+            if distance < best_distance:
+                best_distance = distance
+                best_edge = (start, end)
+        start, end = best_edge
+        normal_x = end[1] - start[1]
+        normal_y = start[0] - end[0]
+        length = math.hypot(normal_x, normal_y) or 1.0
+        normal_x /= length
+        normal_y /= length
+        midpoint = ((start[0] + end[0]) / 2.0, (start[1] + end[1]) / 2.0)
+        probe = (midpoint[0] + normal_x, midpoint[1] + normal_y)
+        if not _point_in_material(probe, ring, []):
+            normal_x *= -1.0
+            normal_y *= -1.0
+        return normal_x, normal_y
     best_vector = (0.0, 0.0)
     best_distance = float("inf")
-    for point in _path_samples(path):
-        clamped = (min(max(point[0], x0), x1), min(max(point[1], y0), y1))
-        vector = (clamped[0] - point[0], clamped[1] - point[1])
-        distance = vector[0] * vector[0] + vector[1] * vector[1]
-        if distance < best_distance:
-            best_vector = vector
-            best_distance = distance
+    for point in samples:
+        for index, start in enumerate(ring):
+            closest = _closest_on_segment(point, start, ring[(index + 1) % len(ring)])
+            vector = (closest[0] - point[0], closest[1] - point[1])
+            distance = vector[0] * vector[0] + vector[1] * vector[1]
+            if distance < best_distance:
+                best_vector = vector
+                best_distance = distance
     return best_vector
 
 
@@ -484,7 +623,7 @@ def _separation_axis(
     path = _sheet_path(host, local)
     if len(path) < 2:
         return None
-    vector_x, vector_y = _push_from_body(path, _neighbor_rect_mm(neighbor))
+    vector_x, vector_y = _push_from_polygon(path, obstacle_geometry_mm(neighbor).get("outer") or ())
     if abs(vector_x) <= 1e-6 and abs(vector_y) <= 1e-6:
         return None
     if abs(vector_x) >= abs(vector_y):
@@ -520,6 +659,7 @@ def resolve_exceptional_groove_layout(
         if not issues:
             return current, []
         issue = issues[0]
+        before = float(issue.get("deficit_mm") or 0)
         moved = False
         for sheet in current.get("sheets") or ():
             host = next(
@@ -543,6 +683,15 @@ def resolve_exceptional_groove_layout(
             if axis is None:
                 continue
             distance_cm = (float(issue.get("deficit_mm") or 0) + 0.05) / CM_TO_MM
+            remembered = [
+                (
+                    piece,
+                    num(piece.get("x")),
+                    num(piece.get("y")),
+                    deepcopy(piece.get("geometry")) if isinstance(piece.get("geometry"), dict) else None,
+                )
+                for piece in sheet.get("pieces") or []
+            ]
             moved = _shift_pair(
                 sheet,
                 host.get("id"),
@@ -552,8 +701,27 @@ def resolve_exceptional_groove_layout(
                 distance_cm,
                 kerf_cm,
             )
-            if moved:
-                break
+            if not moved:
+                continue
+            follow_up = next(
+                (
+                    item for item in layout_conflicts(current, diameters)
+                    if item.get("label") == issue.get("label")
+                    and item.get("neighbor_label") == issue.get("neighbor_label")
+                ),
+                None,
+            )
+            if follow_up is not None and float(follow_up.get("deficit_mm") or 0) >= before - 0.04:
+                for piece, prior_x, prior_y, prior_geometry in remembered:
+                    piece["x"] = prior_x
+                    piece["y"] = prior_y
+                    if prior_geometry is None:
+                        piece.pop("geometry", None)
+                    else:
+                        piece["geometry"] = prior_geometry
+                moved = False
+                continue
+            break
         if not moved:
             return current, issues
     return current, layout_conflicts(current, diameters)

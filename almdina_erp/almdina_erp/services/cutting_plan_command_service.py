@@ -751,7 +751,21 @@ def recalculate_system_plan(
             _sync_saved_cut_policy(order, updates["deduct_edge_thickness"])
 
     backfill_piece_instance_ids(order)
-    calculate_system_plan(order, plan)
+    from almdina_erp.almdina_erp.domain.cutting.addon_cutter_rules import (
+        AddonCutterRejected,
+        as_dxf_issues,
+    )
+    from almdina_erp.almdina_erp.presentation.cutting.dxf_error_presenter import (
+        render_error_cards_html,
+    )
+
+    try:
+        calculate_system_plan(order, plan)
+    except AddonCutterRejected as rejected:
+        frappe.throw(
+            render_error_cards_html(as_dxf_issues(rejected.findings), context="save"),
+            title=_("تعذر حساب خطة القص"),
+        )
     apply_plan_costs(plan, edge_cost_usd=factory_execution_edge_cost(order, plan))
     repository.save_document(plan)
     refresh_order_commercial_totals(order, plan)

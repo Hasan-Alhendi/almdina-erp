@@ -600,6 +600,20 @@ def calculate_system_plan(order: Any, plan: Any, *, seed_plans=(), search_round=
     plan_settings = settings_for_system_search(_validated_plan_settings(plan))
     plan.optimization_mode = plan_settings.optimization_mode
     fingerprint = plan_input_fingerprint(order, plan)
+    from almdina_erp.almdina_erp.domain.cutting.addon_cutter_rules import (
+        AddonCutterRejected,
+        assess_piece_addons,
+    )
+    from almdina_erp.almdina_erp.domain.cutting.tool_diameters import diameters_for_record
+
+    diameters = diameters_for_record(plan)
+    early_findings = []
+    for index, row in enumerate(_piece_rows(order, plan), start=1):
+        piece = dict(row)
+        piece.setdefault("source_piece_no", piece.get("source_piece_no") or index)
+        early_findings.extend(assess_piece_addons(piece, diameters))
+    if early_findings:
+        raise AddonCutterRejected(early_findings)
     outcome = optimize_order_plan(
         OptimizeOrderPlanCommand(
             engine_version=ENGINE_VERSION,
@@ -654,24 +668,18 @@ def _reject_or_repair_addon_cutters(plan: Any, outcome: OptimizationOutcome) -> 
     """Refuse a cutter that is wider than its add-on, and keep searching for a safe edge groove."""
 
     from almdina_erp.almdina_erp.domain.cutting.addon_cutter_rules import (
-        as_dxf_issues,
+        AddonCutterRejected,
         assess_piece_addons,
         resolve_exceptional_groove_layout,
     )
     from almdina_erp.almdina_erp.domain.cutting.tool_diameters import diameters_for_record
-    from almdina_erp.almdina_erp.presentation.cutting.dxf_error_presenter import (
-        render_error_cards_html,
-    )
 
     diameters = diameters_for_record(plan)
     hard = []
     for piece in outcome.expanded_pieces:
         hard.extend(assess_piece_addons(piece, diameters))
     if hard:
-        frappe.throw(
-            render_error_cards_html(as_dxf_issues(hard), context="save"),
-            title=_("تعذر حساب خطة القص"),
-        )
+        raise AddonCutterRejected(hard)
     kerf_cm = float(diameters.get("kerf_mm") or 0) / 10.0
     sources = (outcome.snapshot, *outcome.candidate_snapshots)
     safe_primary = None
@@ -689,10 +697,7 @@ def _reject_or_repair_addon_cutters(plan: Any, outcome: OptimizationOutcome) -> 
         else:
             safe_candidates.append(repaired)
     if safe_primary is None:
-        frappe.throw(
-            render_error_cards_html(as_dxf_issues(blocking), context="save"),
-            title=_("تعذر حساب خطة القص"),
-        )
+        raise AddonCutterRejected(blocking)
     return replace(
         outcome,
         snapshot=safe_primary,
