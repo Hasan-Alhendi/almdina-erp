@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import Any
 
 import frappe
@@ -644,8 +645,59 @@ def calculate_system_plan(order: Any, plan: Any, *, seed_plans=(), search_round=
         ),
         engine=domain_cutting_engine,
     )
+    outcome = _reject_or_repair_addon_cutters(plan, outcome)
     apply_calculation_outcome(order, plan, outcome, fingerprint=fingerprint)
     return outcome
+
+
+def _reject_or_repair_addon_cutters(plan: Any, outcome: OptimizationOutcome) -> OptimizationOutcome:
+    """Refuse a cutter that is wider than its add-on, and keep searching for a safe edge groove."""
+
+    from almdina_erp.almdina_erp.domain.cutting.addon_cutter_rules import (
+        as_dxf_issues,
+        assess_piece_addons,
+        resolve_exceptional_groove_layout,
+    )
+    from almdina_erp.almdina_erp.domain.cutting.tool_diameters import diameters_for_record
+    from almdina_erp.almdina_erp.presentation.cutting.dxf_error_presenter import (
+        render_error_cards_html,
+    )
+
+    diameters = diameters_for_record(plan)
+    hard = []
+    for piece in outcome.expanded_pieces:
+        hard.extend(assess_piece_addons(piece, diameters))
+    if hard:
+        frappe.throw(
+            render_error_cards_html(as_dxf_issues(hard), context="save"),
+            title=_("تعذر حساب خطة القص"),
+        )
+    kerf_cm = float(diameters.get("kerf_mm") or 0) / 10.0
+    sources = (outcome.snapshot, *outcome.candidate_snapshots)
+    safe_primary = None
+    safe_candidates = []
+    blocking = []
+    for source in sources:
+        repaired, issues = resolve_exceptional_groove_layout(
+            source, diameters, kerf_cm=kerf_cm
+        )
+        if issues:
+            blocking = issues
+            continue
+        if safe_primary is None:
+            safe_primary = repaired
+        else:
+            safe_candidates.append(repaired)
+    if safe_primary is None:
+        frappe.throw(
+            render_error_cards_html(as_dxf_issues(blocking), context="save"),
+            title=_("تعذر حساب خطة القص"),
+        )
+    return replace(
+        outcome,
+        snapshot=safe_primary,
+        candidate_snapshots=tuple(safe_candidates),
+    )
 
 
 def _apply_snapshot(

@@ -749,9 +749,10 @@ def _entry_machining_paths(
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """Build cutter-center paths once in the entry usable-sheet frame.
 
-    Each add-on uses the diameter resolved for its layer. A liner whose bit is
-    wider than the strip does not block plan-copy readiness and does not receive
-    a center path. Other unproven geometry still blocks.
+    Each add-on uses the diameter resolved for its layer. A cutter wider than
+    its add-on has no center path and blocks readiness. A rear groove that
+    starts on the door edge is the only wider-cutter path, and only after the
+    outward center shift stays inside the requested width.
     """
 
     issues: list[dict[str, Any]] = []
@@ -936,21 +937,6 @@ def _entry_machining_paths(
                 ]
         except (LinerGeometryError, DoorLinerError, TypeError, ValueError) as exc:
             reason = getattr(exc, "code", "") or "addon_toolpath_unproven"
-            # Saving a plan copy is separate from storing a machinable center.
-            # A liner bit wider than the strip keeps the liner definition and
-            # records the refusal, but it must not invent a center path.
-            if kind == "liner" and reason == "liner_narrower_than_cutter":
-                issues.append(
-                    _issue(
-                        "machining_path_unproven",
-                        severity=WARNING,
-                        piece_instance_ids=[str(info.get("piece_instance_id") or "")],
-                        piece_ids=_ids(info),
-                        reason=str(reason),
-                        addon_kind=kind,
-                    )
-                )
-                continue
             issues.append(
                 _issue(
                     "geometry_unproven",

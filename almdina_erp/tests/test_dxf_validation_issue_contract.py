@@ -557,7 +557,7 @@ def test_all_declared_issue_codes_have_safe_three_question_presentations():
         and not name.startswith(("CATEGORY_", "TARGET_"))
         and name.isupper()
     )
-    assert len(catalogue) == 95
+    assert len(catalogue) == 99
 
     for code in catalogue:
         card = present_issue(issue(code, "WORKFLOW"))

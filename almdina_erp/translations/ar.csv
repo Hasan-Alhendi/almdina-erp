@@ -4387,3 +4387,22 @@ Vertical edge protection (mm),هامش حماية عمودي (مم)
 "Minimum actual gap from original board edges when centering is not eligible. Trim already counts; zero disables this axis. Unsafe moves keep the existing plan.","المسافة الفعلية المستهدفة عن حواف اللوح الأصلية عند تعذر التوسيط. يُحتسب التشذيب ضمنها؛ الصفر يعطّل حماية هذا المحور. تُحفظ الخطة الحالية إذا تعذرت الحركة الآمنة."
 Edge protection margins must be finite non-negative numbers.,يجب أن تكون هوامش الحماية أرقامًا صالحة ومحدودة وغير سالبة.
 Edge protection settings changed. Recalculate the preview before saving.,تغيّرت إعدادات حماية الحواف. أعد حساب المعاينة قبل الحفظ.
+rear groove,فرزة الظهر
+plunge handle,مسكة الغطس
+"Door {0}: the {1} is {2} mm wide and its cutter is {3} mm. The cutter is wider than the add-on, so the cutting plan cannot be calculated or approved.","الدرفة {0}: عرض {1} {2} مم وقطر ريشتها {3} مم. قطر الريشة أكبر من عرض الإضافة، لذلك لا يمكن حساب خطة القص ولا اعتمادها."
+"Choose a cutter whose diameter is less than or equal to the add-on width, or increase the add-on width, then calculate again. Values are not changed automatically.",اختر ريشة قطرها أصغر من عرض الإضافة أو يساويه، أو زِد عرض الإضافة، ثم أعد الحساب. لا تُغيَّر القيم تلقائيًا.
+"Door {0}: the rear groove is {1} mm wide and its cutter is {2} mm. A wider cutter is allowed only when the groove starts at the door edge and the cutter covers that width without cutting the rest of the door.","الدرفة {0}: عرض فرزة الظهر {1} مم وقطر ريشتها {2} مم. تُقبل الريشة الأعرض فقط عندما تبدأ الفرزة من طرف الدرفة ويغطي القص هذا العرض دون قص بقية الدرفة."
+"Run the rear groove along the open door edge, or choose a cutter whose diameter is less than or equal to the groove width, then calculate again.",اجعل فرزة الظهر على طرف الدرفة المفتوح، أو اختر ريشة قطرها لا يتجاوز عرض الفرزة، ثم أعد الحساب.
+"Door {0}: the rear groove is {1} mm wide and its cutter is {2} mm. The cutter body enters door {3}. The cutting plan cannot be calculated or approved.","الدرفة {0}: عرض فرزة الظهر {1} مم وقطر ريشتها {2} مم. جسم الريشة يدخل الدرفة {3}. لا يمكن حساب خطة القص ولا اعتمادها."
+"Separate the two doors along that edge, or turn the grooved door so the groove faces an open edge, then calculate again. The groove width and the cutter are not changed automatically.",أبعد الدرفتين عن تلك الحافة، أو أدر الدرفة ذات الفرزة بحيث تواجه الفرزة حافة فارغة، ثم أعد الحساب. لا يُغيَّر عرض الفرزة ولا قطر الريشة تلقائيًا.
+"The cutter is wider than this add-on, so the NC file was not created. Choose a cutter whose diameter is less than or equal to the add-on width.",قطر الريشة أكبر من عرض الإضافة، لذلك لم يُنشأ ملف NC. اختر ريشة قطرها لا يتجاوز عرض الإضافة.
+"This rear-groove cutter is wider than the groove and would cut the door outside the requested groove. Run the groove along the open door edge, or choose a narrower cutter.",ريشة فرزة الظهر أكبر من عرض الفرزة وستقص الدرفة خارج الفرزة المطلوبة. اجعل الفرزة على طرف الدرفة المفتوح، أو اختر ريشة أضيق.
+"The rear-groove cutter body enters a neighbouring door, so the NC file was not created. Separate those doors or turn the groove toward an open edge.",جسم ريشة فرزة الظهر يدخل درفة مجاورة، لذلك لم يُنشأ ملف NC. أبعد الدرفتين أو وجّه الفرزة نحو حافة فارغة.
+The rear groove cutter would cut {0} outside the requested width,ريشة فرزة الظهر ستقص {0} خارج العرض المطلوب
+"The rear groove cutter would cut {0} outside the requested width.",ريشة فرزة الظهر ستقص {0} خارج العرض المطلوب.
+"Run the rear groove along the open door edge, or choose a cutter that is not wider than the groove.",اجعل فرزة الظهر على طرف الدرفة المفتوح، أو اختر ريشة لا يتجاوز قطرها عرض الفرزة.
+"Separate the neighbouring door from the rear groove, or turn the groove toward an open edge.",أبعد الدرفة المجاورة عن فرزة الظهر، أو وجّه الفرزة نحو حافة فارغة.
+"The {0} cutter is wider than the add-on, so this distribution cannot be saved. Choose a cutter whose diameter is less than or equal to the add-on width.","ريشة {0} أكبر من عرض الإضافة، لذلك لا يمكن حفظ هذا التوزيع. اختر ريشة قطرها لا يتجاوز عرض الإضافة."
+"The rear-groove cutter body enters a neighbouring door, so this distribution cannot be saved. Separate those doors or turn the groove toward an open edge.",جسم ريشة فرزة الظهر يدخل درفة مجاورة، لذلك لا يمكن حفظ هذا التوزيع. أبعد الدرفتين أو وجّه الفرزة نحو حافة فارغة.
+تعذر حساب خطة القص,تعذر حساب خطة القص
+تعذر اعتماد خطة القص,تعذر اعتماد خطة القص

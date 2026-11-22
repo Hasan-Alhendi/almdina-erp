@@ -1371,7 +1371,11 @@ def _kind_specs(piece: Mapping[str, Any], kind: str, values: Mapping[str, Mappin
 
 
 def _mill_issue(code: str) -> str:
-    if code == "liner_narrower_than_cutter":
+    if code in {
+        "liner_narrower_than_cutter",
+        "rear_groove_oversize_unsafe",
+        "rear_groove_neighbor_conflict",
+    }:
         return code
     if code == "side_unavailable":
         return code
@@ -1630,6 +1634,20 @@ def _apply_parametric_mills(
                     blocked_path("mill_diameter_required", key)
                 continue
             cutter_diameter = float(diameter)
+            from almdina_erp.almdina_erp.domain.cutting.addon_cutter_rules import (
+                assess_piece_addons,
+            )
+
+            selected_fit = assess_piece_addons(
+                piece,
+                {**(plan_diameters or {}), kind: cutter_diameter},
+            )
+            selected_fit = [item for item in selected_fit if item.get("kind") == kind]
+            if selected_fit:
+                _drop_layer(entities, piece_id, layer)
+                for key in catalog_keys or [f"{kind}:{piece_id}:primary"]:
+                    blocked_path(str(selected_fit[0].get("code") or "liner_narrower_than_cutter"), key)
+                continue
             # The approved plan owns the cutter center. A different selected
             # diameter is rejected later and must not move the generated path.
             planned = diameter_for_kind(kind, plan_diameters or {})

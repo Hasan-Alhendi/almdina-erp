@@ -258,9 +258,11 @@ def export_tool_errors(
         spec = values.get(kind) or {}
         if not _layer_active(spec):
             continue
-        if _persisted_toolpath(piece, kind):
-            continue
         diameter = diameter_for_kind(kind, diameters)
+        width_mm = float(spec.get("width_cm") or 0) * 10.0
+        wider = diameter is not None and width_mm + 0.25 < diameter
+        if _persisted_toolpath(piece, kind) and not wider:
+            continue
         if diameter is None:
             errors.append({
                 "code": "cutter_diameter_invalid",

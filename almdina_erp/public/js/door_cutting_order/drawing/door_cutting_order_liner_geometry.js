@@ -436,13 +436,19 @@
         return regionPolygonMm(piece, side, offsetCm, widthCm, 0, null);
     }
 
-    function cutterCenterOffsetsMm(widthMm, diameterMm) {
+    function cutterCenterOffsetsMm(widthMm, diameterMm, options) {
         if (!Number.isFinite(widthMm) || !Number.isFinite(diameterMm) || diameterMm <= TOLERANCE_MM || widthMm <= TOLERANCE_MM) {
             const error = new Error("cutter_diameter_invalid");
             error.code = "cutter_diameter_invalid";
             throw error;
         }
+        const kind = options && options.kind;
+        const offsetMm = options && Number(options.offsetMm);
+        const atEdge = Number.isFinite(offsetMm) && Math.abs(offsetMm) <= TOLERANCE_MM;
         if (widthMm + TOLERANCE_MM < diameterMm) {
+            if (kind === "back_groove" && atEdge && !(options && options.stepoverMm)) {
+                return [widthMm - (diameterMm / 2)];
+            }
             const error = new Error("liner_narrower_than_cutter");
             error.code = "liner_narrower_than_cutter";
             throw error;
@@ -970,22 +976,27 @@
     function toolpathMm(piece, side, offsetCm, widthCm, cutterDiameterMm, startCm, lengthCm, ends) {
         const error = validationCode(piece, side, offsetCm, widthCm);
         if (error) fail(error);
-        const centers = cutterCenterOffsetsMm(num(widthCm) * 10, num(cutterDiameterMm));
+        const widthMm = num(widthCm) * 10;
+        const diameterMm = num(cutterDiameterMm);
+        const offsetMm = num(offsetCm) * 10;
+        const kind = ends && ends.addonKind;
+        const centers = cutterCenterOffsetsMm(widthMm, diameterMm, { kind, offsetMm });
+        const edgeOversize = kind === "back_groove" && Math.abs(offsetMm) <= TOLERANCE_MM && widthMm + TOLERANCE_MM < diameterMm;
         const polygon = piecePolygonMm(piece);
         const prepared = preparedReference(piece, side, startCm, lengthCm);
         const sign = inwardSign(prepared.reference, polygon);
-        const radius = num(cutterDiameterMm) / 2;
+        const radius = diameterMm / 2;
         const startSawn = resolveSawn(ends && ends.startSawn, prepared.boundaryStart);
         const endSawn = resolveSawn(ends && ends.endSawn, prepared.boundaryEnd);
         const extendStart = prepared.boundaryStart;
         const extendEnd = prepared.boundaryEnd;
         const needsFlat = !startSawn || !endSawn;
-        if (needsFlat && centers.length < 2) fail("liner_flat_end_unmachinable");
+        if (needsFlat && centers.length < 2 && !edgeOversize) fail("liner_flat_end_unmachinable");
         const lines = spanCutterLines(prepared.clipped, {
             sign,
             polygon,
             centers,
-            offsetMm: num(offsetCm) * 10,
+            offsetMm,
             radius,
             extendStart,
             extendEnd,
@@ -999,7 +1010,42 @@
         });
         if (!startSawn) path = prependClosure(path, lines.map(line => line[0]));
         if (!endSawn) path = appendClosure(path, lines.map(line => line[line.length - 1]), lines[lines.length - 1]);
+        if (edgeOversize && !rearGrooveOversizeSafe(lines, prepared.clipped, sign, polygon, offsetMm, widthMm, radius)) {
+            fail("rear_groove_oversize_unsafe");
+        }
         return path;
+    }
+
+    function nearestLineDistance(point, lines) {
+        const distances = (lines || []).filter(line => line && line.length >= 2).map(line => {
+            let best = Infinity;
+            for (let index = 1; index < line.length; index += 1) {
+                best = Math.min(best, pointSegDist(point, line[index - 1], line[index]));
+            }
+            return best;
+        });
+        return distances.length ? Math.min(...distances) : Infinity;
+    }
+
+    function rearGrooveOversizeSafe(lines, clipped, sign, polygon, offsetMm, widthMm, radius) {
+        const near = offsetPolyline(clipped, offsetMm, sign);
+        const far = offsetPolyline(clipped, offsetMm + widthMm, sign);
+        const band = near.concat(far.slice().reverse());
+        const samples = band.slice();
+        for (let index = 1; index < band.length; index += 1) {
+            samples.push([
+                (band[index - 1][0] + band[index][0]) / 2,
+                (band[index - 1][1] + band[index][1]) / 2,
+            ]);
+        }
+        if (samples.some(point => nearestLineDistance(point, lines) > radius + TOLERANCE_MM)) return false;
+        const gap = Math.max(1, TOLERANCE_MM * 4);
+        return offsetPolyline(clipped, offsetMm + widthMm + gap, sign).every(point => {
+            if (pointInPolygon(point, polygon)) {
+                return nearestLineDistance(point, lines) > radius - TOLERANCE_MM;
+            }
+            return true;
+        });
     }
 
     function segmentsCross(a, b, c, d) {
@@ -1273,6 +1319,9 @@
 
     function generateToolpath(options) {
         const spec = options || {};
+        const ends = Object.assign({}, spec.ends || {}, {
+            addonKind: spec.type || spec.kind || (spec.ends && spec.ends.addonKind) || "",
+        });
         return toolpathMm(
             spec.piece,
             spec.referenceSide,
@@ -1281,7 +1330,7 @@
             spec.cutterDiameterMm,
             spec.startCm,
             spec.lengthCm,
-            spec.ends || null
+            ends
         );
     }
 

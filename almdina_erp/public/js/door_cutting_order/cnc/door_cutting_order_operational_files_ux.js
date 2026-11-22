@@ -2038,6 +2038,8 @@
             geometry_not_ready: translate("Resolve the listed geometry problems, then generate the NC file again."),
             mill_parameters_missing: translate("Complete the milling parameters on the approved plan, then try again."),
             liner_narrower_than_cutter: translate("Choose a narrower tool, or widen the milling band on the approved plan."),
+            rear_groove_oversize_unsafe: translate("Run the rear groove along the open door edge, or choose a cutter that is not wider than the groove."),
+            rear_groove_neighbor_conflict: translate("Separate the neighbouring door from the rear groove, or turn the groove toward an open edge."),
             perimeter_unavailable: translate("Keep separate cut paths, or fix the outer cut network so one closed perimeter can be formed."),
             perimeter_not_closed: translate("Close the outer cut network, or keep separate cut paths."),
             perimeter_geometry_ambiguous: translate("Remove branches from the outer cut network, or keep separate cut paths."),
