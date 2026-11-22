@@ -255,7 +255,10 @@ class TestPlanFingerprintServiceIntegration(unittest.TestCase):
         plan.dxf_file, plan.dxf_status, plan.saw_center_status = '/private/files/golden.dxf', 'Validated', 'Absent'
         plan.input_fingerprint = fixture['contracts']['v2_pre_oct22']['sha256']
         before = copy.deepcopy((vars(order), vars(plan)))
-        command._assert_plan_ready_for_approval(order, plan)
+        # This test verifies historical fingerprint decisions, not DXF validation.
+        # Add-on cutter validation has its own manufacturing regression coverage.
+        with patch('almdina_erp.almdina_erp.services.export_validation_service.validate_cutting_plan_issues', return_value=[]):
+            command._assert_plan_ready_for_approval(order, plan)
         with patch.object(query, '_prefer_original_upload_for_row', return_value=True):
             payload = query._plan_row_with_freshness(order, vars(plan), plan.snapshot_json)
         self.assertEqual('COMPATIBLE', payload['validation']['freshness_state'])
