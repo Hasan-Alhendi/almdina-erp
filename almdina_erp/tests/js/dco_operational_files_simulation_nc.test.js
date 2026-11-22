@@ -143,7 +143,8 @@ assert.ok(dialog.includes("data-move=\"earlier\""));
 assert.ok(dialog.includes('data-move="later"'));
 assert.ok(dialog.includes('dco-operational-order__arrow'));
 assert.ok(dialog.includes('aria-hidden="true">↓</span>'));
-assert.ok(dialog.includes('<section class="dco-sheet-acc" data-sheet-section="order">'));
+assert.ok(dialog.includes('<section class="dco-sheet-group" data-sheet-section="order">'));
+assert.ok(!dialog.includes("dco-sheet-acc"));
 assert.ok(dialog.includes("data-delete-association=\"association:a\""));
 assert.ok(dialog.indexOf("dco-operational-sheet__preview") < dialog.indexOf("dco-operational-sheet__settings"));
 
@@ -332,6 +333,11 @@ const pendingCard = ux.sheetCardActions({ sheet_no: 1, status: "Settings Saved",
 assert.ok(!pendingCard.includes("dco-operational-files__nc-ready"));
 assert.ok(pendingCard.includes("dco-board-focus-trigger"));
 assert.ok(translations.includes("تم توليد الملف التشغيلي"));
+assert.ok(panel.includes("dco-board-gallery"));
+assert.ok(panel.includes("dco-plan-context-chip is-boards"));
+assert.ok(panel.includes("layoutOperationalGallery("));
+assert.ok(css.includes('.dco-operational-files[data-board-columns="3"] .dco-board-gallery'));
+assert.ok(css.includes("operational_files_html"));
 assert.ok(panel.includes("requestSheetProgramPreview("));
 assert.ok(panel.includes("collectCutExecutions("));
 

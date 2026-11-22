@@ -467,11 +467,12 @@ const css = fs.readFileSync(path.join(root, "public/css/door_cutting_order_opera
 const panelRule = css.slice(css.indexOf(".dco-tool-picker__panel {"), css.indexOf(".dco-tool-picker__change"));
 assert.ok(panelRule.includes("position: static"));
 assert.equal(panelRule.includes("position: absolute"), false);
-const accordionRule = css.slice(
-    css.indexOf(".dco-operational-sheet .dco-sheet-acc {"),
-    css.indexOf(".dco-operational-sheet .dco-sheet-acc__title")
+const groupRule = css.slice(
+    css.indexOf(".dco-operational-sheet .dco-sheet-group {"),
+    css.indexOf(".dco-operational-sheet .dco-sheet-group__title")
 );
-assert.ok(accordionRule.includes("overflow: hidden"));
+assert.ok(groupRule.includes("box-shadow: none"));
+assert.equal(groupRule.includes("overflow: hidden"), false);
 
 const pickerDoc = element("document");
 pickerDoc.ownerDocument = pickerDoc;

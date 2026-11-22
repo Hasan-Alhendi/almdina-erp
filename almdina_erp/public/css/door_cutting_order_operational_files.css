@@ -1,7 +1,22 @@
 .dco-operational-files {
     display: flex;
     flex-direction: column;
-    gap: 1rem;
+    gap: 8px;
+    inline-size: 100%;
+    max-inline-size: none;
+    min-inline-size: 0;
+    box-sizing: border-box;
+    padding: 8px;
+    border: 1px solid var(--border-color, var(--alm-border, #dfe3e8));
+    border-radius: 16px;
+    background: var(--alm-card, var(--card-bg, #fff));
+    box-shadow: 0 5px 18px rgba(15, 23, 42, 0.045);
+}
+.dco-operational-files__header {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
     min-inline-size: 0;
 }
 .dco-operational-files__banner,
@@ -10,7 +25,19 @@
     margin: 0;
     line-height: 1.5;
 }
-.dco-operational-files__banner,
+.dco-operational-files__meta {
+    min-inline-size: 0;
+    color: var(--alm-text-strong, var(--text-color, #101828));
+    font-size: 12px;
+    font-weight: 750;
+}
+.dco-operational-files__banner.alert {
+    padding: 6px 10px;
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1.45;
+}
 .dco-operational-sheet__warning {
     padding-block: 0.75rem;
     padding-inline: 1rem;
@@ -18,6 +45,106 @@
     border-radius: 12px;
     background: var(--alm-warning-bg, #fff7e8);
     color: var(--alm-text-strong, #101828);
+}
+.dco-operational-files .dco-plan-context-chip.is-boards {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    margin-inline-start: auto;
+    min-height: 30px;
+    padding: 5px 11px;
+    border: 0;
+    border-radius: 999px;
+    background: var(--alm-accent-soft, color-mix(in srgb, var(--alm-accent, #2563eb) 12%, transparent));
+    color: var(--alm-accent, #2563eb);
+    font-weight: 800;
+    white-space: nowrap;
+}
+.dco-operational-files .dco-plan-context-boards-value {
+    font-size: 14px;
+    line-height: 1;
+    font-weight: 850;
+}
+.dco-operational-files .dco-plan-context-boards-label {
+    font-size: 11px;
+    font-weight: 750;
+}
+.dco-operational-files .dco-board-gallery {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+    inline-size: 100%;
+    margin: 0;
+    padding: 0;
+    align-items: start;
+}
+.dco-operational-files[data-board-columns="2"] .dco-board-gallery {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.dco-operational-files[data-board-columns="3"] .dco-board-gallery {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.dco-operational-files[data-board-columns="4"] .dco-board-gallery {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+.dco-operational-files .dco-board-gallery > .dco-sheet-card {
+    min-inline-size: 0;
+    inline-size: 100% !important;
+    max-inline-size: 100% !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 5px !important;
+    border: 1px solid var(--border-color, var(--alm-border, #e2e6ea)) !important;
+    border-radius: 13px !important;
+    background: var(--alm-card, var(--card-bg, #fff)) !important;
+    box-shadow: 0 2px 8px rgba(15, 23, 42, 0.035) !important;
+    overflow: hidden;
+}
+.dco-operational-files .dco-board-gallery .dco-sheet-title {
+    display: grid !important;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center !important;
+    gap: 5px !important;
+    min-height: 27px;
+    margin: 0 0 4px !important;
+    padding: 0 0 5px !important;
+    border-bottom: 1px solid var(--alm-card-border, var(--border-color, #e4e8ee));
+    color: var(--alm-text-strong, #101828) !important;
+    font-size: 10.5px !important;
+    line-height: 1.3 !important;
+}
+.dco-operational-files .dco-board-gallery .dco-sheet-title > :first-child {
+    color: var(--alm-text-strong, #101828);
+    font-size: 11.5px;
+    font-weight: 900;
+    white-space: nowrap;
+}
+.dco-operational-files .dco-board-gallery .dco-sheet-title > :nth-child(2) {
+    min-inline-size: 0;
+    color: var(--alm-text-subtle, var(--text-muted, #667085));
+    font-size: 9px;
+    font-weight: 750;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.dco-operational-files .dco-board-gallery .dco-sheet-board {
+    inline-size: 100% !important;
+    width: 100% !important;
+    block-size: auto !important;
+    height: auto !important;
+    max-inline-size: none !important;
+    max-width: none !important;
+    aspect-ratio: var(--dco-board-aspect, 1 / 2) !important;
+    margin: 0 !important;
+}
+.dco-operational-files[data-board-columns="2"] .dco-board-gallery .dco-sheet-board,
+.dco-operational-files[data-board-columns="3"] .dco-board-gallery .dco-sheet-board,
+.dco-operational-files[data-board-columns="4"] .dco-board-gallery .dco-sheet-board {
+    inline-size: min(100%, var(--dco-board-screen-max-width, 100%)) !important;
+    width: min(100%, var(--dco-board-screen-max-width, 100%)) !important;
+    margin-inline: auto !important;
 }
 .dco-operational-files__gallery {
     display: grid;
@@ -57,6 +184,16 @@
     background: var(--alm-surface-muted, #f4f6f8);
     font-size: 12px;
     font-weight: 800;
+}
+.dco-operational-files .dco-board-gallery .dco-operational-files__status {
+    padding: 1px 6px;
+    border-radius: 999px;
+    background: var(--alm-surface-muted, var(--subtle-fg, #f4f6f8));
+    color: var(--alm-text-strong, var(--text-color, #101828));
+    font-size: 9px;
+    font-weight: 800;
+    line-height: 1.2;
+    white-space: nowrap;
 }
 .dco-operational-files__board,
 .dco-operational-sheet__preview {
@@ -397,8 +534,165 @@ html[dir="rtl"] .dco-operational-sheet-dialog .dco-operational-sheet__preview {
     max-inline-size: 390px;
     min-inline-size: 0;
 }
+.dco-cnc-sheet-page [data-sheet-preview] {
+    flex: 1 1 auto;
+    min-block-size: 0;
+    display: flex;
+    flex-direction: column;
+}
 .dco-cnc-sheet-page .dco-cnc-cut-preview {
-    max-inline-size: 390px;
+    flex: 1 1 auto;
+    max-inline-size: none;
+    min-block-size: 0;
+    inline-size: 100%;
+}
+.dco-cnc-sheet-page .dco-cnc-cut-preview__viewport {
+    flex: 1 1 auto;
+    min-block-size: 16rem;
+    inline-size: 100%;
+    max-inline-size: 100%;
+    background-color: var(--alm-bg, #f3f5f8);
+    background-image:
+        linear-gradient(90deg, rgba(15, 23, 42, 0.03) 1px, transparent 1px),
+        linear-gradient(rgba(15, 23, 42, 0.03) 1px, transparent 1px);
+    background-size: 24px 24px;
+    border-color: var(--border-color, var(--alm-border, #dfe3e8));
+}
+.dco-cnc-sheet-page .dco-cnc-cut-preview__board-fill,
+.dco-cnc-sheet-page .dco-cnc-cut-preview__board-grid,
+.dco-cnc-sheet-page .dco-cnc-cut-preview__grid-line {
+    pointer-events: none;
+}
+.dco-cnc-sheet-page .dco-cnc-cut-preview__board-fill {
+    fill: #ffffff;
+}
+.dco-cnc-sheet-page .dco-cnc-cut-preview__grid-line {
+    fill: none;
+    stroke: rgba(71, 85, 105, 0.18);
+    vector-effect: none;
+}
+.dco-cnc-sheet-page .dco-cnc-cut-preview__stage,
+.dco-cnc-sheet-page .dco-cnc-cut-preview__svg {
+    inline-size: 100%;
+    block-size: 100%;
+}
+.dco-cnc-sheet-page .dco-cnc-cut-preview__canvas-fill {
+    fill: var(--alm-canvas, #eef1f6);
+    pointer-events: none;
+}
+.dco-cnc-sheet-page .dco-cnc-cut-preview__machine {
+    fill: none;
+    stroke: var(--alm-text-strong, #101828);
+    stroke-width: 1.5;
+}
+.dco-cnc-sheet-page .dco-cnc-cut-preview__void {
+    fill: none;
+    pointer-events: none;
+}
+.dco-cnc-sheet-page .dco-cnc-cut-preview__sheet {
+    stroke: var(--alm-border, #d0d5dd);
+    stroke-width: 1.25;
+    vector-effect: non-scaling-stroke;
+}
+.dco-cnc-sheet-page .dco-cnc-cut-preview__piece {
+    fill: none;
+    stroke: var(--alm-border, #d0d5dd);
+    stroke-width: 1;
+    vector-effect: non-scaling-stroke;
+    pointer-events: none;
+}
+[data-theme="dark"] .dco-cnc-sheet-page .dco-cnc-cut-preview__viewport {
+    background-color: #121821;
+}
+[data-theme="dark"] .dco-cnc-sheet-page .dco-cnc-cut-preview__zero-label {
+    color: var(--alm-status-danger-fg, #f87171);
+}
+[data-theme="dark"] .dco-cnc-sheet-page .dco-cnc-cut-preview__zero-label::before {
+    background: var(--alm-status-danger-fg, #f87171);
+}
+.dco-cnc-sheet-page .dco-operational-sheet__selection,
+.dco-cnc-sheet-page .dco-operational-files__note,
+.dco-cnc-sheet-page .dco-operational-sheet__note {
+    font-size: var(--text-sm, 12px);
+    color: var(--text-muted, var(--alm-text-subtle, #667085));
+}
+.dco-cnc-sheet-page .dco-operational-sheet__placement,
+.dco-cnc-sheet-page .dco-operational-perimeter {
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+}
+.dco-cnc-sheet-page .dco-operational-perimeter {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem 1rem;
+}
+.dco-cnc-sheet-page .dco-operational-perimeter legend {
+    flex: 1 0 100%;
+    padding: 0;
+    font-size: var(--text-sm, 12px);
+    font-weight: 500;
+}
+.dco-cnc-sheet-page .dco-operational-sheet__settings .form-control,
+.dco-cnc-sheet-page .dco-operational-sheet__settings select,
+.dco-cnc-sheet-page .dco-operational-sheet__settings input[type="text"] {
+    width: 100%;
+    max-width: 100%;
+    height: var(--input-height, 28px);
+    min-height: var(--input-height, 28px);
+    background: var(--control-bg, var(--fg-color, #fff));
+    color: var(--text-color, inherit);
+    border: 1px solid var(--border-color, var(--alm-border, #d1d8dd));
+    border-radius: var(--border-radius, 8px);
+    box-shadow: none;
+}
+.dco-cnc-sheet-page .dco-operational-sheet__settings .form-control:focus,
+.dco-cnc-sheet-page .dco-operational-sheet__settings select:focus,
+.dco-cnc-sheet-page .dco-operational-sheet__settings input[type="text"]:focus {
+    border-color: var(--primary, var(--alm-accent, #171717));
+    outline: none;
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary, var(--alm-accent, #171717)) 16%, transparent);
+}
+.dco-cnc-sheet-page .dco-operational-sheet__settings .form-control:disabled,
+.dco-cnc-sheet-page .dco-operational-sheet__settings select:disabled,
+.dco-cnc-sheet-page .dco-operational-sheet__settings input:disabled,
+.dco-cnc-sheet-page .dco-operational-sheet__settings button:disabled {
+    opacity: 0.65;
+}
+.dco-cnc-sheet-page .dco-artcam,
+.dco-cnc-sheet-page .dco-artcam-editor {
+    gap: 0.5rem;
+}
+.dco-cnc-sheet-page .dco-operational-order__item,
+.dco-cnc-sheet-page .dco-artcam-saved__item {
+    background: var(--fg-color, var(--alm-card, #fff));
+    border-color: var(--border-color, var(--alm-border, #dfe3e8));
+    box-shadow: none;
+}
+@container cnc-sheet-settings (max-width: 34rem) {
+    .dco-cnc-sheet-page .dco-artcam-row--main,
+    .dco-cnc-sheet-page .dco-artcam-row--tool {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+@container cnc-sheet-settings (max-width: 26rem) {
+    .dco-cnc-sheet-page .dco-artcam-row--pair,
+    .dco-cnc-sheet-page .dco-artcam-row--home,
+    .dco-cnc-sheet-page .dco-operational-sheet__stop-row {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+@media (max-width: 900px) {
+    .dco-cnc-sheet-page .dco-cnc-cut-preview__viewport {
+        block-size: min(70vw, 24rem);
+        min-block-size: 16rem;
+    }
+    .dco-cnc-sheet-page .dco-operational-order__item {
+        flex-wrap: wrap;
+    }
 }
 .dco-cnc-cut-preview__zoom {
     display: inline-flex;
@@ -407,6 +701,20 @@ html[dir="rtl"] .dco-operational-sheet-dialog .dco-operational-sheet__preview {
     flex: 0 0 auto;
     position: relative;
     z-index: 2;
+}
+.dco-cnc-sheet-page .dco-cnc-cut-preview__viewport > .dco-cnc-cut-preview__zoom {
+    position: absolute;
+    top: 0.5rem;
+    left: 0.5rem;
+    right: auto;
+    z-index: 5;
+    direction: ltr;
+    pointer-events: auto;
+    padding: 0.2rem;
+    border: 1px solid var(--border-color, var(--alm-border, #e4e8ee));
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--alm-card, var(--card-bg, #fff)) 92%, transparent);
+    box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
 }
 .dco-cnc-cut-preview__viewport {
     position: relative;
@@ -544,23 +852,41 @@ html[dir="rtl"] .dco-operational-sheet-dialog .dco-operational-sheet__preview {
 .dco-cnc-sheet-page {
     display: flex;
     flex-direction: column;
-    gap: 0.85rem;
-    min-block-size: calc(100vh - 7rem);
-    padding-block: clamp(0.75rem, 1.6vw, 1.5rem) clamp(1rem, 2.2vw, 2rem);
-    padding-inline: clamp(0.9rem, 2.8vw, 2.25rem);
+    gap: 0.5rem;
+    min-block-size: 0;
+    padding-block: 0.4rem 0.65rem;
+    padding-inline: clamp(0.75rem, 1.6vw, 1.25rem);
     box-sizing: border-box;
-    overflow-x: hidden;
+    overflow: visible;
+    background: transparent;
+    color: var(--text-color, var(--alm-text-strong, #101828));
 }
 .dco-cnc-sheet-page__toolbar {
     display: flex;
     flex-wrap: wrap;
     justify-content: space-between;
-    gap: 0.75rem;
-    align-items: flex-start;
+    gap: 0.65rem 1rem;
+    align-items: center;
 }
 .dco-cnc-sheet-page__identity h1,
 .dco-cnc-sheet-page__identity p {
     margin: 0;
+}
+.dco-cnc-sheet-page__identity h1 {
+    font-size: var(--text-lg, 1.125rem);
+    font-weight: 600;
+    line-height: 1.3;
+    color: var(--text-color, var(--alm-text-strong, #101828));
+}
+.dco-cnc-sheet-page__meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.2rem 0.75rem;
+    margin-block-start: 0.15rem;
+    color: var(--text-muted, var(--alm-text-subtle, #667085));
+    font-size: var(--text-sm, 12px);
+    font-weight: 500;
+    line-height: 1.4;
 }
 .dco-cnc-sheet-page__actions,
 .dco-operational-sheet__export-actions {
@@ -568,6 +894,73 @@ html[dir="rtl"] .dco-operational-sheet-dialog .dco-operational-sheet__preview {
     flex-wrap: wrap;
     gap: 0.4rem;
     align-items: center;
+}
+.dco-cnc-sheet-page .dco-cnc-preview-toolbar {
+    display: flex;
+    flex-direction: row;
+    direction: ltr;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 0.35rem 0.75rem;
+    flex: 0 0 auto;
+    min-inline-size: 0;
+}
+.dco-cnc-sheet-page .dco-cnc-preview-toolbar .dco-cnc-sheet-page__actions,
+.dco-cnc-sheet-page .dco-cnc-preview-toolbar .dco-operational-sheet__export,
+.dco-cnc-sheet-page .dco-cnc-preview-toolbar .dco-operational-sheet__export-actions {
+    display: flex;
+    flex-direction: row;
+    direction: ltr;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 0.35rem;
+    margin: 0;
+    padding: 0;
+}
+.dco-cnc-sheet-page .dco-cnc-preview-toolbar .dco-cnc-sheet-page__actions {
+    flex: 0 0 auto;
+    margin-inline-start: 0;
+}
+.dco-cnc-sheet-page .dco-cnc-preview-toolbar .btn {
+    box-sizing: border-box;
+    height: var(--input-height, 28px);
+    min-height: var(--input-height, 28px);
+    padding-block: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+}
+.dco-cnc-sheet-page [data-cnc-save-sheet],
+.dco-cnc-sheet-page .btn.alm-btn-primary[data-cnc-save-sheet] {
+    background-color: var(--alm-accent);
+    border-color: var(--alm-accent);
+    color: var(--alm-on-primary);
+    box-shadow: none;
+    height: var(--input-height, 28px);
+    min-height: var(--input-height, 28px);
+    padding: 0 10px;
+    border-radius: var(--border-radius, 8px);
+    font-weight: 600;
+}
+.dco-cnc-sheet-page [data-cnc-save-sheet]:hover:not(:disabled),
+.dco-cnc-sheet-page [data-cnc-save-sheet]:focus-visible:not(:disabled),
+.dco-cnc-sheet-page .btn.alm-btn-primary[data-cnc-save-sheet]:hover:not(:disabled),
+.dco-cnc-sheet-page .btn.alm-btn-primary[data-cnc-save-sheet]:focus-visible:not(:disabled) {
+    background-color: color-mix(in srgb, var(--alm-accent) 86%, var(--alm-text-strong));
+    border-color: color-mix(in srgb, var(--alm-accent) 86%, var(--alm-text-strong));
+    color: var(--alm-on-primary);
+    box-shadow: none;
+}
+.dco-cnc-sheet-page .dco-artcam-actions .btn.alm-btn-primary {
+    height: var(--input-height, 28px);
+    min-height: var(--input-height, 28px);
+    padding: 0 10px;
+    border-radius: var(--border-radius, 8px);
+    box-shadow: none;
+    font-weight: 600;
 }
 .dco-cnc-sheet-page[dir="rtl"] .dco-operational-sheet__settings,
 html[dir="rtl"] .dco-cnc-sheet-page .dco-operational-sheet__settings {
@@ -610,22 +1003,43 @@ html[dir="rtl"] .dco-cnc-sheet-page .dco-operational-sheet__settings {
     flex: 1 1 auto;
     min-block-size: 0;
 }
+.dco-cnc-sheet-page .dco-operational-sheet,
 .dco-cnc-sheet-page .dco-operational-sheet__body {
-    grid-template-columns: minmax(0, 390px) minmax(16rem, 1fr);
+    min-block-size: 0;
+}
+.dco-cnc-sheet-page .dco-operational-sheet__body {
+    grid-template-columns: minmax(0, 65fr) minmax(16rem, 35fr);
     align-items: start;
+    gap: 1.25rem;
+}
+.dco-cnc-sheet-page__workspace,
+.dco-cnc-sheet-page .dco-operational-sheet,
+.dco-cnc-sheet-page .dco-operational-sheet__body {
+    overflow: visible;
 }
 .dco-cnc-sheet-page .dco-operational-sheet__preview {
     position: sticky;
-    inset-block-start: 0;
-    max-inline-size: 390px;
+    inset-block-start: var(--navbar-height, 48px);
+    align-self: start;
+    z-index: 2;
+    max-inline-size: none;
+    inline-size: 100%;
+    block-size: calc(100dvh - var(--navbar-height, 48px) - 0.85rem);
     min-inline-size: 0;
+    min-block-size: 16rem;
     overflow: visible;
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
 }
 .dco-cnc-sheet-page .dco-operational-sheet__settings {
     position: relative;
     z-index: 3;
     max-block-size: none;
     overflow: visible;
+    gap: 0;
+    container-type: inline-size;
+    container-name: cnc-sheet-settings;
 }
 @media (max-width: 900px) {
     .dco-cnc-sheet-page .dco-operational-sheet__body {
@@ -633,6 +1047,8 @@ html[dir="rtl"] .dco-cnc-sheet-page .dco-operational-sheet__settings {
     }
     .dco-cnc-sheet-page .dco-operational-sheet__preview {
         position: static;
+        block-size: auto;
+        overflow: visible;
     }
 }
 body.dco-cnc-sheet-settings-active .layout-main-section {
@@ -775,60 +1191,28 @@ body.dco-cnc-sheet-settings-active .layout-main-section {
     background: transparent;
     text-align: start;
 }
-.dco-operational-sheet .dco-sheet-acc {
-    margin: 0 0 12px;
-    border: 1px solid var(--border-color, #dfe4e8);
-    border-radius: var(--alm-radius-card, 16px);
-    background: var(--card-bg, #fff);
-    box-shadow: var(--alm-shadow-card, 0 1px 2px rgba(15, 23, 42, 0.04));
-    overflow: hidden;
-}
-.dco-operational-sheet .dco-sheet-acc__title {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-    padding: 13px 16px;
-    border-bottom: 1px solid var(--border-color, #dfe4e8);
-    background: var(--subtle-fg, #f8fafb);
-}
-.dco-operational-sheet .dco-sheet-acc.is-collapsed .dco-sheet-acc__title {
-    border-bottom: 0;
-}
-.dco-operational-sheet .dco-sheet-acc__title h4 {
+.dco-operational-sheet .dco-sheet-group {
     margin: 0;
-    font-size: 14px;
-    font-weight: 900;
+    padding: 0.7rem 0 0.85rem;
+    border: 0;
+    border-block-end: 1px solid var(--border-color, var(--alm-border, #dfe3e8));
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    overflow: visible;
 }
-.dco-operational-sheet .dco-sheet-acc__toggle {
-    appearance: none;
-    display: inline-grid;
-    place-items: center;
-    width: 26px;
-    height: 26px;
-    min-width: 26px;
+.dco-operational-sheet .dco-sheet-group:last-of-type {
+    border-block-end: 0;
+}
+.dco-operational-sheet .dco-sheet-group__title {
+    margin: 0 0 0.45rem;
+    font-size: var(--text-sm, 12px);
+    font-weight: 600;
+    line-height: 1.35;
+    color: var(--text-muted, var(--alm-text-subtle, #667085));
+}
+.dco-operational-sheet .dco-sheet-group__body {
     padding: 0;
-    border: 1px solid var(--border-color, #dfe4e8);
-    border-radius: 7px;
-    background: var(--card-bg, #fff);
-    color: var(--text-muted, #66727d);
-    font-size: 0;
-    cursor: pointer;
-}
-.dco-operational-sheet .dco-sheet-acc__toggle::before {
-    content: "⌄";
-    font-size: 17px;
-    line-height: 1;
-    transition: transform .16s ease;
-}
-.dco-operational-sheet .dco-sheet-acc__toggle[aria-expanded="true"]::before {
-    transform: rotate(180deg);
-}
-.dco-operational-sheet .dco-sheet-acc.is-collapsed > .dco-sheet-acc__body {
-    display: none;
-}
-.dco-operational-sheet .dco-sheet-acc__body {
-    padding: 12px 16px 16px;
 }
 .dco-tool-disclosure {
     display: flex;
@@ -1052,7 +1436,29 @@ body.dco-cnc-sheet-settings-active .layout-main-section {
 .dco-operational-files__sheet-tools {
     display: inline-flex;
     align-items: center;
-    gap: 0.4rem;
+    gap: 4px;
+    justify-self: end;
+    min-inline-size: 0;
+}
+body:not(.full-width) .std-form-layout .form-section:has([data-fieldname="operational_files_html"]) > .section-body,
+.form-section:has([data-fieldname="operational_files_html"]),
+.form-section:has([data-fieldname="operational_files_html"]) > .section-body,
+.form-section:has([data-fieldname="operational_files_html"]) .form-column,
+[data-fieldname="operational_files_html"],
+[data-fieldname="operational_files_html"] > .frappe-control,
+[data-fieldname="operational_files_html"] > .form-group,
+[data-fieldname="operational_files_html"] .control-input-wrapper,
+[data-fieldname="operational_files_html"] .dco-operational-files {
+    width: 100% !important;
+    max-width: none !important;
+    inline-size: 100%;
+    max-inline-size: none;
+    box-sizing: border-box;
+}
+body:not(.full-width) .std-form-layout .form-section:has([data-fieldname="operational_files_html"]) > .section-body,
+.form-section:has([data-fieldname="operational_files_html"]) > .section-body {
+    margin-inline: 0 !important;
+    padding: 0 var(--dco-tab-card-inset-inline, 44px) 8px !important;
 }
 .dco-operational-files__nc-ready {
     display: inline-flex;
