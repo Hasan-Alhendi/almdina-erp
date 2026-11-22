@@ -67,7 +67,7 @@ def historical_plan_settings(plan: Any) -> dict[str, Any]:
     return {'optimization_mode': mode, 'machine_type': machine, **numeric}
 
 
-def historical_geometry_piece(row: Any) -> dict[str, Any]:
+def historical_geometry_piece(row: Any, *, version: int = 3) -> dict[str, Any]:
     """The deployed representation, including inactive and empty defaults."""
     piece = {
         "piece_instance_id": str(getattr(row, "piece_instance_id", "") or "").strip(),
@@ -107,7 +107,7 @@ def historical_geometry_piece(row: Any) -> dict[str, Any]:
             piece[f"{prefix}_reference_side"] = side
             for suffix in ("offset_cm", "width_cm", "start_cm", "length_cm"):
                 piece[f"{prefix}_{suffix}"] = flt(getattr(row, f"{prefix}_{suffix}", 0))
-    return freeze_geometry_piece(piece)
+    return freeze_geometry_piece(piece, version=version)
 
 
 def historical_v1_piece(row: Any) -> dict[str, Any]:

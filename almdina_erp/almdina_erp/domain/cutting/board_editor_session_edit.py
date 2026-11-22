@@ -592,6 +592,22 @@ def _reframe_piece_geometry(
         world_dx=world_dx,
         world_dy=world_dy,
     )
+    for field in ("opening_rings_mm", "base_opening_rings_mm"):
+        rings = piece.get(field)
+        if not isinstance(rings, list):
+            continue
+        piece[field] = [
+            _reframe_points(
+                ring,
+                boards,
+                from_sheet=from_sheet,
+                to_sheet=to_sheet,
+                world_dx=world_dx,
+                world_dy=world_dy,
+            )
+            for ring in rings
+            if isinstance(ring, list)
+        ]
     pivot = piece.get("pivot_mm")
     if isinstance(pivot, Mapping):
         from_x, from_y = _sheet_origin_mm(boards, from_sheet)

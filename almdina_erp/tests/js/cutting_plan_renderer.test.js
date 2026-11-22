@@ -492,6 +492,130 @@ vm.runInContext(
     context,
     { filename: "door_cutting_order_liner_geometry.js" }
 );
+
+function editedLinerPiece(extra) {
+    return Object.assign({
+        x: 10,
+        y: 10,
+        w: 40,
+        h: 50,
+        piece_type: "Regular",
+        extra_liner: 1,
+        liner_reference_side: "edge_width_top",
+        liner_offset_cm: 0,
+        liner_width_cm: 0.6,
+        rotation_deg: 0,
+        geometry: {
+            schema_version: 1,
+            unit: "mm",
+            coordinate_space: "usable_sheet",
+            outer: [[100, 100], [500, 100], [500, 600], [100, 600]],
+            holes: [],
+        },
+    }, extra || {});
+}
+
+function editedPlan(piece) {
+    return {
+        method_key: "board_editor",
+        usable_board_width_cm: 122,
+        usable_board_length_cm: 244,
+        full_board_width_cm: 122,
+        full_board_length_cm: 244,
+        trim_cm: 0,
+        kerf_mm: 4,
+        sheets: [{ sheet_no: 1, pieces: [piece] }],
+    };
+}
+
+const linerApi = fakeWindow.AlmdinaLinerGeometry;
+const widerEdited = editedLinerPiece({ overlays: [] });
+const narrowerEdited = editedLinerPiece({
+    overlays: [{
+        kind: "liner",
+        layer: "Liner",
+        geometry: {
+            path: [[100, 80], [220, 90], [400, 70], [500, 85]],
+            closed: false,
+            toolpath: true,
+        },
+    }],
+});
+const widerVisual = linerApi.visualDisplayOverlays(widerEdited);
+const narrowerVisual = linerApi.visualDisplayOverlays(narrowerEdited);
+assert.equal(widerVisual.length, 1);
+assert.equal(narrowerVisual.length, 1);
+assert.equal(widerVisual[0].geometry.toolpath, false);
+assert.equal(widerVisual[0].geometry_source, "parametric_visual");
+assert.deepEqual(widerVisual[0].geometry.path, narrowerVisual[0].geometry.path);
+assert.ok(Math.abs(widerVisual[0].geometry.path[0][1] - 103) < 0.05);
+assert.ok(widerVisual[0].geometry.path.every(point => Math.abs(point[1] - 103) < 0.05));
+
+const twoLinerPiece = editedLinerPiece({
+    liner_specs_json: JSON.stringify({
+        width_cm: 0.6,
+        liners: [
+            { id: "liner_1", side: "edge_width_top", offset_cm: 0, start_cm: 0, length_cm: 0 },
+            { id: "liner_2", side: "edge_width_bottom", offset_cm: 0, start_cm: 0, length_cm: 0 },
+        ],
+    }),
+});
+const twoVisual = linerApi.visualDisplayOverlays(twoLinerPiece);
+assert.equal(twoVisual.length, 2);
+const twoYs = twoVisual.map(item => item.geometry.path[0][1]).sort((a, b) => a - b);
+assert.ok(Math.abs(twoYs[0] - 103) < 0.05);
+assert.ok(Math.abs(twoYs[1] - 597) < 0.05);
+
+const rotatedOuter = [[100, 100], [500, 100], [500, 600], [100, 600]].map(point => {
+    const pivotX = 300;
+    const pivotY = 350;
+    const x = point[0] - pivotX;
+    const y = point[1] - pivotY;
+    return [pivotX - y, pivotY + x];
+});
+const rotatedVisual = linerApi.visualDisplayOverlays(editedLinerPiece({
+    rotation_deg: 90,
+    geometry: {
+        schema_version: 1,
+        unit: "mm",
+        coordinate_space: "usable_sheet",
+        outer: rotatedOuter,
+        holes: [],
+    },
+}));
+assert.equal(rotatedVisual.length, 1);
+assert.ok(rotatedVisual[0].geometry.path.every(point => Math.abs(point[0] - 547) < 0.05));
+
+const editedFrm = {
+    doc: {
+        name: "EDITED",
+        kerf_mm: 8,
+        liner_tool_diameter_mm: 8,
+        pieces: [],
+    },
+};
+for (const piece of [widerEdited, narrowerEdited, twoLinerPiece]) {
+    const html = renderer.build(editedFrm, editedPlan(piece));
+    const marks = html.match(/data-overlay-kind="liner"/g) || [];
+    const expected = piece === twoLinerPiece ? 2 : 1;
+    assert.equal(marks.length, expected, html);
+    assert.match(html, /data-overlay-kind="liner"[^>]*stroke-dasharray="3 2.2"/);
+    assert.doesNotMatch(html, /data-overlay-kind="liner"[^>]*d="[^"]*80 /);
+}
+const uploadedOnly = editedLinerPiece({
+    extra_liner: 0,
+    liner_reference_side: "",
+    liner_width_cm: 0,
+    overlays: [{
+        kind: "liner",
+        layer: "Liner",
+        geometry: { path: [[120, 140], [400, 140]], closed: false },
+    }],
+});
+const uploadedHtml = renderer.build(editedFrm, editedPlan(uploadedOnly));
+assert.equal((uploadedHtml.match(/data-overlay-kind="liner"/g) || []).length, 1);
+assert.equal(linerApi.visualDisplayOverlays(uploadedOnly).length, 0);
+
 const linerPlan = {
     usable_board_width_cm: 122,
     usable_board_length_cm: 244,

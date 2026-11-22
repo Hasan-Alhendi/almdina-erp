@@ -1034,7 +1034,9 @@ def test_rotated_connected_liner_keeps_the_same_corner_geometry():
         for point in path
     ]
     restored = canonical_path(turned, mirrored=False, quarter_turns=1, width_mm=400, height_mm=600)
-    assert [point for point in restored] == pytest.approx(path)
+    assert len(restored) == len(path)
+    for actual, expected in zip(restored, path, strict=True):
+        assert actual == pytest.approx(expected)
     assert _proper_crossings(turned) == 0
     assert _overlapping_runs(turned) == 0
 

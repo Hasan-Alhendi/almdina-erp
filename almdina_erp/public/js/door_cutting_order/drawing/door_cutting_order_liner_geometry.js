@@ -2018,6 +2018,154 @@
         return paths.filter(path => path && path.length >= 2);
     }
 
+    const VISUAL_POSE_TOLERANCE_MM = 0.75;
+
+    function openDisplayRing(points) {
+        const ring = [];
+        (points || []).forEach(point => {
+            if (!Array.isArray(point) || point.length < 2) return;
+            ring.push([num(point[0]), num(point[1])]);
+        });
+        if (ring.length >= 2 && dist(ring[0], ring[ring.length - 1]) <= VISUAL_POSE_TOLERANCE_MM) {
+            ring.pop();
+        }
+        return ring;
+    }
+
+    function displayAabb(points) {
+        const xs = points.map(point => point[0]);
+        const ys = points.map(point => point[1]);
+        return {
+            minX: Math.min(...xs),
+            minY: Math.min(...ys),
+            maxX: Math.max(...xs),
+            maxY: Math.max(...ys),
+        };
+    }
+
+    function translateDisplay(points, dx, dy) {
+        return points.map(point => [point[0] + dx, point[1] + dy]);
+    }
+
+    function reflectDisplayHorizontal(points, centerX) {
+        return points.map(point => [(2 * centerX) - point[0], point[1]]);
+    }
+
+    function reflectDisplayVertical(points, centerY) {
+        return points.map(point => [point[0], (2 * centerY) - point[1]]);
+    }
+
+    function rotateDisplayPoint(point, pivot, angleDeg) {
+        const x = point[0] - pivot[0];
+        const y = point[1] - pivot[1];
+        const rad = (Number(angleDeg) * Math.PI) / 180;
+        const cos = Math.cos(rad);
+        const sin = Math.sin(rad);
+        return [pivot[0] + (x * cos) - (y * sin), pivot[1] + (x * sin) + (y * cos)];
+    }
+
+    function rotateDisplayRing(points, pivot, angleDeg) {
+        return points.map(point => rotateDisplayPoint(point, pivot, angleDeg));
+    }
+
+    function displayRingsMatch(left, right) {
+        if (left.length !== right.length) return false;
+        return left.every((point, index) => (
+            Math.abs(point[0] - right[index][0]) <= VISUAL_POSE_TOLERANCE_MM
+            && Math.abs(point[1] - right[index][1]) <= VISUAL_POSE_TOLERANCE_MM
+        ));
+    }
+
+    function poseDisplayPaths(piece, linerPiece, sheet, localPaths) {
+        const angle = num(piece && piece.rotation_deg);
+        const bounds = displayAabb(sheet);
+        const pivot = [(bounds.minX + bounds.maxX) / 2, (bounds.minY + bounds.maxY) / 2];
+        const base = Math.abs(angle) > 1e-6
+            ? rotateDisplayRing(sheet, pivot, -angle)
+            : sheet.map(point => point.slice());
+        const baseBounds = displayAabb(base);
+        const turns = pieceQuarterTurns(piece);
+        const mirrored = Boolean(piece && piece.corner_mirrored);
+        const width = linerPiece.widthCm * 10;
+        const height = linerPiece.lengthCm * 10;
+        let localOutline = piecePolygonMm(linerPiece);
+        const pieceType = String((piece && piece.piece_type) || linerPiece.pieceType || "");
+        if (pieceType === CLIPPED || pieceType === L_SHAPED) {
+            localOutline = localOutline.map(point => transformPoint(point, mirrored, turns, width, height));
+        }
+        const outlineBounds = displayAabb(localOutline);
+        const shiftX = baseBounds.minX - outlineBounds.minX;
+        const shiftY = baseBounds.minY - outlineBounds.minY;
+        const canonical = translateDisplay(localOutline, shiftX, shiftY);
+        const centerX = (baseBounds.minX + baseBounds.maxX) / 2;
+        const centerY = (baseBounds.minY + baseBounds.maxY) / 2;
+        const candidates = [
+            ["", canonical],
+            ["h", reflectDisplayHorizontal(canonical, centerX)],
+            ["v", reflectDisplayVertical(canonical, centerY)],
+            ["hv", reflectDisplayVertical(reflectDisplayHorizontal(canonical, centerX), centerY)],
+        ];
+        const chosen = candidates.find(item => displayRingsMatch(item[1], base));
+        if (!chosen) return [];
+        return localPaths.map(local => {
+            let shifted = translateDisplay(
+                local.map(point => transformPoint(point, mirrored, turns, width, height)),
+                shiftX,
+                shiftY
+            );
+            if (chosen[0] === "h") shifted = reflectDisplayHorizontal(shifted, centerX);
+            else if (chosen[0] === "v") shifted = reflectDisplayVertical(shifted, centerY);
+            else if (chosen[0] === "hv") {
+                shifted = reflectDisplayVertical(reflectDisplayHorizontal(shifted, centerX), centerY);
+            }
+            if (Math.abs(angle) > 1e-6) shifted = rotateDisplayRing(shifted, pivot, angle);
+            return shifted;
+        }).filter(path => path.length >= 2);
+    }
+
+    function visualDisplayOverlays(piece) {
+        const outer = piece && piece.geometry && piece.geometry.outer;
+        if (!Array.isArray(outer) || outer.length < 3) return [];
+        if (String((piece && piece.piece_type) || "") === "Special") return [];
+        const parsed = parseDoorLiners(piece);
+        if (!parsed.enabled || !(num(parsed.widthCm) > 0)) return [];
+        const specs = (parsed.liners || []).filter(item => String(item.side || "").trim());
+        if (!specs.length) return [];
+        const sheet = openDisplayRing(outer);
+        if (sheet.length < 3) return [];
+        const linerPiece = pieceFromRow(piece);
+        let localPaths = [];
+        try {
+            localPaths = specs.map(spec => centerlineMm(
+                linerPiece,
+                spec.side,
+                spec.offsetCm,
+                parsed.widthCm,
+                spec.startCm,
+                spec.lengthCm
+            )).filter(path => Array.isArray(path) && path.length >= 2);
+        } catch (error) {
+            return [];
+        }
+        if (!localPaths.length) return [];
+        const posed = poseDisplayPaths(piece, linerPiece, sheet, localPaths);
+        return posed.map(path => ({
+            kind: "liner",
+            layer: "Liner",
+            synthetic: true,
+            display_only: true,
+            geometry_source: "parametric_visual",
+            geometry: {
+                schema_version: 1,
+                unit: "mm",
+                coordinate_space: "usable_sheet",
+                closed: false,
+                toolpath: false,
+                path,
+            },
+        }));
+    }
+
     window.AlmdinaLinerGeometry = Object.freeze({
         toleranceMm: TOLERANCE_MM,
         availableSides,
@@ -2067,5 +2215,6 @@
         mergedRegionPolygonsMm,
         sawnBoundaryEnds,
         placeLocalPath,
+        visualDisplayOverlays,
     });
 })();

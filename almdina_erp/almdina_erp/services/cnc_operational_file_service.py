@@ -228,6 +228,12 @@ _MESSAGES = {
     "sheet_length_invalid": "The approved sheet length is not valid.",
     "sheet_exceeds_machine_width": "The board is larger than the machine width. NC cannot be generated.",
     "sheet_exceeds_machine_length": "The board is larger than the machine length. NC cannot be generated.",
+    "width_stop_invalid": (
+        "The width stop must be a number from 0 cm up to the gap between the machine and the full sheet."
+    ),
+    "length_stop_invalid": (
+        "The length stop must be a number from 0 cm up to the gap between the machine and the full sheet."
+    ),
     "placement_incomplete": "Sheet placement on the CNC machine is incomplete.",
     "post_processor_required": "Choose a post processor before generating the NC file.",
     "post_processor_unsupported": "The selected post processor is not supported.",
@@ -488,6 +494,10 @@ def save_cnc_operational_sheet(
     cnc_machine: str | None = None,
     offset_left_cm: float | int | str | None = None,
     offset_bottom_cm: float | int | str | None = None,
+    width_stop_side: str | None = None,
+    width_stop_cm: float | int | str | None = None,
+    length_stop_side: str | None = None,
+    length_stop_cm: float | int | str | None = None,
     post_processor: str | None = None,
     machining_profiles: str | list[Any] | None = None,
     vector_associations: str | list[Any] | None = None,
@@ -553,6 +563,10 @@ def save_cnc_operational_sheet(
             "cnc_machine": cnc_machine,
             "offset_left_cm": offset_left_cm,
             "offset_bottom_cm": offset_bottom_cm,
+            "width_stop_side": width_stop_side,
+            "width_stop_cm": width_stop_cm,
+            "length_stop_side": length_stop_side,
+            "length_stop_cm": length_stop_cm,
             "post_processor": post_processor,
             "machine_catalog": list_cnc_machines(),
             "plan_snapshot": approved_plan_snapshot(order),
@@ -1484,6 +1498,10 @@ def generate_cnc_sheet_nc(
     cnc_machine: str | None = None,
     offset_left_cm: float | int | str | None = None,
     offset_bottom_cm: float | int | str | None = None,
+    width_stop_side: str | None = None,
+    width_stop_cm: float | int | str | None = None,
+    length_stop_side: str | None = None,
+    length_stop_cm: float | int | str | None = None,
     post_processor: str | None = None,
 ) -> dict[str, Any]:
     """Build one verified NC file from the current sheet settings and return it.
@@ -1533,6 +1551,10 @@ def generate_cnc_sheet_nc(
             "cnc_machine": cnc_machine,
             "offset_left_cm": offset_left_cm,
             "offset_bottom_cm": offset_bottom_cm,
+            "width_stop_side": width_stop_side,
+            "width_stop_cm": width_stop_cm,
+            "length_stop_side": length_stop_side,
+            "length_stop_cm": length_stop_cm,
             "post_processor": post_processor,
             "machine_catalog": list_cnc_machines(),
             "plan_snapshot": approved_plan_snapshot(order),
@@ -1609,6 +1631,7 @@ def generate_cnc_sheet_nc(
             sheet_width_cm=sheet_w,
             sheet_length_cm=sheet_l,
             require_machine=True,
+            sheet_stops=prepared.get("sheet_stops"),
         )
         package = build_post_processed_nc(
             program,

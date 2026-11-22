@@ -182,12 +182,36 @@ def _piece_from_snapshot(piece: Mapping[str, Any]) -> LinerPiece:
     )
 
 
+def _display_only_mark(overlay: Mapping[str, Any]) -> bool:
+    """A visual centerline is not a cutter center, even if it carries a path."""
+
+    if overlay.get("display_only") is True:
+        return True
+    if str(overlay.get("geometry_source") or "") == "parametric_visual":
+        return True
+    payload = overlay.get("payload")
+    if isinstance(payload, Mapping):
+        if payload.get("display_only") is True:
+            return True
+        if str(payload.get("geometry_source") or "") == "parametric_visual":
+            return True
+    geometry = overlay.get("geometry")
+    if isinstance(geometry, Mapping):
+        if geometry.get("display_only") is True:
+            return True
+        if str(geometry.get("geometry_source") or "") == "parametric_visual":
+            return True
+    return False
+
+
 def _persisted_toolpath(piece: Mapping[str, Any], kind: str) -> bool:
     overlays = piece.get("overlays") or ()
     if not isinstance(overlays, Sequence) or isinstance(overlays, (str, bytes)):
         return False
     for overlay in overlays:
         if not isinstance(overlay, Mapping) or str(overlay.get("kind") or "") != kind:
+            continue
+        if _display_only_mark(overlay):
             continue
         geometry = overlay.get("geometry") or {}
         if not isinstance(geometry, Mapping):

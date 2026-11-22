@@ -94,7 +94,9 @@ CUT_SIZE_MISMATCH = "CUT_SIZE_MISMATCH"
 PIECE_COUNT_MISMATCH = "PIECE_COUNT_MISMATCH"
 SPECIAL_SIZE_MISMATCH = "SPECIAL_SIZE_MISMATCH"
 REGULAR_OUTLINE_NOT_RECTANGLE = "REGULAR_OUTLINE_NOT_RECTANGLE"
+REGULAR_OPENING_UNEXPECTED = "REGULAR_OPENING_UNEXPECTED"
 SPECIAL_OUTLINE_IS_RECTANGLE = "SPECIAL_OUTLINE_IS_RECTANGLE"
+OPENING_UNMANUFACTURABLE = "OPENING_UNMANUFACTURABLE"
 SPECIAL_ADDON_GROUP_EXTRA = "SPECIAL_ADDON_GROUP_EXTRA"
 SPECIAL_ADDON_GROUP_MISSING = "SPECIAL_ADDON_GROUP_MISSING"
 SPECIAL_ADDON_GROUP_SPLIT = "SPECIAL_ADDON_GROUP_SPLIT"
@@ -302,7 +304,10 @@ SKIP_PERSISTED_CUT_CONTEXT_CODES: frozenset[str] = frozenset(
         EXTRA_CUT_PATH,
         PIECE_MISSING,
         REGULAR_OUTLINE_NOT_RECTANGLE,
+        REGULAR_OPENING_UNEXPECTED,
         SPECIAL_OUTLINE_IS_RECTANGLE,
+        OPENING_UNMANUFACTURABLE,
+        PIECE_IDENTITY_AMBIGUOUS,
         SPECIAL_ADDON_GROUP_EXTRA,
         SPECIAL_ADDON_GROUP_MISSING,
         SPECIAL_ADDON_GROUP_SPLIT,
@@ -363,6 +368,25 @@ def topology_error_to_issue(
         return issue(
             SPECIAL_OUTLINE_IS_RECTANGLE,
             CATEGORY_DIMENSIONS,
+            target=DxfIssueTarget(kind=TARGET_ORDER),
+            params=params,
+            debug=debug,
+        )
+    if code == "REGULAR_OPENING_UNEXPECTED":
+        params["identity_unproven"] = True
+        return issue(
+            REGULAR_OPENING_UNEXPECTED,
+            CATEGORY_TOPOLOGY,
+            target=DxfIssueTarget(kind=TARGET_ORDER),
+            params=params,
+            debug=debug,
+        )
+    if code == "PIECE_IDENTITY_AMBIGUOUS":
+        params["identity_unproven"] = True
+        params["reason"] = "glass_special_geometry"
+        return issue(
+            PIECE_IDENTITY_AMBIGUOUS,
+            CATEGORY_IDENTITY,
             target=DxfIssueTarget(kind=TARGET_ORDER),
             params=params,
             debug=debug,

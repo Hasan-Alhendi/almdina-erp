@@ -43,6 +43,10 @@ const current = {
     ],
     values: {
         default_kerf_mm: 5,
+        cnc_default_preset_cut_path: "CUT-TOOL",
+        cnc_default_preset_liner: "LINER-TOOL",
+        cnc_default_preset_rear_groove: "",
+        cnc_default_preset_handle_recess: "RECESS-TOOL",
         default_trim_margin_mm: 5,
         max_centerable_edge_gap_cm: 5,
         default_packing_mode: "auto",
@@ -136,6 +140,16 @@ assert.equal(sections[5].rows[0].value, "قياسات {order_name}");
 assert.equal(sections[5].rows[1].value, "تعديلات {order_name}");
 assert.equal(sections[5].rows.length, 4);
 assert.equal(sections[5].rows[3].value, "انتهى CNC {order_name}");
+const cncRows = sections.find(section => section.key === "cnc").rows;
+assert.deepEqual(
+    JSON.parse(JSON.stringify(cncRows.slice(0, 4).map(row => [row.label, row.value]))),
+    [
+        ["Cut Between Pieces Preset", "CUT-TOOL"],
+        ["Liner Preset", "LINER-TOOL"],
+        ["Rear Groove Preset", "—"],
+        ["Handle Recess Preset", "RECESS-TOOL"],
+    ]
+);
 assert.equal(sections[0].rows[1].value, "Enabled");
 assert.equal(sections[0].rows[2].value, "Same as cutting tool");
 assert.equal(sections[0].rows[6].value, 5);
@@ -211,7 +225,7 @@ const arModel = moduleApi.create({
 });
 const arBackup = arModel.page(backupCurrent);
 assert.equal(arBackup.sections[7].rows[2].value, "آخر 7 نسخ احتياطية");
-assert.equal(arModel.sections(current)[0].rows[5].value, "تلقائي");
+assert.equal(arModel.catalogLabel(current, "optimization_catalog", "auto"), "تلقائي");
 
 const restoreOnly = model.page({
     values: {},

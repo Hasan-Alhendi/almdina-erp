@@ -1121,6 +1121,27 @@
         };
     }
 
+    function reflectDisplayPath(path, piece) {
+        // Session mirror flags are the only pose not already in the loaded path.
+        // Reflect once about the entry pivot; rotation and translation stay in
+        // entryPointToWorld so a saved mirror is not applied a second time.
+        if (!piece || !Array.isArray(path)) return path;
+        const pivot = piece.entry_pivot_mm || piece.pivot_mm || { x: 0, y: 0 };
+        const centerX = Number(pivot.x) || 0;
+        const centerY = Number(pivot.y) || 0;
+        let next = path;
+        if (piece.mirrored) {
+            next = next.map((point) => [(2 * centerX) - (Number(point[0]) || 0), Number(point[1]) || 0]);
+        }
+        if (piece.flip_h) {
+            next = next.map((point) => [(2 * centerX) - (Number(point[0]) || 0), Number(point[1]) || 0]);
+        }
+        if (piece.flip_v) {
+            next = next.map((point) => [Number(point[0]) || 0, (2 * centerY) - (Number(point[1]) || 0)]);
+        }
+        return next;
+    }
+
     function entryPointToWorld(point, piece, boards) {
         // Projection geometry stays in the immutable entry usable-sheet frame.
         // Map once: rotate about entry_pivot, then place that pivot at the live world pivot.
@@ -2371,6 +2392,16 @@
                 return;
             }
 
+            function sessionOpeningRings(piece) {
+                if (Array.isArray(piece.opening_rings_mm) && piece.opening_rings_mm.length) {
+                    return piece.opening_rings_mm.filter((ring) => Array.isArray(ring) && ring.length >= 3);
+                }
+                if (Array.isArray(piece.glass_hole_local_mm) && piece.glass_hole_local_mm.length >= 3) {
+                    return [piece.glass_hole_local_mm];
+                }
+                return [];
+            }
+
             let geometry = element.geometry;
             if (
                 sessionPiece
@@ -2381,20 +2412,22 @@
                 // Authoritative session outline already carries pose; lift to world once.
                 geometry = {
                     outer: sessionPointsToWorld(sessionPiece.outline_mm, sessionPiece, boards),
-                    holes: Array.isArray(sessionPiece.glass_hole_local_mm)
-                        ? [sessionPointsToWorld(sessionPiece.glass_hole_local_mm, sessionPiece, boards)]
-                        : [],
+                    holes: sessionOpeningRings(sessionPiece).map((ring) => (
+                        sessionPointsToWorld(ring, sessionPiece, boards)
+                    )),
                 };
-            } else if (
-                sessionPiece
-                && element.kind === "hole"
-                && Array.isArray(sessionPiece.glass_hole_local_mm)
-                && sessionPiece.glass_hole_local_mm.length >= 3
-            ) {
-                geometry = {
-                    outer: sessionPointsToWorld(sessionPiece.glass_hole_local_mm, sessionPiece, boards),
-                    holes: [],
-                };
+            } else if (sessionPiece && element.kind === "hole") {
+                const rings = sessionOpeningRings(sessionPiece);
+                const holeIndex = element.payload && Number.isInteger(element.payload.hole_index)
+                    ? element.payload.hole_index
+                    : 0;
+                const ring = rings[holeIndex] || (holeIndex === 0 ? rings[0] : null);
+                if (Array.isArray(ring) && ring.length >= 3) {
+                    geometry = {
+                        outer: sessionPointsToWorld(ring, sessionPiece, boards),
+                        holes: [],
+                    };
+                }
             } else if (sessionPiece && geometry && Array.isArray(geometry.outer)) {
                 geometry = {
                     outer: geometry.outer.map((point) => entryPointToWorld(point, sessionPiece, boards)),
@@ -2403,8 +2436,11 @@
                     )),
                 };
             } else if (sessionPiece && geometry && Array.isArray(geometry.path)) {
+                const sourcePath = element.payload && element.payload.geometry_source === "parametric_visual"
+                    ? reflectDisplayPath(geometry.path, sessionPiece)
+                    : geometry.path;
                 geometry = {
-                    path: geometry.path.map((point) => entryPointToWorld(point, sessionPiece, boards)),
+                    path: sourcePath.map((point) => entryPointToWorld(point, sessionPiece, boards)),
                     closed: geometry.closed,
                 };
             } else if (geometry && Array.isArray(geometry.outer)) {

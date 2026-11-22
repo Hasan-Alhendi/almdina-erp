@@ -183,18 +183,10 @@
             if (model.activeTab !== "settings") return;
             // Full-page render always replaces the live session card with the
             // loading placeholder, so the OpenWA snapshot must be re-fetched.
-            if (
-                model.canManageWhatsAppSession
-                && whatsapp
-                && typeof whatsapp.refresh === "function"
-            ) {
+            if (model.canManageWhatsAppSession && typeof whatsapp?.refresh === "function") {
                 whatsapp.refresh();
             }
-            if (
-                model.showBackupPanel
-                && backups
-                && typeof backups.refresh === "function"
-            ) {
+            if (model.showBackupPanel && typeof backups?.refresh === "function") {
                 backups.refresh();
             }
         }

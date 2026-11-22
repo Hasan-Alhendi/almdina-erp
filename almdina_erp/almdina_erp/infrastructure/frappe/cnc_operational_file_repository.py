@@ -223,6 +223,7 @@ def saved_operational_files(order_name: str) -> list[dict[str, Any]]:
                 "cut_path_sequence": _sequence_list(getattr(document, "cut_path_sequence", None)),
                 "perimeter_cut_early_confirmed": bool(cint(getattr(document, "perimeter_cut_early_confirmed", 0))),
                 "cnc_machine": str(getattr(document, "cnc_machine", None) or ""),
+                "sheet_stops": _sheet_stops_dict(getattr(document, "sheet_stops_json", None)),
                 "offset_left_cm": float(getattr(document, "offset_left_cm", 0) or 0),
                 "offset_bottom_cm": float(getattr(document, "offset_bottom_cm", 0) or 0),
                 "post_processor": str(getattr(document, "post_processor", "") or ""),
@@ -296,6 +297,39 @@ def _object_list(raw: Any) -> list[Any]:
 
 def _object_list_json(raw: Any) -> str:
     return json.dumps(_object_list(raw), ensure_ascii=True, separators=(",", ":"))
+
+
+def _sheet_stops_dict(raw: Any) -> dict[str, Any] | None:
+    """Read persisted sheet stops. Missing and empty values stay unset."""
+
+    if raw is None or raw == "":
+        return None
+    if isinstance(raw, Mapping):
+        parsed: Any = dict(raw)
+    elif isinstance(raw, str):
+        text = raw.strip()
+        if not text or text == "null":
+            return None
+        parsed = json.loads(text)
+    else:
+        return None
+    if not isinstance(parsed, Mapping):
+        return None
+    if not str(parsed.get("width_stop_side") or "").strip():
+        return None
+    return {
+        "width_stop_side": str(parsed.get("width_stop_side") or ""),
+        "width_stop_cm": float(parsed.get("width_stop_cm")),
+        "length_stop_side": str(parsed.get("length_stop_side") or ""),
+        "length_stop_cm": float(parsed.get("length_stop_cm")),
+    }
+
+
+def _sheet_stops_json(raw: Any) -> str:
+    parsed = _sheet_stops_dict(raw)
+    if not parsed:
+        return ""
+    return json.dumps(parsed, ensure_ascii=True, sort_keys=True, separators=(",", ":"))
 
 
 def _sequence_json(raw: Any) -> str:
@@ -691,6 +725,7 @@ def _settings_payload(document: Any) -> str:
         "machining_profiles": _object_list(document.get("machining_profiles_json")),
         "vector_associations": _object_list(document.get("vector_associations_json")),
         "toolpath_snapshots": _object_list(document.get("toolpath_snapshots_json")),
+        "sheet_stops": _sheet_stops_json(document.get("sheet_stops_json")),
     }
     return json.dumps(payload, ensure_ascii=True, sort_keys=True, separators=(",", ":"), default=str)
 
@@ -754,6 +789,8 @@ def save_sheet(
     ):
         if field in payload:
             document.set(field, _object_list_json(payload.get(field)))
+    if "sheet_stops" in payload:
+        document.set("sheet_stops_json", _sheet_stops_json(payload.get("sheet_stops")))
     if existing_name and _settings_payload(document) == before:
         return str(document.name)
     document.set("settings_revision", current_revision + 1)

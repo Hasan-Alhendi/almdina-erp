@@ -2969,8 +2969,19 @@ Increase the measurement,زيادة القياس
 Decrease the measurement,إنقاص القياس
 Row {0}: {1},السطر {0}: {1}
 "Row {0}: Piece dimensions {1} × {2} cm do not fit the board {3} × {4} cm, even after allowed rotation.",السطر {0}: قياسات الدرفة {1} × {2} سم لا تتسع ضمن اللوح {3} × {4} سم حتى بعد السماح بالدوران.
+The finished contour on GEOMETRY is not valid. {0},المحيط النهائي على طبقة GEOMETRY غير صالح. {0}
+"Correct the finished contour on GEOMETRY, then upload the file again.",صحح المحيط النهائي على طبقة GEOMETRY ثم أعد رفع الملف.
+Contour {0} on layer {1}.,المحيط {0} على طبقة {1}.
+invalid geometry,هندسة غير صالحة
 A regular door could not be matched because the DXF contour is not a rectangle.,تعذر مطابقة درفة عادية لأن المحيط في DXF غير مستطيل.
-A special door could not be matched because the DXF contour is a rectangle.,تعذر مطابقة درفة خاصة لأن المحيط في DXF مستطيل.
+A special door could not be matched because the rectangular contour has no internal opening.,تعذر مطابقة درفة خاصة لأن المحيط مستطيل بلا فتحة داخلية.
+"Use a non-rectangular contour, or add at least one internal through-cut opening inside the rectangle.",استخدم محيطًا غير مستطيل، أو أضف فتحة قص نافذة واحدة على الأقل داخل المستطيل.
+A regular door cannot contain an internal through-cut opening.,لا يمكن أن تحتوي الدرفة العادية على فتحة قص نافذة.
+Remove the opening from the regular door contour.,أزل الفتحة من محيط الدرفة العادية.
+An internal opening cannot be cut with the selected cutter.,لا يمكن قص الفتحة الداخلية بالريشة المختارة.
+Enlarge the opening or choose a cutter that fits inside it.,كبّر الفتحة أو اختر ريشة تدخل داخلها.
+Glass and special doors with the same opening cannot be told apart.,تعذّر تمييز درفة البلور عن الدرفة الخاصة لأن الفتحة نفسها تطابق الاثنتين.
+"Add manufacturing evidence that identifies each door, then import again.",أضف دليل تصنيع يميز كل درفة ثم أعد الاستيراد.
 "The special-door group {0} × {1} cm has an extra {2} that the order does not require.",مجموعة الدرفات الخاصة {0} × {1} سم تحتوي على {2} إضافي غير مطلوب.
 "The special-door group {0} × {1} cm is missing a required {2}.",مجموعة الدرفات الخاصة {0} × {1} سم تفتقد {2} المطلوبة.
 That path is on a regular door and is not counted for the special door.,ذلك المسار على درفة عادية ولا يُحتسب للدرفة الخاصة.
@@ -3629,6 +3640,7 @@ A machining add-on conflicts with neighbouring material.,إضافة تصنيع �
 The {0} add-on conflicts with neighbouring material.,إضافة {0} تتعارض مع مادة مجاورة.
 The {0} add-on conflicts with neighbouring material ({1}).,إضافة {0} تتعارض مع مادة مجاورة ({1}).
 "The {0} add-on has no proven geometry ({1}), so readiness cannot be declared.",إضافة {0} بلا هندسة مثبتة ({1})، لذلك لا يمكن إعلان الجاهزية.
+"The liner tool is wider than the liner strip, so no machining path was stored with this copy.",ريشة اللاينر أعرض من شريط اللاينر، لذلك لم يُحفظ مسار تشغيل مع هذه النسخة.
 "This piece has no supported geometry ({0}), so it cannot be marked ready.",هذه القطعة بلا هندسة مدعومة ({0})، لذلك لا يمكن إعلانها جاهزة.
 Create cutting plan copy,إنشاء نسخة خطة قص
 Save the current distribution before creating a cutting plan copy.,احفظ التوزيع الحالي قبل إنشاء نسخة خطة قص.
@@ -4360,6 +4372,11 @@ Top Side,أعلى
 "Side of the width stop. It is independent of the work zero. The gap is calculated from the machine width and the full board width.",جهة مصدم العرض مستقلة عن نقطة الصفر. يُحسب الفراغ من عرض الماكينة وعرض اللوح الكامل.
 "Side of the length stop. It is independent of the work zero. The gap is calculated from the machine length and the full board length.",جهة مصدم الطول مستقلة عن نقطة الصفر. يُحسب الفراغ من طول الماكينة وطول اللوح الكامل.
 "Choose the width stop side and the length stop side on the CNC machine before generating a new file.",اختر جهة مصدم العرض وجهة مصدم الطول على الماكينة قبل توليد ملف جديد.
+Width Stop (cm),مصدم العرض (سم)
+Length Stop (cm),مصدم الطول (سم)
+Restore default stops,استعادة المصادم الافتراضية
+"The width stop must be a number from 0 cm up to the gap between the machine and the full sheet.",يجب أن يكون مصدم العرض رقمًا من 0 سم وحتى الفراغ بين الماكينة واللوح الكامل.
+"The length stop must be a number from 0 cm up to the gap between the machine and the full sheet.",يجب أن يكون مصدم الطول رقمًا من 0 سم وحتى الفراغ بين الماكينة واللوح الكامل.
 "The board is larger than the machine width. NC cannot be generated.",اللوح أكبر من عرض الماكينة. لا يمكن توليد الملف التشغيلي.
 "The board is larger than the machine length. NC cannot be generated.",اللوح أكبر من طول الماكينة. لا يمكن توليد الملف التشغيلي.
 "The operational file has been generated.",تم توليد الملف التشغيلي
