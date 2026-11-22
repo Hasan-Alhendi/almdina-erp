@@ -132,8 +132,8 @@ assert.ok(pageMarkup.includes('preserveAspectRatio="xMidYMid meet"'));
 const pageBox = pageMarkup.match(/viewBox="([^"]+)"/)[1].split(/\s+/).map(Number);
 assert.ok(pageBox[0] <= 0 && pageBox[1] <= 0);
 assert.ok(pageBox[0] + pageBox[2] >= 2440 && pageBox[1] + pageBox[3] >= 1220);
-assert.ok(pageMarkup.indexOf('data-cut-zoom="in"') < pageMarkup.indexOf("data-cut-viewport"));
-assert.ok(pageMarkup.indexOf("data-cut-viewport") < pageMarkup.indexOf("data-cut-stage"));
+assert.ok(pageMarkup.indexOf("data-cut-viewport") < pageMarkup.indexOf('data-cut-zoom="in"'));
+assert.ok(pageMarkup.indexOf('data-cut-zoom="in"') < pageMarkup.indexOf("data-cut-stage"));
 
 const dialogMarkup = ux.cutPathPreviewMarkup(program, {
     markerScope: "cnc-zoom-dialog",

@@ -1256,10 +1256,12 @@
     function exportControlsMarkup(workspace) {
         const canPrepare = Boolean(workspace && workspace.can_prepare);
         const control = generateNcControlState({ canPrepare });
+        const downloadLabel = translate("Download cutting file");
+        const downloadTitle = control.disabled ? (control.reason || "") : downloadLabel;
         return `<div class="dco-operational-sheet__export" data-cnc-export-bar>
             <div class="dco-operational-sheet__export-actions">
-                <button type="button" class="btn btn-default btn-sm" data-cnc-generate-nc data-cnc-page-action="generate"${control.disabled ? " disabled" : ""} title="${escapeHtml(control.reason || "")}">${escapeHtml(translate("Generate NC file"))}</button>
                 <button type="button" class="btn btn-primary btn-sm" data-cnc-save-sheet${canPrepare ? "" : " disabled"}>${escapeHtml(translate("Save sheet settings"))}</button>
+                <button type="button" class="btn btn-default btn-sm" data-cnc-generate-nc data-cnc-page-action="generate"${control.disabled ? " disabled" : ""} title="${escapeHtml(downloadTitle)}">${escapeHtml(downloadLabel)}</button>
             </div>
         </div>`;
     }
@@ -1312,7 +1314,6 @@
         const pageChrome = Boolean(exportBar);
         const previewToolbar = pageChrome
             ? `<div class="dco-cnc-preview-toolbar" dir="ltr">
-                <div class="dco-cnc-preview-toolbar__zoom" data-cnc-preview-zoom></div>
                 <div class="dco-cnc-sheet-page__actions" data-cnc-page-actions></div>
             </div>`
             : "";
@@ -2390,7 +2391,7 @@
         if (save) save.disabled = !canPrepare;
         if (generate) {
             generate.disabled = Boolean(control.disabled);
-            generate.setAttribute("title", control.reason || "");
+            generate.setAttribute("title", control.disabled ? (control.reason || "") : translate("Download cutting file"));
         }
         bindGenerateNc(ui, ui.root, {
             canPrepare,
@@ -2858,6 +2859,8 @@
             "[data-cnc-save-sheet]",
             "[data-cnc-generate-nc]",
             "[data-generate-nc]",
+            "[data-cut-zoom]",
+            ".dco-cnc-cut-preview__zoom",
         ];
         if (controls.some(selector => target.closest(selector))) return "control";
         if (target.closest("[data-sheet-geometry]")) return "board";
@@ -3633,7 +3636,7 @@
                 .filter(hole => hole.length >= 3);
             const path = [outer, ...holes].map(sheetRingPath).join(" ");
             const identity = piece.piece_instance_id || piece.id || piece.label || "";
-            return `<path class="dco-cnc-cut-preview__piece" data-piece-id="${escapeHtml(identity)}" fill-rule="evenodd" d="${path}"/>`;
+            return `<path class="dco-cnc-cut-preview__piece" data-piece-id="${escapeHtml(identity)}" fill="none" fill-rule="evenodd" d="${path}"/>`;
         }).join("");
     }
 
@@ -3763,12 +3766,12 @@
             </div>`;
             const framed = `${stage}${svgInner.overlay || ""}`;
             if (!pageLayout) return `<div class="dco-cnc-cut-preview__canvas">${framed}</div>`;
-            return `<div class="dco-cnc-cut-preview__zoom" role="group" aria-label="${escapeHtml(translate("Board preview viewport"))}">
-                <button type="button" class="btn btn-default btn-xs" data-cut-zoom="out" aria-label="${escapeHtml(translate("Zoom out"))}" title="${escapeHtml(translate("Zoom out"))}">−</button>
-                <button type="button" class="btn btn-default btn-xs" data-cut-zoom="reset" aria-label="${escapeHtml(translate("Fit to view"))}" title="${escapeHtml(translate("Fit to view"))}">100%</button>
-                <button type="button" class="btn btn-default btn-xs" data-cut-zoom="in" aria-label="${escapeHtml(translate("Zoom in"))}" title="${escapeHtml(translate("Zoom in"))}">+</button>
-            </div>
-            <div class="dco-cnc-cut-preview__viewport" data-cut-viewport style="${cutPreviewLayoutStyle(width, length, frameOptions)};overflow:hidden;contain:paint;clip-path:inset(0 round 8px)" role="region" aria-label="${escapeHtml(translate("Board preview viewport"))}">
+            return `<div class="dco-cnc-cut-preview__viewport" data-cut-viewport style="${cutPreviewLayoutStyle(width, length, frameOptions)};overflow:hidden;contain:paint;clip-path:inset(0 round 8px)" role="region" aria-label="${escapeHtml(translate("Board preview viewport"))}">
+                <div class="dco-cnc-cut-preview__zoom" dir="ltr" role="group" aria-label="${escapeHtml(translate("Board preview viewport"))}">
+                    <button type="button" class="btn btn-default btn-xs" data-cut-zoom="out" aria-label="${escapeHtml(translate("Zoom out"))}" title="${escapeHtml(translate("Zoom out"))}">−</button>
+                    <button type="button" class="btn btn-default btn-xs" data-cut-zoom="reset" aria-label="${escapeHtml(translate("Fit to view"))}" title="${escapeHtml(translate("Fit to view"))}">100%</button>
+                    <button type="button" class="btn btn-default btn-xs" data-cut-zoom="in" aria-label="${escapeHtml(translate("Zoom in"))}" title="${escapeHtml(translate("Zoom in"))}">+</button>
+                </div>
                 ${framed}
             </div>`;
         };
@@ -4025,6 +4028,8 @@
             }, { passive: false });
             let drag = null;
             viewport.addEventListener("pointerdown", event => {
+                const target = event.target;
+                if (target && typeof target.closest === "function" && target.closest(".dco-cnc-cut-preview__zoom")) return;
                 if (event.shiftKey || Number(event.button) !== 0 || zoom <= 1.0001) return;
                 drag = {
                     x: Number(event.clientX),

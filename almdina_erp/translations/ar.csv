@@ -3354,6 +3354,7 @@ simulation_dialect_only,لهجة المحاكاة فقط
 machine_origin_not_established,أصل الماكينة غير محدد
 Generate simulation NC,توليد NC تجريبي
 Generate NC file,توليد ملف NC
+Download cutting file,تحميل ملف القص
 Download NC file,تنزيل ملف NC
 Download previous simulation NC,تنزيل النسخة السابقة من NC التجريبي
 Move the operation earlier,تقديم العملية

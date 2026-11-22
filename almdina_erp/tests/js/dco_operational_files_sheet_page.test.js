@@ -421,9 +421,10 @@ assert.equal(settingsMarkup.includes("dco-operational-sheet__preview"), false);
 assert.equal(pageMarkup.includes("data-cnc-post-processor"), false);
 assert.ok(pageMarkup.includes("data-cnc-save-sheet"));
 assert.ok(pageMarkup.includes("data-cnc-generate-nc"));
-assert.ok(pageMarkup.indexOf("data-cnc-generate-nc") < pageMarkup.indexOf("data-cnc-save-sheet"));
+assert.ok(pageMarkup.includes("Download cutting file"));
+assert.ok(pageMarkup.indexOf("data-cnc-save-sheet") < pageMarkup.indexOf("data-cnc-generate-nc"));
 assert.ok(pageMarkup.includes("dco-cnc-preview-toolbar"));
-assert.ok(pageMarkup.includes("data-cnc-preview-zoom"));
+assert.equal(pageMarkup.includes("data-cnc-preview-zoom"), false);
 assert.ok(pageMarkup.indexOf("dco-cnc-preview-toolbar") < pageMarkup.indexOf("data-sheet-preview"));
 assert.equal(pageMarkup.includes("dco-operational-sheet__selection"), false);
 assert.equal(pageMarkup.includes("data-sheet-nc-status"), false);
@@ -445,7 +446,7 @@ assert.ok(pageMarkup.indexOf('data-sheet-section="perimeter"') < pageMarkup.inde
 assert.ok(pageMarkup.indexOf('data-sheet-section="associations"') < pageMarkup.indexOf('data-sheet-section="order"'));
 assert.ok(panel.includes("data-cnc-page-actions"));
 assert.ok(panel.includes("placePageActions("));
-assert.ok(css.includes("grid-template-columns: minmax(0, 3fr) minmax(16rem, 2fr)"));
+assert.ok(css.includes("grid-template-columns: minmax(0, 65fr) minmax(16rem, 35fr)"));
 assert.ok(panel.includes("data-sheet-grid-pattern"));
 assert.ok(panel.includes("8 / scale"));
 assert.ok(panel.includes('patternTransform="rotate(45)"'));
@@ -462,7 +463,11 @@ assert.ok(css.includes("justify-content: space-between"));
 assert.ok(css.includes(".dco-cnc-sheet-page [data-cnc-save-sheet]"));
 assert.ok(css.includes("background-color: var(--alm-accent);"));
 assert.ok(css.includes("direction: ltr;"));
-assert.ok(css.includes("100dvh - var(--navbar-height, 48px) - 2.15rem"));
+assert.ok(css.includes("inset-block-start: var(--navbar-height, 48px)"));
+assert.ok(css.includes("100dvh - var(--navbar-height, 48px) - 0.85rem"));
+assert.ok(css.includes(".dco-cnc-sheet-page .dco-cnc-cut-preview__viewport > .dco-cnc-cut-preview__zoom"));
+assert.ok(css.includes(".dco-cnc-sheet-page .dco-cnc-cut-preview__piece"));
+assert.ok(translations.includes("Download cutting file,تحميل ملف القص"));
 assert.ok(panel.includes("relocatePageZoomControls"));
 assert.ok(translations.includes("Machine placement,تموضع اللوح على الماكينة"));
 assert.ok(translations.includes("Vector Associations,ربط المتجهات"));
@@ -514,6 +519,7 @@ const shaped = ux.cutPathPreviewMarkup({
         }],
     },
 });
+assert.ok(shaped.includes('fill="none" fill-rule="evenodd"'));
 assert.ok(shaped.includes('data-piece-id="leaf-l"'));
 assert.ok(shaped.includes("40 1190"), "an inner corner of a non-rectangular leaf stays on the outline");
 assert.ok(shaped.includes('data-piece-id="leaf-hole"'));
