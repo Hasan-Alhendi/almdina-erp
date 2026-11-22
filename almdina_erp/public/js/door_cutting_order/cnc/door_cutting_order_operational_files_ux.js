@@ -386,6 +386,13 @@
             cutPathSequence: [],
             perimeterEarlyConfirmed: Boolean(sheet.perimeter_cut_early_confirmed),
             cncMachine: String(sheet.cnc_machine || ""),
+            sheetStops: sheet.sheet_stops && sheet.sheet_stops.width_stop_side ? {
+                width_stop_side: String(sheet.sheet_stops.width_stop_side || ""),
+                width_stop_cm: Number(sheet.sheet_stops.width_stop_cm),
+                length_stop_side: String(sheet.sheet_stops.length_stop_side || ""),
+                length_stop_cm: Number(sheet.sheet_stops.length_stop_cm),
+            } : null,
+            stopDraft: { width: null, length: null },
             settingsRevision: Number(sheet.settings_revision || 0),
             sheetWidthCm: sheet.sheet_width_cm == null ? null : Number(sheet.sheet_width_cm),
             sheetLengthCm: sheet.sheet_length_cm == null ? null : Number(sheet.sheet_length_cm),
@@ -418,6 +425,8 @@
             perimeterEarlyConfirmed: Boolean(state.perimeterEarlyConfirmed)
                 && sheetPerimeterPrecedesMilling(state.order),
             cncMachine: String(state.cncMachine || ""),
+            sheetStops: state.sheetStops || null,
+            stopDraft: state.stopDraft || null,
         });
     }
 
@@ -462,9 +471,52 @@
         return { position, horizontalSide, verticalSide };
     }
 
-    function physicalSheetOffsetCm(machine, sheetWidthCm, sheetLengthCm) {
-        const stops = activeStopValues(machine);
-        if (!stops || stops.error) return stops && stops.error ? { error: stops.error, position: stops.position } : null;
+    function defaultSheetStops(machine, sheetWidthCm, sheetLengthCm) {
+        if (!machine) return null;
+        const width = Number(machine.width_cm);
+        const length = Number(machine.length_cm);
+        const sheetW = Number(sheetWidthCm);
+        const sheetL = Number(sheetLengthCm);
+        if (!(width > 0) || !(length > 0) || !(sheetW > 0) || !(sheetL > 0)) return null;
+        const widthGap = width - sheetW;
+        const lengthGap = length - sheetL;
+        if (widthGap < -1e-6) return { error: "sheet_exceeds_machine_width" };
+        if (lengthGap < -1e-6) return { error: "sheet_exceeds_machine_length" };
+        return {
+            width_stop_side: String(machine.width_stop_side || ""),
+            width_stop_cm: widthGap > 0 ? widthGap : 0,
+            length_stop_side: String(machine.length_stop_side || ""),
+            length_stop_cm: lengthGap > 0 ? lengthGap : 0,
+        };
+    }
+
+    function activeSheetStops(workspace, state) {
+        const machine = findCncMachine(workspace, state && state.cncMachine);
+        const defaults = defaultSheetStops(machine, state && state.sheetWidthCm, state && state.sheetLengthCm);
+        const saved = state && state.sheetStops;
+        if (!saved) return defaults;
+        return {
+            width_stop_side: String(saved.width_stop_side || (defaults && defaults.width_stop_side) || ""),
+            width_stop_cm: saved.width_stop_cm,
+            length_stop_side: String(saved.length_stop_side || (defaults && defaults.length_stop_side) || ""),
+            length_stop_cm: saved.length_stop_cm,
+            error: defaults && defaults.error,
+        };
+    }
+
+    function parseStopCm(raw, gap) {
+        const text = String(raw == null ? "" : raw).trim();
+        if (!/^[+]?(?:\d+\.?\d*|\.\d+)$/.test(text)) return { ok: false };
+        const number = Number(text);
+        if (!Number.isFinite(number) || number < 0 || number - Number(gap) > 1e-6) return { ok: false };
+        return { ok: true, value: number };
+    }
+
+    function physicalSheetOffsetCm(machine, sheetWidthCm, sheetLengthCm, stops) {
+        const machineStops = activeStopValues(machine);
+        if (!machineStops || machineStops.error) {
+            return machineStops && machineStops.error ? { error: machineStops.error, position: machineStops.position } : null;
+        }
         const width = Number(machine.width_cm);
         const length = Number(machine.length_cm);
         const sheetW = Number(sheetWidthCm);
@@ -472,26 +524,52 @@
         if (!(width > 0) || !(length > 0) || !(sheetW > 0) || !(sheetL > 0)) return null;
         const horizontalCm = width - sheetW;
         const verticalCm = length - sheetL;
-        if (horizontalCm < -1e-6) return { error: "sheet_exceeds_machine_width", position: stops.position };
-        if (verticalCm < -1e-6) return { error: "sheet_exceeds_machine_length", position: stops.position };
+        if (horizontalCm < -1e-6) return { error: "sheet_exceeds_machine_width", position: machineStops.position };
+        if (verticalCm < -1e-6) return { error: "sheet_exceeds_machine_length", position: machineStops.position };
         const widthGap = horizontalCm > 0 ? horizontalCm : 0;
         const lengthGap = verticalCm > 0 ? verticalCm : 0;
+        const chosen = stops || {
+            width_stop_side: machine.width_stop_side,
+            width_stop_cm: widthGap,
+            length_stop_side: machine.length_stop_side,
+            length_stop_cm: lengthGap,
+        };
+        const horizontalSide = WIDTH_STOP_SIDES[String(chosen.width_stop_side || "")];
+        const verticalSide = LENGTH_STOP_SIDES[String(chosen.length_stop_side || "")];
+        if (!horizontalSide || !verticalSide) {
+            return { error: "cnc_machine_stop_sides_required", position: machineStops.position };
+        }
+        const widthStop = Number(chosen.width_stop_cm);
+        const lengthStop = Number(chosen.length_stop_cm);
+        if (!Number.isFinite(widthStop) || widthStop < 0 || widthStop - widthGap > 1e-6) {
+            return { error: "width_stop_invalid", position: machineStops.position };
+        }
+        if (!Number.isFinite(lengthStop) || lengthStop < 0 || lengthStop - lengthGap > 1e-6) {
+            return { error: "length_stop_invalid", position: machineStops.position };
+        }
+        const offsetLeft = horizontalSide === "left" ? widthStop : widthGap - widthStop;
+        const offsetBottom = verticalSide === "bottom" ? lengthStop : lengthGap - lengthStop;
         return {
-            position: stops.position,
-            offset_left_cm: stops.horizontalSide === "left" ? widthGap : 0,
-            offset_bottom_cm: stops.verticalSide === "bottom" ? lengthGap : 0,
-            horizontalCm: widthGap,
-            verticalCm: lengthGap,
-            horizontalSide: stops.horizontalSide,
-            verticalSide: stops.verticalSide,
-            right_clearance_cm: stops.horizontalSide === "right" ? widthGap : 0,
-            top_clearance_cm: stops.verticalSide === "top" ? lengthGap : 0,
+            position: machineStops.position,
+            offset_left_cm: offsetLeft,
+            offset_bottom_cm: offsetBottom,
+            horizontalCm: widthStop,
+            verticalCm: lengthStop,
+            horizontalSide,
+            verticalSide,
+            right_clearance_cm: widthGap - offsetLeft,
+            top_clearance_cm: lengthGap - offsetBottom,
         };
     }
 
     function placementPreviewPayload(workspace, state) {
         const machine = findCncMachine(workspace, state.cncMachine);
-        const origin = physicalSheetOffsetCm(machine, state.sheetWidthCm, state.sheetLengthCm);
+        const origin = physicalSheetOffsetCm(
+            machine,
+            state.sheetWidthCm,
+            state.sheetLengthCm,
+            activeSheetStops(workspace, state)
+        );
         if (!machine || !origin || origin.error) return null;
         return {
             machine_name: String(machine.machine_name || machine.name || ""),
@@ -520,6 +598,8 @@
         sheet_exceeds_machine_length: "The board is larger than the machine length. NC cannot be generated.",
         cnc_machine_stops_unconfigured: "Set the two stops for this work zero on the CNC machine. A stop from another edge is not copied across.",
         cnc_machine_stop_sides_required: "Choose the width stop side and the length stop side on the CNC machine before generating a new file.",
+        width_stop_invalid: "The width stop must be a number from 0 cm up to the gap between the machine and the full sheet.",
+        length_stop_invalid: "The length stop must be a number from 0 cm up to the gap between the machine and the full sheet.",
         work_zero_center_retired: "This CNC machine still uses Center as its work zero. Choose Bottom Left, Bottom Right, Top Left, or Top Right before generating a new file.",
         work_zero_invalid: "The selected work zero is not supported.",
         cnc_machine_required: "Choose a CNC machine before generating the NC file.",
@@ -550,9 +630,24 @@
                 message: translate(PLACEMENT_MESSAGES.cnc_machine_disabled),
             };
         }
+        const draft = state.stopDraft || {};
+        if (draft.width != null) {
+            return {
+                ok: false,
+                code: "width_stop_invalid",
+                message: translate(PLACEMENT_MESSAGES.width_stop_invalid),
+            };
+        }
+        if (draft.length != null) {
+            return {
+                ok: false,
+                code: "length_stop_invalid",
+                message: translate(PLACEMENT_MESSAGES.length_stop_invalid),
+            };
+        }
         const sheetW = Number(state.sheetWidthCm);
         const sheetL = Number(state.sheetLengthCm);
-        const origin = physicalSheetOffsetCm(machine, sheetW, sheetL);
+        const origin = physicalSheetOffsetCm(machine, sheetW, sheetL, activeSheetStops(workspace, state));
         if (!origin || origin.error) {
             const code = (origin && origin.error) || "cnc_machine_stop_sides_required";
             return {
@@ -604,8 +699,126 @@
                 <select data-cnc-machine${disabled}>${options.join("")}</select>
             </label>
             ${dims}
+            ${stopFieldsMarkup(workspace, state, canPrepare)}
             ${warning}
         </section>`;
+    }
+
+    function stopOptionMarkup(pairs, selected) {
+        return pairs.map(([value, label]) => (
+            `<option value="${escapeHtml(value)}"${value === selected ? " selected" : ""}>${escapeHtml(translate(label))}</option>`
+        )).join("");
+    }
+
+    function stopFieldsMarkup(workspace, state, canPrepare) {
+        const machine = findCncMachine(workspace, state.cncMachine);
+        const disabled = canPrepare ? "" : " disabled";
+        const stops = activeSheetStops(workspace, state) || {};
+        const hidden = machine ? "" : " hidden";
+        return `<div class="dco-operational-sheet__stops" data-sheet-stops${hidden}>
+            <div class="dco-operational-sheet__stop-row">
+                <label>${escapeHtml(translate("Width Stop Side"))}
+                    <select data-width-stop-side${disabled}>${stopOptionMarkup([
+                        ["Left Side", "Left Side"],
+                        ["Right Side", "Right Side"],
+                    ], String(stops.width_stop_side || ""))}</select>
+                </label>
+                <label>${escapeHtml(translate("Width Stop (cm)"))}
+                    <input data-width-stop-cm type="text" inputmode="decimal" autocomplete="off" value="${escapeHtml(formatPlacementCm(stops.width_stop_cm))}"${disabled}>
+                </label>
+            </div>
+            <div class="dco-operational-sheet__stop-row">
+                <label>${escapeHtml(translate("Length Stop Side"))}
+                    <select data-length-stop-side${disabled}>${stopOptionMarkup([
+                        ["Top Side", "Top Side"],
+                        ["Bottom Side", "Bottom Side"],
+                    ], String(stops.length_stop_side || ""))}</select>
+                </label>
+                <label>${escapeHtml(translate("Length Stop (cm)"))}
+                    <input data-length-stop-cm type="text" inputmode="decimal" autocomplete="off" value="${escapeHtml(formatPlacementCm(stops.length_stop_cm))}"${disabled}>
+                </label>
+            </div>
+            <button type="button" class="btn btn-default btn-xs" data-reset-sheet-stops${disabled}>${escapeHtml(translate("Restore default stops"))}</button>
+        </div>`;
+    }
+
+    function writeStopControls(body, stops) {
+        const root = body && body.querySelector("[data-sheet-stops]");
+        if (!root || !stops || stops.error) return;
+        const widthSide = root.querySelector("[data-width-stop-side]");
+        const lengthSide = root.querySelector("[data-length-stop-side]");
+        const widthCm = root.querySelector("[data-width-stop-cm]");
+        const lengthCm = root.querySelector("[data-length-stop-cm]");
+        if (widthSide) widthSide.value = String(stops.width_stop_side || "");
+        if (lengthSide) lengthSide.value = String(stops.length_stop_side || "");
+        if (widthCm) widthCm.value = formatPlacementCm(stops.width_stop_cm);
+        if (lengthCm) lengthCm.value = formatPlacementCm(stops.length_stop_cm);
+    }
+
+    function refreshPlacementPreview(body, workspace, state, sheet) {
+        const fit = validateSheetPlacementFits(workspace, state, {
+            requireMachine: Boolean(state.cncMachine),
+        });
+        const warning = body.querySelector("[data-placement-warning]");
+        if (warning) {
+            warning.hidden = Boolean(fit.ok);
+            warning.textContent = fit.ok ? "" : fit.message;
+        }
+        const preview = body.querySelector("[data-sheet-preview]");
+        if (preview && preview.__cutPreviewProgram && fit.ok) {
+            paintCutPathPreview(preview, {
+                status: "ready",
+                program: preview.__cutPreviewProgram,
+                sheet: sheet || null,
+                state,
+                selectedExecutionPathId: state.selectedExecutionPathId || "",
+                selectedVectorIds: state.vectorSelection || [],
+                layout: preview.getAttribute("data-preview-layout") || preview.__cutPreviewLayout || "",
+                zoom: preview.__cutPreviewZoom,
+                pan: preview.__cutPreviewPan,
+                hiddenOperations: preview.__cutPreviewHidden,
+                placement: placementPreviewPayload(workspace, state),
+            });
+        }
+        const stops = body.querySelector("[data-sheet-stops]");
+        if (stops) stops.hidden = !findCncMachine(workspace, state.cncMachine);
+    }
+
+    function applyStopControl(state, workspace, target) {
+        const machine = findCncMachine(workspace, state.cncMachine);
+        const defaults = defaultSheetStops(machine, state.sheetWidthCm, state.sheetLengthCm);
+        if (!defaults || defaults.error) return false;
+        const current = activeSheetStops(workspace, state) || defaults;
+        state.stopDraft = state.stopDraft || { width: null, length: null };
+        if (target.hasAttribute("data-width-stop-side")) {
+            state.sheetStops = Object.assign({}, current, { width_stop_side: String(target.value || "") });
+            return true;
+        }
+        if (target.hasAttribute("data-length-stop-side")) {
+            state.sheetStops = Object.assign({}, current, { length_stop_side: String(target.value || "") });
+            return true;
+        }
+        if (target.hasAttribute("data-width-stop-cm")) {
+            const parsed = parseStopCm(target.value, defaults && defaults.width_stop_cm);
+            if (!parsed.ok) {
+                state.stopDraft.width = String(target.value == null ? "" : target.value);
+                return false;
+            }
+            state.stopDraft.width = null;
+            state.sheetStops = Object.assign({}, current, { width_stop_cm: parsed.value });
+            return true;
+        }
+        if (target.hasAttribute("data-length-stop-cm")) {
+            const parsed = parseStopCm(target.value, defaults && defaults.length_stop_cm);
+            if (!parsed.ok) {
+                state.stopDraft.length = String(target.value == null ? "" : target.value);
+                return false;
+            }
+            state.stopDraft.length = null;
+            state.sheetStops = Object.assign({}, current, { length_stop_cm: parsed.value });
+            return true;
+        }
+        return false;
     }
 
     function applyLayerPreset(state, key, name) {
@@ -945,8 +1158,8 @@
         const canPrepare = Boolean(workspace && workspace.can_prepare);
         const control = generateNcControlState({ canPrepare });
         return `<div class="dco-operational-sheet__export" data-cnc-export-bar>
-            <div class="dco-operational-sheet__export-actions">
-                <button type="button" class="btn btn-primary btn-sm" data-cnc-save-sheet${canPrepare ? "" : " disabled"}>${escapeHtml(translate("Save sheet settings"))}</button>
+            <div class="dco-operational-sheet__export-actions almdina-ui">
+                <button type="button" class="btn alm-btn-primary btn-sm" data-cnc-save-sheet${canPrepare ? "" : " disabled"}>${escapeHtml(translate("Save sheet settings"))}</button>
                 <button type="button" class="btn btn-default btn-sm" data-cnc-generate-nc data-cnc-page-action="generate"${control.disabled ? " disabled" : ""} title="${escapeHtml(control.reason || "")}">${escapeHtml(translate("Generate NC file"))}</button>
             </div>
         </div>`;
@@ -1187,8 +1400,18 @@
                     live.state.confirmed = Boolean(target.checked);
                     return;
                 }
+                if (target.hasAttribute("data-width-stop-side")
+                    || target.hasAttribute("data-length-stop-side")
+                    || target.hasAttribute("data-width-stop-cm")
+                    || target.hasAttribute("data-length-stop-cm")) {
+                    applyStopControl(live.state, live.workspace, target);
+                    refreshPlacementPreview(body, live.workspace, live.state, live.sheet);
+                    return;
+                }
                 if (target.hasAttribute("data-cnc-machine")) {
                     live.state.cncMachine = String(target.value || "");
+                    live.state.sheetStops = null;
+                    live.state.stopDraft = { width: null, length: null };
                     const dims = body.querySelector("[data-machine-dims]");
                     const machine = findCncMachine(live.workspace, live.state.cncMachine);
                     if (dims) {
@@ -1223,14 +1446,43 @@
                             placement: placementPreviewPayload(live.workspace, live.state),
                         });
                     }
+                    writeStopControls(body, machine ? defaultSheetStops(
+                        machine,
+                        live.state.sheetWidthCm,
+                        live.state.sheetLengthCm
+                    ) : null);
+                    const stopRoot = body.querySelector("[data-sheet-stops]");
+                    if (stopRoot) stopRoot.hidden = !machine;
                     if (machine) reportPlacementValidation(fit);
                     requestSheetProgramPreview(live.frm, dialog, live.workspace, live.sheet, live.state);
                 }
+            });
+            body.addEventListener("input", event => {
+                const live = liveContext();
+                const target = event.target;
+                if (!live || !live.state || !target || typeof target.hasAttribute !== "function") return;
+                if (!target.hasAttribute("data-width-stop-cm") && !target.hasAttribute("data-length-stop-cm")) return;
+                applyStopControl(live.state, live.workspace, target);
+                refreshPlacementPreview(body, live.workspace, live.state, live.sheet);
             });
             body.addEventListener("click", event => {
                 const live = liveContext();
                 const target = event.target;
                 if (!live || !live.state || !target || typeof target.closest !== "function") return;
+                const resetStops = target.closest("[data-reset-sheet-stops]");
+                if (resetStops) {
+                    if (resetStops.disabled) return;
+                    live.state.sheetStops = null;
+                    live.state.stopDraft = { width: null, length: null };
+                    const machine = findCncMachine(live.workspace, live.state.cncMachine);
+                    writeStopControls(body, defaultSheetStops(
+                        machine,
+                        live.state.sheetWidthCm,
+                        live.state.sheetLengthCm
+                    ));
+                    refreshPlacementPreview(body, live.workspace, live.state, live.sheet);
+                    return;
+                }
                 const zone = boardPointerZone(target);
                 const pathMenu = body.querySelector("[data-path-menu]");
                 if (zone === "menu") {
@@ -1744,7 +1996,7 @@
             if (state.overrides[key]) overrides[key] = state.overrides[key];
         });
         const joinMode = normalizePerimeterJoinMode(state.perimeterJoinMode);
-        return {
+        const args = {
             order_name: frm.doc.name,
             sheet_no: sheet.sheet_no,
             operation_presets: state.operations,
@@ -1763,6 +2015,14 @@
             cnc_machine: String(state.cncMachine || ""),
             base_revision: Number(state.settingsRevision || sheet.settings_revision || 0),
         };
+        const stops = activeSheetStops(workspace, state);
+        if (stops && !stops.error && String(state.cncMachine || "").trim()) {
+            args.width_stop_side = stops.width_stop_side;
+            args.width_stop_cm = stops.width_stop_cm;
+            args.length_stop_side = stops.length_stop_side;
+            args.length_stop_cm = stops.length_stop_cm;
+        }
+        return args;
     }
 
     function issueAction(code) {
@@ -4304,6 +4564,7 @@
         openSheetSettingsTab,
         mountSheetSettingsPage,
         findCncMachine,
+        defaultSheetStops,
         placementPreviewPayload,
         syncPlacementOverlay,
         validateSheetPlacementFits,

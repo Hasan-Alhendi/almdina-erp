@@ -309,7 +309,7 @@ test("frozen A print keeps localized machining error without plan name or revisi
     assert.doesNotMatch(finalHtml, /إصدار الخطة|Plan revision/);
     assert.ok(finalHtml.includes('data-liner-toolpath-error="liner_narrower_than_cutter"'),
         `machining error markers: ${JSON.stringify(finalHtml.match(/data-liner-toolpath-error[^>]*|data-overlay-kind="liner"[^>]*/g))}`);
-    assert.match(finalHtml, /عرض اللاينر أصغر من سماكة الشفرة/);
+    assert.match(finalHtml, /عرض اللاينر أصغر من قطر ريشته/);
     assert.doesNotMatch(finalHtml, /The width of|\{0\}|SYSTEM-B/);
 });
 

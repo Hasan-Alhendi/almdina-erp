@@ -33,6 +33,8 @@ SECTION_FIELDS = MappingProxyType(
                 "default_optimization_time_limit_sec",
                 "optimal_search_piece_limit",
                 "max_centerable_edge_gap_cm",
+                "edge_protection_horizontal_mm",
+                "edge_protection_vertical_mm",
                 "alignment_search_budget_sec",
             }
         ),

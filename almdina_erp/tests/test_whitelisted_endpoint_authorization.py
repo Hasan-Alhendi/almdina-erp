@@ -142,6 +142,36 @@ class TestWhitelistedEndpointAuthorization(unittest.TestCase):
             },
         )
 
+    def test_board_editor_text_endpoints_require_post_and_write_authorization(self) -> None:
+        for name in ("shape_board_editor_text", "validate_board_editor_text"):
+            endpoint = f"almdina_erp.almdina_erp.services.board_editor_drawing_service.{name}"
+            with self.subTest(endpoint=endpoint):
+                node = _whitelisted_functions()[endpoint][1]
+                self.assertTrue(any(
+                    isinstance(decorator, ast.Call)
+                    and _is_whitelist(decorator)
+                    and any(
+                        keyword.arg == "methods" and ast.literal_eval(keyword.value) == ["POST"]
+                        for keyword in decorator.keywords
+                    )
+                    for decorator in node.decorator_list
+                ))
+                guarded = [
+                    child for child in ast.walk(node)
+                    if isinstance(child, ast.Call)
+                    and isinstance(child.func, ast.Name)
+                    and child.func.id == "_authorize_drawing"
+                ]
+                self.assertTrue(any(
+                    any(
+                        kw.arg == "write"
+                        and isinstance(kw.value, ast.Constant)
+                        and kw.value.value is True
+                        for kw in call.keywords
+                    )
+                    for call in guarded
+                ), "Text operations must authorize the order and plan for editing")
+
     def test_language_write_has_an_explicit_self_only_contract(self) -> None:
         endpoint = "almdina_erp.almdina_erp.services.user_language_service.set_current_user_language"
         self.assertEqual(WHITELISTED_ENDPOINT_CONTRACTS[endpoint], EndpointAuthorizationContract.SELF_WRITE)

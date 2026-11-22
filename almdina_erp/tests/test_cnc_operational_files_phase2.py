@@ -10,6 +10,7 @@ from almdina_erp.almdina_erp.application.cnc.workspace import (
     prepare_sheet_settings,
 )
 from almdina_erp.almdina_erp.domain.cnc.operations import DEFAULT_MACHINING_ORDER
+from almdina_erp.almdina_erp.domain.cnc.placement import PlacementError
 from almdina_erp.almdina_erp.domain.cnc.post_processor import PostProcessorError
 from almdina_erp.almdina_erp.domain.cnc.operational_file import (
     OperationalFileError,
@@ -90,6 +91,10 @@ def _prepare(
     cnc_machine=None,
     machine_catalog=None,
     plan_snapshot=None,
+    width_stop_side=None,
+    width_stop_cm=None,
+    length_stop_side=None,
+    length_stop_cm=None,
 ):
     return prepare_sheet_settings(
         order_name="DCO-1",
@@ -116,7 +121,88 @@ def _prepare(
         cnc_machine=cnc_machine,
         machine_catalog=machine_catalog,
         plan_snapshot=plan_snapshot,
+        width_stop_side=width_stop_side,
+        width_stop_cm=width_stop_cm,
+        length_stop_side=length_stop_side,
+        length_stop_cm=length_stop_cm,
     )
+
+
+def test_sheet_stops_stay_on_the_sheet_and_drive_placement():
+    pieces = [_piece("A")]
+    catalog = [_machine(), _machine(
+        name="WIDE",
+        width_cm=300,
+        length_cm=500,
+        width_stop_side="Right Side",
+        length_stop_side="Top Side",
+    )]
+    snapshot = _sheet_snapshot()
+    implicit = _prepare(
+        pieces,
+        cnc_machine="IMA",
+        machine_catalog=catalog,
+        plan_snapshot=snapshot,
+        existing={"cnc_machine": "IMA", "offset_left_cm": 3, "offset_bottom_cm": 4},
+    )
+    assert implicit["offset_left_cm"] == 80
+    assert implicit["offset_bottom_cm"] == 160
+    assert implicit["sheet_stops"] is None
+    edited = _prepare(
+        pieces,
+        cnc_machine="IMA",
+        machine_catalog=catalog,
+        plan_snapshot=snapshot,
+        width_stop_side="Right Side",
+        width_stop_cm=10,
+        length_stop_side="Top Side",
+        length_stop_cm=0,
+    )
+    assert edited["offset_left_cm"] == 70
+    assert edited["offset_bottom_cm"] == 160
+    assert edited["sheet_stops"]["width_stop_cm"] == 10
+    assert edited["sheet_stops"]["length_stop_cm"] == 0
+    assert catalog[0]["width_stop_side"] == "Left Side"
+    reopened = _prepare(
+        pieces,
+        cnc_machine="IMA",
+        machine_catalog=catalog,
+        plan_snapshot=snapshot,
+        existing={"cnc_machine": "IMA", "sheet_stops": edited["sheet_stops"]},
+    )
+    assert reopened["offset_left_cm"] == 70
+    assert reopened["sheet_stops"]["width_stop_side"] == "Right Side"
+    other_sheet = _prepare(
+        pieces,
+        cnc_machine="IMA",
+        machine_catalog=catalog,
+        plan_snapshot=snapshot,
+        existing={"cnc_machine": "IMA"},
+    )
+    assert other_sheet["offset_left_cm"] == 80
+    switched = _prepare(
+        pieces,
+        cnc_machine="WIDE",
+        machine_catalog=catalog,
+        plan_snapshot=snapshot,
+        existing={"cnc_machine": "IMA", "sheet_stops": edited["sheet_stops"]},
+    )
+    assert switched["sheet_stops"] is None
+    assert switched["offset_left_cm"] == 0
+    assert switched["offset_bottom_cm"] == 0
+    assert implicit["settings_fingerprint"] != edited["settings_fingerprint"]
+    with pytest.raises(PlacementError) as invalid:
+        _prepare(
+            pieces,
+            cnc_machine="IMA",
+            machine_catalog=catalog,
+            plan_snapshot=snapshot,
+            width_stop_side="Left Side",
+            width_stop_cm="abc",
+            length_stop_side="Bottom Side",
+            length_stop_cm=0,
+        )
+    assert invalid.value.code == "width_stop_invalid"
 
 
 def _machine(**overrides):

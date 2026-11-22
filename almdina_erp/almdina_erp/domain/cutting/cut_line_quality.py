@@ -65,6 +65,7 @@ def sheet_cut_line_quality(
     kerf_cm: float,
     *,
     piece_filter: Callable[[Mapping[str, Any]], bool] | None = None,
+    max_pieces: int | None = _MAX_SHEET_PIECES,
 ) -> tuple[float, int, float] | None:
     """(real mm, merged segments, longest internal straight center in mm).
 
@@ -73,7 +74,7 @@ def sheet_cut_line_quality(
     against protected shape contours.
     """
     pieces = list(sheet.get("pieces") or ())
-    if len(pieces) > _MAX_SHEET_PIECES:
+    if max_pieces is not None and len(pieces) > max_pieces:
         return None
     shapes = []
     for piece in pieces:

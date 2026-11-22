@@ -1130,16 +1130,43 @@ def test_recovery_new_saved_intersection():
             first_plan.wait_for(state="visible", timeout=15000)
             assert first_plan.is_enabled(), "First System plan bootstrap is not available"
             first_plan.click()
+            # First calculation creates a temporary, validated plan preview and
+            # opens the Plan edit session. The operator must explicitly Save it;
+            # no canonical system_draft exists before that commit.
+            page.wait_for_function("""() =>
+                AlmdinaPlanPreviewSession?.snapshot(cur_frm)?.status === 'ready'
+                && AlmdinaPlanPreviewSession?.isCommittable(cur_frm)""",
+                timeout=60000)
+            evidence["bootstrap_preview"] = page.evaluate("""() => ({
+                id:AlmdinaPlanPreviewSession.snapshot(cur_frm).previewId,
+                status:AlmdinaPlanPreviewSession.snapshot(cur_frm).status,
+                editor:AlmdinaDcoEditSessionCoordinator.snapshot(cur_frm).activeKind,
+                token:AlmdinaDocumentContext.capture(cur_frm)})""")
+            assert evidence["bootstrap_preview"]["editor"] == "plan", evidence["bootstrap_preview"]
+            mark_step("first_plan_preview_ready")
+            initial_save = page.locator(
+                '.dco-tab-edit-toolbar[data-almdina-tab-edit-kind="plan"] .dco-tab-edit-save')
+            assert initial_save.is_enabled(), "The first plan preview must have an explicit Save action"
+            initial_save.click()
             page.wait_for_function("""name =>
                 AlmdinaPlanWorkspaceState?.snapshot(cur_frm)?.status === 'ready'
                 && AlmdinaPlanWorkspaceState?.snapshot(cur_frm)?.data?.order_name === name
-                && !!AlmdinaPlanWorkspaceState?.snapshot(cur_frm)?.data?.plans?.system_draft?.name""",
+                && !!AlmdinaPlanWorkspaceState?.snapshot(cur_frm)?.data?.plans?.system_draft?.name
+                && AlmdinaDcoEditSessionCoordinator.snapshot(cur_frm).activeKind === null""",
                 arg=saved, timeout=60000)
             evidence["plan_bootstrap"] = page.evaluate("""() => ({
                 token:AlmdinaDocumentContext.capture(cur_frm),
                 plan:AlmdinaPlanWorkspaceState.snapshot(cur_frm).data.plans.system_draft.name,
                 kerf:cur_frm.doc.kerf_mm})""")
             assert evidence["plan_bootstrap"]["token"]["generation"] == evidence["native_save"]["token"]["generation"]
+            # The following preview-commit assertions own the *next* settings
+            # change; retain first-save evidence but reset their request scope.
+            evidence["bootstrap_commit_requests"] = list(evidence["preview_commit_requests"])
+            evidence["bootstrap_commit_responses"] = list(evidence["preview_commit_responses"])
+            assert len(evidence["bootstrap_commit_requests"]) == len(evidence["bootstrap_commit_responses"]) == 1
+            assert evidence["bootstrap_commit_requests"][0]["preview_id"] == evidence["bootstrap_preview"]["id"]
+            evidence["preview_commit_requests"].clear()
+            evidence["preview_commit_responses"].clear()
             mark_step("post_save_system_plan_bootstrapped")
 
             plan_toolbar = page.locator('.dco-tab-edit-toolbar[data-almdina-tab-edit-kind="plan"]')

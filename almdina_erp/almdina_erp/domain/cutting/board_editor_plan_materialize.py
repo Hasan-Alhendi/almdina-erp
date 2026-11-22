@@ -43,6 +43,7 @@ from almdina_erp.almdina_erp.domain.cutting.offcut_policy import (
 )
 from almdina_erp.almdina_erp.domain.cutting.plan_lifecycle import BOARD_EDITOR
 from almdina_erp.almdina_erp.domain.cutting.primitives import num
+from almdina_erp.almdina_erp.domain.orders.extra_addons import extra_overlay_layer_for_kind
 
 METHOD_KEY = "board_editor"
 METHOD_LABEL = "Board Editor"
@@ -395,9 +396,15 @@ def _materialize_piece(
     # Posed glass_hole_local_mm is usable-sheet (review frame). Use it only for
     # geometry.holes. Manufacturing glass_hole_local_mm stays piece-local from source.
     holes = []
-    hole = posed.get("glass_hole_local_mm")
-    if isinstance(hole, list) and len(hole) >= 3:
-        holes.append(hole)
+    posed_rings = posed.get("opening_rings_mm")
+    if isinstance(posed_rings, list) and posed_rings:
+        for ring in posed_rings:
+            if isinstance(ring, list) and len(ring) >= 3:
+                holes.append(ring)
+    else:
+        hole = posed.get("glass_hole_local_mm")
+        if isinstance(hole, list) and len(hole) >= 3:
+            holes.append(hole)
     manufacturing_hole = source.get("glass_hole_local_mm")
     piece_type = str(trusted.get("piece_type") or source.get("piece_type") or "")
     geometry_source = str(
@@ -529,6 +536,7 @@ def _materialize_piece(
         # The pre-adoption classification must not delete a contour that was
         # just posed. The stock rectangle is still not a substitute: an
         # interior adoption whose outline is still the blank is removed.
+        # Owned through-cut openings stay even when the outer matches that blank.
         posed_outer = None
         if isinstance(piece.get("geometry"), Mapping):
             posed_outer = piece["geometry"].get("outer")
@@ -539,7 +547,12 @@ def _materialize_piece(
             and len(posed_outer) >= 3
             and not _same_ring(posed_outer, blank_pose)
         )
-        if not keep_posed_contour and (
+        kept_openings = (
+            bool((piece.get("geometry") or {}).get("holes"))
+            if isinstance(piece.get("geometry"), Mapping)
+            else False
+        )
+        if not kept_openings and not keep_posed_contour and (
             geometry_source == "cnc_raw_rect"
             or (
                 not exact_geometry
@@ -621,10 +634,14 @@ def _overlays_from_machining(paths: Sequence[Mapping[str, Any]]) -> list[dict[st
         if len(points) < 2:
             continue
         kind = str(item.get("kind") or item.get("addon_kind") or "machining")
+        try:
+            layer = extra_overlay_layer_for_kind(kind)
+        except KeyError:
+            layer = str(item.get("layer") or kind)
         overlays.append(
             {
                 "kind": kind,
-                "layer": str(item.get("layer") or kind),
+                "layer": layer,
                 "geometry": serialize_overlay_geometry_mm(
                     points,
                     closed=bool(item.get("closed")),

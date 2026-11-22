@@ -8,6 +8,7 @@ import json
 import math
 import subprocess
 import unittest
+from pathlib import Path
 
 import ezdxf
 
@@ -314,6 +315,7 @@ process.stdout.write(JSON.stringify(compiled.geometry.points));
             check=True,
             capture_output=True,
             text=True,
+            cwd=Path(__file__).resolve().parents[2],
         )
         self.assertEqual(json.loads(completed.stdout), python_points)
 

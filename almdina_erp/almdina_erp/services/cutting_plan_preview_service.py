@@ -19,6 +19,7 @@ from almdina_erp.almdina_erp.application.orders.plan_snapshot_security import (
 )
 from almdina_erp.almdina_erp.domain.cutting.plan_lifecycle import DRAFT, SYSTEM
 from almdina_erp.almdina_erp.domain.cutting.plan_settings import (
+    EdgeProtectionPolicy,
     plan_settings_field_values,
     settings_for_system_search,
 )
@@ -206,6 +207,9 @@ def _session(order, preview_id):
         frappe.throw(_("تغيّرت نسخة خطة القص بعد المعاينة. أعد المعاينة قبل الحفظ."),frappe.ValidationError)
     if optimizer_settings_fingerprint(session.settings)!=session.settings_fingerprint:
         frappe.throw(_("معاينة خطة القص غير صالحة للحفظ."),frappe.ValidationError)
+    current_protection = EdgeProtectionPolicy.from_settings(frappe.get_cached_doc("Almdina ERP Settings"))
+    if EdgeProtectionPolicy.from_settings(session.settings) != current_protection:
+        frappe.throw(_("Edge protection settings changed. Recalculate the preview before saving."), frappe.ValidationError)
     current_center_gap = flt(
         getattr(frappe.get_cached_doc("Almdina ERP Settings"), "max_centerable_edge_gap_cm", 5.0)
     )
@@ -275,6 +279,10 @@ def _build_session(order,source,settings,*,previous=None):
     _apply_settings(preview_plan,settings)
     outcome = calculate_system_plan(order,preview_plan,**(
         dict(seed_plans=previous.search_seeds,search_round=previous.search_round+1) if previous else {}))
+    expected_protection = EdgeProtectionPolicy.from_settings(settings)
+    if any(EdgeProtectionPolicy.from_settings(snapshot) != expected_protection
+           for snapshot in outcome.candidate_snapshots or (outcome.snapshot,)):
+        frappe.throw(_("Edge protection settings changed. Recalculate the preview before saving."), frappe.ValidationError)
     candidates = {}
     from almdina_erp.almdina_erp.domain.cutting.plan_portfolio import geometry_signature
     seen = set()
@@ -386,6 +394,7 @@ def preview_cutting_plan(
         _settings_from_plan(source_plan, settings)
     ).optimization_mode
     factory_settings = frappe.get_cached_doc("Almdina ERP Settings")
+    settings.update(EdgeProtectionPolicy.from_settings(factory_settings).field_values())
     settings["max_centerable_edge_gap_cm"] = flt(
         getattr(factory_settings, "max_centerable_edge_gap_cm", 5.0)
     )

@@ -42,6 +42,15 @@ def _special_cut_points(origin=(0, 0), width=400, height=600):
     )
 
 
+def _l_cut_points(origin=(0, 0), width=400, height=600):
+    x, y = origin
+    return (
+        (x, y), (x + width, y), (x + width, y + 160),
+        (x + 180, y + 160), (x + 180, y + height),
+        (x, y + height),
+    )
+
+
 def _add_rectangle(msp, points, *, layer: str) -> None:
     corners = tuple(points)
     for start, end in zip(corners, (*corners[1:], corners[0])):
@@ -97,11 +106,16 @@ def _extra_plan_doc(
     overlay_on_cut_path: bool = False,
     overlay_points=None,
     special_outline: bool = False,
+    l_outline: bool = False,
 ):
     doc = ezdxf.new("R2010")
     msp = doc.modelspace()
     _add_rectangle(msp, ((0, 0), (1220, 0), (1220, 2440), (0, 2440)), layer=SHEET)
-    cut = _special_cut_points() if special_outline else ((0, 0), (400, 0), (400, 600), (0, 600))
+    cut = (
+        _l_cut_points() if l_outline
+        else _special_cut_points() if special_outline
+        else ((0, 0), (400, 0), (400, 600), (0, 600))
+    )
     _add_rectangle(msp, cut, layer=CUT)
     overlay = overlay_points or ((40, 40), (180, 40), (180, 160), (40, 160))
     if overlay_on_cut_path:
@@ -151,7 +165,8 @@ def _layer0_designer_plan_doc():
     doc = ezdxf.new("R2010")
     msp = doc.modelspace()
     _add_rectangle(msp, ((0, 0), (1220, 0), (1220, 2440), (0, 2440)), layer="0")
-    _add_rectangle(msp, ((100, 100), (500, 100), (500, 700), (100, 700)), layer="0")
+    _add_rectangle(msp, ((100, 100), (500, 100), (500, 700),
+                         (130, 700), (100, 670)), layer="0")
     _add_rectangle(msp, ((480, 80), (510, 80), (510, 720), (480, 720)), layer="0")
     _add_rectangle(msp, ((220, 280), (300, 280), (300, 480), (220, 480)), layer="0")
     _add_rectangle(msp, ((90, 90), (510, 90), (510, 710), (90, 710)), layer="along")
@@ -387,11 +402,13 @@ class TestExtraDxfOverlayImport(unittest.TestCase):
         self.assertAlmostEqual(pieces[0]["w"], 40.0)
         self.assertAlmostEqual(pieces[0]["h"], 60.0)
 
-    def test_test1_reference_geometry_on_layer0_is_accepted(self) -> None:
+    def test_test1_rectangular_reference_geometry_on_layer0_is_accepted(self) -> None:
+        # This captured reference's 330×899 CUT_PATH is rectangular. Test its
+        # layer-0/overlay handling as Regular, not a fictitious L-shaped door.
         snapshot = self._parse(
             _test1_reference_plan_doc(),
             _order(
-                piece_type="L-Shaped Corner",
+                piece_type="Regular",
                 extra_liner=1,
                 extra_back_groove=1,
                 extra_recessed_handle_cutout=1,
@@ -461,24 +478,24 @@ class TestExtraDxfOverlayImport(unittest.TestCase):
 
     def test_piece_with_only_double_does_not_require_overlay_layers(self) -> None:
         snapshot = self._parse(
-            _extra_plan_doc(overlay_layer=None),
+            _extra_plan_doc(overlay_layer=None, special_outline=True),
             _order(piece_type="Clipped Corner", extra_double=1),
         )
         self.assertEqual(len(snapshot["sheets"][0]["pieces"]), 1)
         self.assertNotIn("overlays", snapshot["sheets"][0]["pieces"][0])
 
     def test_multiple_liner_marks_on_one_piece_are_accepted(self) -> None:
-        doc = _extra_plan_doc()
+        doc = _extra_plan_doc(l_outline=True)
         msp = doc.modelspace()
-        _add_rectangle(msp, ((200, 200), (280, 200), (280, 280), (200, 280)), layer=LINER)
+        _add_rectangle(msp, ((40, 200), (120, 200), (120, 280), (40, 280)), layer=LINER)
         snapshot = self._parse(doc, _order(piece_type="L-Shaped Corner", extra_liner=1))
         overlays = snapshot["sheets"][0]["pieces"][0]["overlays"]
         self.assertGreaterEqual(len([item for item in overlays if item["kind"] == "liner"]), 2)
 
     def test_duplicate_back_groove_on_one_piece_is_rejected(self) -> None:
-        doc = _extra_plan_doc(overlay_layer="Rear Groove")
+        doc = _extra_plan_doc(overlay_layer="Rear Groove", l_outline=True)
         msp = doc.modelspace()
-        _add_rectangle(msp, ((200, 200), (280, 200), (280, 280), (200, 280)), layer="Rear Groove")
+        _add_rectangle(msp, ((40, 200), (120, 200), (120, 280), (40, 280)), layer="Rear Groove")
         with self.assertRaises(DxfImportError) as exc_info:
             self._parse(doc, _order(piece_type="L-Shaped Corner", extra_back_groove=1))
         message = _present_error(exc_info.exception)

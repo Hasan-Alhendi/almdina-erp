@@ -22,6 +22,7 @@ from almdina_erp.almdina_erp.domain.cutting.sheet_edge_trim import (
 from almdina_erp.almdina_erp.domain.cutting.plan_settings import (
     PlanSettings,
     normalize_plan_settings,
+    EdgeProtectionPolicy,
 )
 from almdina_erp.almdina_erp.domain.cutting.evaluation import placement_permission_errors
 from almdina_erp.almdina_erp.domain.cutting.optimizer import enrich_plan_metrics
@@ -107,6 +108,7 @@ class OptimizerOptions:
     alns_search_budget_sec: float = 0.0
     pattern_search_budget_sec: float = 0.0
     corner_search_budget_sec: float = 0.0
+    edge_protection: EdgeProtectionPolicy = EdgeProtectionPolicy()
 
 
 @dataclass(frozen=True, slots=True)
@@ -296,6 +298,7 @@ def optimize_order_plan(
             additions,corner_trace=_refine_pattern_gallery(command,engine,expanded,raw_seeds,
                 snapshots[0],applied_trim,trim_decision,plan_settings,corner_seconds,corner_only=True)
             if additions:
+                extra_records.extend(additions)
                 seed_by_signature={geometry_signature(s):r for s,r in [*ranked,*extra_records]}
                 records=[(s,seed_by_signature[geometry_signature(s)]) for s in snapshots]+additions
                 keys=final_system_sort_keys([s for s,_ in records])
@@ -327,7 +330,35 @@ def optimize_order_plan(
             outcome.snapshot['smart_search']['pattern_search'] = pattern_trace
         if corner_trace is not None:
             outcome.snapshot['smart_search']['corner_search'] = corner_trace
-    return replace(outcome,candidate_snapshots=tuple(snapshots),search_seeds=tuple(raw_seeds))
+    selected = snapshots or [outcome.snapshot]
+    if smart and snapshots:
+        # Retain the exact selected snapshot/seed pair even when compaction
+        # makes distinct raw discoveries share the same geometry signature.
+        seed_by_snapshot = {id(s): seed for s, seed in [*ranked, *extra_records]}
+        visible_seeds = [seed_by_snapshot[id(s)] for s in selected]
+    else:
+        visible_seeds = []
+    finalized = [_snapshot_outcome(command, engine, deepcopy(snapshot), expanded,
+        applied_trim, trim_decision, plan_settings, final_positioning=True) for snapshot in selected]
+    if smart and snapshots:
+        keys = final_system_sort_keys([item.snapshot for item in finalized])
+        records = sorted(zip(keys, finalized, visible_seeds), key=lambda item: item[0])
+        finalized = [item for _, item, _ in records]
+        ordered_seeds = [seed for _, _, seed in records] + raw_seeds
+        raw_seeds, seen_seeds = [], set()
+        for seed in ordered_seeds:
+            signature = geometry_signature(seed)
+            if signature not in seen_seeds:
+                seen_seeds.add(signature)
+                raw_seeds.append(seed)
+    final = finalized[0]
+    # Search diagnostics are metadata only; no geometry changes follow positioning.
+    for key in ("smart_search", "search_time_limit_sec"):
+        if key in outcome.snapshot:
+            final.snapshot[key] = outcome.snapshot[key]
+    final.snapshot["total_elapsed_sec"] = round(time.monotonic() - started, 3)
+    return replace(final, candidate_snapshots=tuple(item.snapshot for item in finalized) if snapshots else (),
+                   search_seeds=tuple(raw_seeds))
 
 
 @traced('_refine_smart_gallery')
@@ -451,7 +482,7 @@ def _refine_pattern_gallery(command,engine,expanded,seeds,incumbent,applied_trim
 
 @traced('_snapshot_outcome')
 def _snapshot_outcome(command, engine, plan, expanded, applied_trim, trim_decision, plan_settings, *,
-                      alignment_budget=None):
+                      alignment_budget=None, final_positioning=False):
     """One manufacturing snapshot projection for the default and every alternative."""
     board = command.board
     plan["kerf_cm"] = board.kerf_cm
@@ -481,33 +512,12 @@ def _snapshot_outcome(command, engine, plan, expanded, applied_trim, trim_decisi
         "min_remnant_area_m2": command.optimizer.min_remnant_area_m2,
     }
     original_sheets = deepcopy(sheets)
-    original_metrics = _enrich_final_geometry_metrics(
-        {**plan, "sheets": original_sheets}, metric_options
-    )
-    realize_sheet_edge_trim(
-        sheets,
-        full_width_cm=board.full_width_cm,
-        full_length_cm=board.full_length_cm,
-        preferred_width_trim_cm=trim_decision.preferred.width_trim_cm,
-        preferred_length_trim_cm=trim_decision.preferred.length_trim_cm,
-        balance_existing_applied=True,
-        max_centerable_edge_gap_cm=command.optimizer.max_centerable_edge_gap_cm,
-        **metric_options,
-    )
     plan["sheets"] = sheets
     plan = _enrich_final_geometry_metrics(plan, metric_options)
-    if _centering_worsens_industrial_quality(
-        original_metrics.get("industrial_rank") or (),
-        plan.get("industrial_rank") or (),
-        machine_type=machine_type,
-    ):
-        plan["sheets"] = original_sheets
-        plan = _enrich_final_geometry_metrics(plan, metric_options)
 
-    if plan_settings.optimization_mode == "smart":
-        # An invalid centering proposal must not make alignment a no-op and
-        # then be rolled back only *after* the refinement opportunity is gone.
-        # Use the same independent geometry/permission gates as the final gate.
+    if not final_positioning and plan_settings.optimization_mode == "smart":
+        # Compaction/alignment retain their existing validation and budgets.
+        # Centering and protection run only on the selected final gallery.
         from almdina_erp.almdina_erp.domain.cutting.final_cut_line_alignment import (
             align_regular_cut_lines, validate_alignment_baseline, has_regular_alignment_candidates,
         )
@@ -552,6 +562,18 @@ def _snapshot_outcome(command, engine, plan, expanded, applied_trim, trim_decisi
             baseline_proof=baseline_proof,
         )
 
+    positioning = None
+    if final_positioning:
+        from almdina_erp.almdina_erp.domain.cutting.final_sheet_positioning import position_final_sheets
+        plan, positioning = position_final_sheets(
+            plan, expanded, usable_width_cm, usable_length_cm, board.kerf_cm,
+            policy=command.optimizer.edge_protection,
+            center_limit=command.optimizer.max_centerable_edge_gap_cm,
+            machine_type=machine_type,
+            mirroring_allowed=piece_mirroring_allowed(command.allow_piece_mirroring),
+            metric_options={key: value for key, value in metric_options.items() if key != "machine_type"},
+        )
+
     def validate_snapshot_plan() -> list[str]:
         errors = list(
             engine.validate(plan, expanded, usable_width_cm, usable_length_cm)
@@ -576,6 +598,9 @@ def _snapshot_outcome(command, engine, plan, expanded, applied_trim, trim_decisi
         plan["sheets"] = original_sheets
         plan = _enrich_final_geometry_metrics(plan, metric_options)
         validation_errors = validate_snapshot_plan()
+        if positioning is not None:
+            for report in positioning["sheets"]:
+                report.update(dx_mm=0.0, dy_mm=0.0, reason="FINAL_VALIDATION_ROLLBACK")
 
     metrics = dict(plan.get("industrial_metrics") or {})
     required_boards = len(plan.get("sheets") or [])
@@ -645,6 +670,10 @@ def _snapshot_outcome(command, engine, plan, expanded, applied_trim, trim_decisi
             "errors": list(validation_errors),
         },
     }
+
+    if positioning is not None:
+        snapshot["final_sheet_positioning"] = positioning
+        snapshot.update(command.optimizer.edge_protection.field_values())
 
     return OptimizationOutcome(
         snapshot=snapshot,

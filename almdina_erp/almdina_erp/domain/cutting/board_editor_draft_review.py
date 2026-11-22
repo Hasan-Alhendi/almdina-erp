@@ -1,8 +1,8 @@
 """Read-only readiness of one saved board-editor draft.
 
 The draft layout supplies pose and membership only. Geometry, rotation
-permission, kerf, trim, and machine type come from the trusted model.
-Nothing here writes the draft, the plan, or an approval.
+permission, kerf, layer tool diameters, trim, and machine type come from
+the trusted model. Nothing here writes the draft, the plan, or an approval.
 """
 
 from __future__ import annotations
@@ -62,6 +62,11 @@ from almdina_erp.almdina_erp.domain.cutting.offcut_policy import (
     decision_from_values,
     resource_kind_from_value,
     validate_source_resource_homogeneity,
+)
+from almdina_erp.almdina_erp.domain.cutting.tool_diameters import (
+    TOOL_DIAMETER_FIELDS,
+    diameter_for_kind,
+    diameters_for_record,
 )
 from almdina_erp.almdina_erp.domain.cutting.primitives import num, rect_intersects
 from almdina_erp.almdina_erp.domain.orders.liner_specs import (
@@ -170,10 +175,20 @@ def trusted_model_from_projection(
                     [local_x, local_y + length],
                 ]
         # Review pose stores the opening in usable-sheet mm (same frame as outline_mm).
-        session_hole = resolve_trusted_glass_hole_mm(
-            piece=piece,
-            geometry_holes=outline_holes.get(instance),
-        )
+        geometry_holes = outline_holes.get(instance)
+        if piece_type == "Special":
+            session_hole = None
+            opening_rings = [
+                ring
+                for ring in (geometry_holes or [])
+                if isinstance(ring, list) and len(ring) >= 3
+            ]
+        else:
+            session_hole = resolve_trusted_glass_hole_mm(
+                piece=piece,
+                geometry_holes=geometry_holes,
+            )
+            opening_rings = []
         pieces[instance] = {
             "piece_instance_id": instance,
             "piece_id": piece.get("piece_id"),
@@ -185,6 +200,7 @@ def trusted_model_from_projection(
             "length_mm": length,
             "outline_mm": outline,
             "glass_hole_local_mm": session_hole,
+            "opening_rings_mm": deepcopy(opening_rings),
             "glass_host_piece_id": piece.get("glass_host_piece_id"),
             "allow_rotation": piece.get("allow_rotation") is True,
             "allow_rotation_proven": piece.get("allow_rotation_proven") is True,
@@ -278,9 +294,45 @@ def trusted_model_from_projection(
         "pieces": pieces,
         "sheets": sheets,
         "standard_full_board": standard,
-        "kerf_mm": num((projection.get("board") or {}).get("kerf_cm")) * 10.0,
+        "kerf_mm": num(board.get("kerf_cm")) * 10.0,
+        "liner_tool_diameter_mm": board.get("liner_tool_diameter_mm"),
+        "handle_recess_tool_diameter_mm": board.get("handle_recess_tool_diameter_mm"),
+        "rear_groove_tool_diameter_mm": board.get("rear_groove_tool_diameter_mm"),
         "machine_type": str(machine_type or ""),
     }
+
+
+def apply_plan_tool_diameters(
+    projection: Mapping[str, Any],
+    plan: Any,
+) -> dict[str, Any]:
+    """Attach the source plan's resolved layer diameters to a projection copy.
+
+    ``diameters_for_record`` is the only resolver. A missing layer diameter
+    inherits that plan's kerf. The caller's projection and plan are not mutated.
+    """
+
+    resolved = diameters_for_record(plan)
+    source_board = projection.get("board") if isinstance(projection.get("board"), Mapping) else {}
+    board = dict(source_board)
+    for field in TOOL_DIAMETER_FIELDS:
+        board[field] = resolved[field]
+    updated = dict(projection)
+    updated["board"] = board
+    return updated
+
+
+def _resolved_tool_diameters(trusted: Mapping[str, Any]) -> dict[str, float]:
+    """Layer diameters for one review. Blank values inherit this plan's kerf."""
+
+    return diameters_for_record(
+        {
+            "kerf_mm": trusted.get("kerf_mm"),
+            "liner_tool_diameter_mm": trusted.get("liner_tool_diameter_mm"),
+            "handle_recess_tool_diameter_mm": trusted.get("handle_recess_tool_diameter_mm"),
+            "rear_groove_tool_diameter_mm": trusted.get("rear_groove_tool_diameter_mm"),
+        }
+    )
 
 
 def review_saved_draft(
@@ -432,7 +484,7 @@ def _posed_pieces(
     by_layout = {row["piece_instance_id"]: row for row in layout.get("pieces") or []}
     posed: list[dict[str, Any]] = []
     session_pieces: dict[str, dict[str, Any]] = {}
-    kerf_mm = num(trusted.get("kerf_mm"))
+    diameters = _resolved_tool_diameters(trusted)
     for instance, info in (trusted.get("pieces") or {}).items():
         row = by_layout[str(instance)]
         piece = _entry_piece(str(instance), info)
@@ -448,7 +500,7 @@ def _posed_pieces(
         board = sheets.get(str(info.get("sheet_no"))) or {}
         paths, path_issues = _entry_machining_paths(
             info,
-            kerf_mm=kerf_mm,
+            diameters=diameters,
             board_width_mm=num(board.get("usable_width_mm")),
             board_length_mm=num(board.get("usable_length_mm")),
         )
@@ -611,6 +663,9 @@ def _entry_piece(instance: str, info: Mapping[str, Any]) -> dict[str, Any]:
         "allow_rotation_proven": info.get("allow_rotation_proven") is True,
         "outline_mm": deepcopy(outline) if isinstance(outline, list) else None,
         "glass_hole_local_mm": deepcopy(hole) if isinstance(hole, list) else None,
+        "opening_rings_mm": deepcopy(info.get("opening_rings_mm"))
+        if isinstance(info.get("opening_rings_mm"), list)
+        else [],
         "reserves_blank": info.get("reserves_blank") is True,
         "piece_type": info.get("piece_type") or "Regular",
         "placement_cm": {
@@ -688,11 +743,16 @@ def _place_local_toolpath(
 def _entry_machining_paths(
     info: Mapping[str, Any],
     *,
-    kerf_mm: float,
+    diameters: Mapping[str, Any],
     board_width_mm: float,
     board_length_mm: float,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    """Build cutter-center paths once in the entry usable-sheet frame."""
+    """Build cutter-center paths once in the entry usable-sheet frame.
+
+    Each add-on uses the diameter resolved for its layer. A liner whose bit is
+    wider than the strip does not block plan-copy readiness and does not receive
+    a center path. Other unproven geometry still blocks.
+    """
 
     issues: list[dict[str, Any]] = []
     try:
@@ -712,17 +772,6 @@ def _entry_machining_paths(
 
     enabled = [addon for addon in MACHINING_ADDONS if (values.get(addon.kind) or {}).get("enabled")]
     if not enabled:
-        return [], issues
-    if kerf_mm <= 0:
-        issues.append(
-            _issue(
-                "geometry_unproven",
-                piece_instance_ids=[str(info.get("piece_instance_id") or "")],
-                piece_ids=_ids(info),
-                reason="cutter_diameter_unavailable",
-                addon_kind=enabled[0].kind,
-            )
-        )
         return [], issues
     liner = _liner_piece_from_trusted(info)
     if liner is None:
@@ -748,6 +797,18 @@ def _entry_machining_paths(
     for addon in enabled:
         kind = addon.kind
         spec = values.get(kind) or {}
+        diameter = diameter_for_kind(kind, diameters)
+        if diameter is None:
+            issues.append(
+                _issue(
+                    "geometry_unproven",
+                    piece_instance_ids=[str(info.get("piece_instance_id") or "")],
+                    piece_ids=_ids(info),
+                    reason="cutter_diameter_unavailable",
+                    addon_kind=kind,
+                )
+            )
+            continue
         try:
             if kind == "liner":
                 liners = list(spec.get("liners") or ())
@@ -789,7 +850,7 @@ def _entry_machining_paths(
                         piece=liner,
                         specs=specs,
                         width_cm=width_cm,
-                        cutter_diameter_mm=kerf_mm,
+                        cutter_diameter_mm=diameter,
                         start_sawn=start_flags,
                         end_sawn=end_flags,
                     )
@@ -828,7 +889,7 @@ def _entry_machining_paths(
                             length_cm=float(spec.get("length_cm") or 0)
                             if spec.get("length_cm") not in (None, "")
                             else None,
-                            cutter_diameter_mm=kerf_mm,
+                            cutter_diameter_mm=diameter,
                             start_sawn=start_sawn,
                             end_sawn=end_sawn,
                         )
@@ -868,13 +929,28 @@ def _entry_machining_paths(
                         length_cm=float(spec.get("length_cm") or 0)
                         if spec.get("length_cm") not in (None, "")
                         else None,
-                        cutter_diameter_mm=kerf_mm,
+                        cutter_diameter_mm=diameter,
                         start_sawn=start_sawn,
                         end_sawn=end_sawn,
                     )
                 ]
         except (LinerGeometryError, DoorLinerError, TypeError, ValueError) as exc:
             reason = getattr(exc, "code", "") or "addon_toolpath_unproven"
+            # Saving a plan copy is separate from storing a machinable center.
+            # A liner bit wider than the strip keeps the liner definition and
+            # records the refusal, but it must not invent a center path.
+            if kind == "liner" and reason == "liner_narrower_than_cutter":
+                issues.append(
+                    _issue(
+                        "machining_path_unproven",
+                        severity=WARNING,
+                        piece_instance_ids=[str(info.get("piece_instance_id") or "")],
+                        piece_ids=_ids(info),
+                        reason=str(reason),
+                        addon_kind=kind,
+                    )
+                )
+                continue
             issues.append(
                 _issue(
                     "geometry_unproven",
@@ -898,7 +974,12 @@ def _entry_machining_paths(
                     )
                 )
                 continue
-            paths.append({"kind": kind, "path_index": index, "path_mm": placed})
+            paths.append({
+                "kind": kind,
+                "path_index": index,
+                "path_mm": placed,
+                "cutter_diameter_mm": diameter,
+            })
     return paths, issues
 
 
@@ -910,9 +991,10 @@ def _addon_rules(
 ) -> None:
     """Reuse liner extension clearance against neighbouring material.
 
-    ``kerf_mm`` is the plan blade/cutter diameter already used by
-    ``generate_toolpath`` / DXF liner export. It is not a second gap on top of
-    piece-to-piece kerf, and it is not a substitute for the add-on strip width.
+    A path names the layer bit in ``cutter_diameter_mm``. ``kerf_mm`` is only
+    the fallback for a path that has no layer diameter, which is the historical
+    shared blade. It is not a second gap on top of piece-to-piece kerf, and it
+    is not a substitute for the add-on strip width.
     ``extension_conflict_details`` ignores board bounds on purpose: historical
     policy allows a contour-end tip past the usable sheet, while piece material
     outside the usable sheet remains a separate placement fault.
@@ -928,9 +1010,15 @@ def _addon_rules(
             if not footprint.get("points"):
                 continue
             holes = []
-            hole = piece.get("glass_hole_local_mm")
-            if isinstance(hole, list) and len(hole) >= 3:
-                holes.append([(float(point[0]), float(point[1])) for point in hole])
+            rings = piece.get("opening_rings_mm")
+            if isinstance(rings, list) and rings:
+                for ring in rings:
+                    if isinstance(ring, list) and len(ring) >= 3:
+                        holes.append([(float(point[0]), float(point[1])) for point in ring])
+            else:
+                hole = piece.get("glass_hole_local_mm")
+                if isinstance(hole, list) and len(hole) >= 3:
+                    holes.append([(float(point[0]), float(point[1])) for point in hole])
             obstacles_by_instance[str(piece["piece_instance_id"])] = {
                 "outer": [(float(point[0]), float(point[1])) for point in footprint["points"]],
                 "holes": holes,
@@ -958,9 +1046,12 @@ def _addon_rules(
                     for instance, obstacle in obstacles_by_instance.items()
                     if instance != owner
                 ]
+                diameter = num(item.get("cutter_diameter_mm"))
+                if diameter <= 0:
+                    diameter = kerf_mm
                 details = extension_conflict_details(
                     [(float(point[0]), float(point[1])) for point in path],
-                    kerf_mm,
+                    diameter,
                     board_bounds,
                     obstacles,
                 )
@@ -1151,9 +1242,15 @@ def _material_rules(
             if not footprint.get("points"):
                 continue
             holes = []
-            hole = piece.get("glass_hole_local_mm")
-            if isinstance(hole, list) and len(hole) >= 3:
-                holes.append(tuple((float(point[0]), float(point[1])) for point in hole))
+            rings = piece.get("opening_rings_mm")
+            if isinstance(rings, list) and rings:
+                for ring in rings:
+                    if isinstance(ring, list) and len(ring) >= 3:
+                        holes.append(tuple((float(point[0]), float(point[1])) for point in ring))
+            else:
+                hole = piece.get("glass_hole_local_mm")
+                if isinstance(hole, list) and len(hole) >= 3:
+                    holes.append(tuple((float(point[0]), float(point[1])) for point in hole))
             parts.append(
                 PlacedPartGeometry(
                     key=piece["piece_instance_id"],

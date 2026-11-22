@@ -39,6 +39,7 @@ from almdina_erp.almdina_erp.domain.cutting.plan_settings import (
     DEFAULT_MACHINE_TYPE,
     DEFAULT_OPTIMIZATION_TIME_LIMIT_SEC,
     DEFAULT_PREFERRED_TRIM_MM,
+    EdgeProtectionPolicy,
     PlanSettings,
     PlanSettingsValidationError,
     normalize_plan_settings,
@@ -342,15 +343,19 @@ def _geometry_piece_rows(
     *,
     historical: bool = False,
     plan: Any | None = None,
+    version: int = FINGERPRINT_CONTRACT_VERSION,
 ) -> list[dict[str, Any]]:
     rows = []
     if historical:
-        return [historical_geometry_piece(row) for row in (order.pieces or [])]
+        return [
+            historical_geometry_piece(row, version=version)
+            for row in (order.pieces or [])
+        ]
     for row in _piece_rows(order, plan):
         piece = dict(row)
         for key in _COMMERCIAL_PIECE_KEYS:
             piece.pop(key, None)
-        rows.append(freeze_geometry_piece(piece))
+        rows.append(freeze_geometry_piece(piece, version=version))
     return rows
 
 
@@ -385,8 +390,16 @@ def _legacy_plan_input_fingerprint(order: Any, plan: Any) -> str:
     )
 
 
+def _uses_individual_glass_margins(order: Any) -> bool:
+    return any(
+        str(getattr(row, "piece_type", "") or "") == "Glass"
+        and str(getattr(row, "glass_margin_mode", "") or "") == "Individual Sides"
+        for row in (order.pieces or [])
+    )
+
+
 def plan_input_fingerprint(
-    order: Any, plan: Any, *, version: int = FINGERPRINT_CONTRACT_VERSION,
+    order: Any, plan: Any, *, version: int | None = None,
     omitted: tuple[str, ...] = (), historical: bool = False,
 ) -> str:
     """Fingerprint cutting geometry and optimizer settings, not commercial labels.
@@ -394,13 +407,18 @@ def plan_input_fingerprint(
     Customer name, board description, edge color, and edge-profile names/rates
     stay out of this hash so they do not stale or cancel a production plan.
     """
-
+    if version is None:
+        version = (
+            MANUFACTURING_BASELINE_VERSION
+            if _uses_individual_glass_margins(order)
+            else FINGERPRINT_CONTRACT_VERSION
+        )
     if version == MANUFACTURING_BASELINE_VERSION and not omitted:
         return fingerprint_payload(manufacturing_baseline_v4(order, plan, historical=historical))
     if (version, omitted) not in ((3, ()), *((2, fields) for _, fields in LEGACY_V2_SCHEMAS)):
         raise PlanFingerprintContractError("unsupported_fingerprint_schema")
     width_mm, length_mm = _board_dimensions_mm(order)
-    pieces = _geometry_piece_rows(order, historical=historical, plan=plan)
+    pieces = _geometry_piece_rows(order, historical=historical, plan=plan, version=version)
     pieces = [{key: value for key, value in row.items() if key not in omitted} for row in pieces]
     return fingerprint_payload(
         {
@@ -441,7 +459,10 @@ def manufacturing_baseline_v4(order: Any, plan: Any, *, historical: bool = False
             kerf_mm=_plan_attr(plan, "kerf_mm"),
             trim_margin_mm=_plan_attr(plan, "trim_margin_mm"),
         ),
-        "pieces": _geometry_piece_rows(order, historical=historical, plan=plan),
+        "pieces": _geometry_piece_rows(
+            order, historical=historical, plan=plan,
+            version=MANUFACTURING_BASELINE_VERSION,
+        ),
     }
 
 
@@ -494,6 +515,15 @@ def plan_fingerprint_compatibility(
     if declared is not None and (type(declared) is not int or declared != FINGERPRINT_CONTRACT_VERSION):
         return FingerprintCompatibility("REVIEW_REQUIRED", "", reason="unsupported_contract")
     current = plan_input_fingerprint(order, plan, historical=True)
+    # Never recognize a V4 digest as a V3/legacy match without the recorded V4
+    # manufacturing baseline and approved layout. An old declared V3 plan changed
+    # its manufacturing requirements; an unversioned hash needs manual review.
+    if _uses_individual_glass_margins(order):
+        if declared is not None:
+            return FingerprintCompatibility("MISMATCH", current, "v3", "order_requirements_changed")
+        return FingerprintCompatibility(
+            "REVIEW_REQUIRED", "", reason="legacy_individual_glass_unverifiable",
+        )
     if stored and stored == current:
         return FingerprintCompatibility("MATCH", stored, "v3", "current_contract")
     if declared is not None:
@@ -565,6 +595,7 @@ def calculate_system_plan(order: Any, plan: Any, *, seed_plans=(), search_round=
 
     width_mm, length_mm = _board_dimensions_mm(order)
     factory_settings = frappe.get_cached_doc("Almdina ERP Settings")
+    edge_protection = EdgeProtectionPolicy.from_settings(factory_settings)
     plan_settings = settings_for_system_search(_validated_plan_settings(plan))
     plan.optimization_mode = plan_settings.optimization_mode
     fingerprint = plan_input_fingerprint(order, plan)
@@ -581,6 +612,7 @@ def calculate_system_plan(order: Any, plan: Any, *, seed_plans=(), search_round=
                 kerf_cm=plan_settings.kerf_mm / 10,
             ),
             optimizer=OptimizerOptions(
+                edge_protection=edge_protection,
                 selected_mode=plan_settings.optimization_mode,
                 machine_type=plan_settings.machine_type,
                 time_limit_sec=plan_settings.optimization_time_limit_sec,

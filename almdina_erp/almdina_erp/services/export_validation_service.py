@@ -13,6 +13,7 @@ from almdina_erp.almdina_erp.domain.cutting.dxf_geometry_snapshot import (
     validate_snapshot_material_layout,
 )
 from almdina_erp.almdina_erp.domain.cutting.glass_opening_nesting import layout_pair_fault
+from almdina_erp.almdina_erp.domain.cutting.machining_overlay import machining_metadata
 from almdina_erp.almdina_erp.domain.cutting.piece_cut_dimensions import (
     dimensions_match_exact,
     special_bbox_allowed_range_cm,
@@ -614,13 +615,7 @@ def _plan_to_export_snapshot(plan: Any) -> dict[str, Any]:
                 "clipped_corner_position": piece.clipped_corner_position or "",
                 "clipped_corner_width_cm": flt(piece.clipped_corner_width_cm),
                 "clipped_corner_length_cm": flt(piece.clipped_corner_length_cm),
-                "extra_liner": cint(getattr(piece, "extra_liner", 0)),
-                "liner_reference_side": getattr(piece, "liner_reference_side", "") or "",
-                "liner_offset_cm": flt(getattr(piece, "liner_offset_cm", 0)),
-                "liner_width_cm": flt(getattr(piece, "liner_width_cm", 0)),
-                "liner_start_cm": flt(getattr(piece, "liner_start_cm", 0)),
-                "liner_length_cm": flt(getattr(piece, "liner_length_cm", 0)),
-                "liner_specs_json": getattr(piece, "liner_specs_json", "") or "",
+                **machining_metadata(piece),
                 "special_shape_geometry_json": (
                     getattr(piece, "special_shape_geometry_json", "") or ""
                 ),

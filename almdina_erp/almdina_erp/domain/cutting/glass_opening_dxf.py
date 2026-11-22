@@ -108,6 +108,7 @@ class GlassIdentityExpectation:
     height_mm: float
     allow_rotation: bool
     is_glass: bool
+    piece_type: str = ""
 
 
 _DOOR_SIDES = ("long_left", "long_right", "width_top", "width_bottom")
@@ -477,7 +478,9 @@ def validate_glass_dxf_opening(
         side_margins=active_margins if side_margins is not None else None,
     )
     if (piece_type or "") != GLASS_TYPE:
-        if hole_list:
+        # Special openings are not Glass margins. Regular and corner pieces
+        # still cannot own a through-cut opening.
+        if hole_list and (piece_type or "") != "Special":
             return GlassOpeningDecision(
                 code=GLASS_OPENING_UNEXPECTED,
                 category=CATEGORY_TOPOLOGY,
@@ -664,15 +667,25 @@ def reassign_glass_identity(
     for members in clusters.values():
         member_set = set(members)
         glass = [index for index in members if expected[index].is_glass]
-        plain_expected = [index for index in members if index not in set(glass)]
+        special = [
+            index
+            for index in members
+            if expected[index].piece_type == "Special"
+        ]
+        plain_expected = [
+            index
+            for index in members
+            if index not in set(glass) and index not in set(special)
+        ]
         if not glass or not plain_expected:
             continue
+        swappable = set(glass) | set(plain_expected)
         positions = [
             position
             for position, contour in enumerate(contours)
-            if contour.expected_index in member_set
+            if contour.expected_index in swappable
         ]
-        if len(positions) != len(members):
+        if len(positions) != len(swappable):
             continue
         if any(contours[position].hole_count > 1 for position in positions):
             return tuple(assigned), GLASS_GEOMETRY_AMBIGUOUS

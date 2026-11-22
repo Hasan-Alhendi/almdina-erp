@@ -198,26 +198,33 @@ def _largest_reusable_free_area(
 
     best = 0.0
     for sheet in plan.get("sheets") or []:
-        board_w = num(sheet.get("w"))
-        board_h = num(sheet.get("h"))
-        for rect in _free_rectangles_for_sheet(sheet):
-            width = num(rect.get("w"))
-            height = num(rect.get("h"))
-            if not _remnant_is_separable(
-                rect, board_w, board_h, machine_type=machine_type
-            ):
-                continue
-            area = width * height / 10000
-            dimension_ok = (
-                width >= min_remnant_width_cm
-                and height >= min_remnant_length_cm
-            ) or (
-                height >= min_remnant_width_cm
-                and width >= min_remnant_length_cm
-            )
-            if dimension_ok and area >= min_remnant_area_m2:
-                best = max(best, area)
+        for rect in _reusable_free_rectangles_for_sheet(
+            sheet, min_remnant_width_cm, min_remnant_length_cm, min_remnant_area_m2,
+            machine_type=machine_type,
+        ):
+            best = max(best, rect["w"] * rect["h"] / 10000)
     return best
+
+
+def _reusable_free_rectangles_for_sheet(
+    sheet: dict[str, Any], min_remnant_width_cm: float, min_remnant_length_cm: float,
+    min_remnant_area_m2: float, *, machine_type: str,
+) -> list[dict[str, float]]:
+    """The existing factory thresholds/separability contract, shared by finishing policies."""
+    usable = []
+    board_w, board_h = num(sheet.get("w")), num(sheet.get("h"))
+    for rect in _free_rectangles_for_sheet(sheet):
+        width, height = num(rect.get("w")), num(rect.get("h"))
+        if not _remnant_is_separable(
+            rect, board_w, board_h, machine_type=machine_type,
+        ):
+            continue
+        dimension_ok = (
+            width >= min_remnant_width_cm and height >= min_remnant_length_cm
+        ) or (height >= min_remnant_width_cm and width >= min_remnant_length_cm)
+        if dimension_ok and width * height / 10000 >= min_remnant_area_m2:
+            usable.append(rect)
+    return usable
 
 
 def _remnant_is_separable(

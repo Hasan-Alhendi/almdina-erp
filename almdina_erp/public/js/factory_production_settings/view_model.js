@@ -92,6 +92,8 @@
                     [t("Optimization timeout (s)"), source.default_optimization_time_limit_sec],
                     [t("Final alignment search budget (seconds)"), source.alignment_search_budget_sec],
                     [t("Piece limit for optimal search"), source.optimal_search_piece_limit],
+                    [t("Horizontal edge protection (mm)"), source.edge_protection_horizontal_mm ?? 0],
+                    [t("Vertical edge protection (mm)"), source.edge_protection_vertical_mm ?? 0],
                 ], current),
                 section("costing", t("Default cost"), t("Cutting fee, special door leaf charges, and their default margins."), [
                     [t("Cutting fee / board"), `${display(source.default_cutting_cost_per_board_usd)} USD`],
@@ -129,6 +131,10 @@
                     ]),
                 ], current),
                 section("cnc", t("Sample machine profile"), t("Stored sample used by the NC post processor. It is not a per-sheet profile, and it is not approved for production."), [
+                    [t("Cut Between Pieces Preset"), source.cnc_default_preset_cut_path],
+                    [t("Liner Preset"), source.cnc_default_preset_liner],
+                    [t("Rear Groove Preset"), source.cnc_default_preset_rear_groove],
+                    [t("Handle Recess Preset"), source.cnc_default_preset_handle_recess],
                     [t("Sample tool number"), source.cnc_machine_tool_number || t("Not specified")],
                     [t("Sample spindle speed (RPM)"), source.cnc_machine_spindle_speed_rpm],
                     [t("Sample cutting feed (mm/min)"), source.cnc_machine_cutting_feed_mm_min],
