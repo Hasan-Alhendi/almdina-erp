@@ -208,7 +208,11 @@ const colored = ux.cutPathPreviewMarkup(program, {
 assert.ok(!colored.includes("--cut-zoom:"));
 assert.ok(!colored.includes("dco-cnc-cut-preview__legend"));
 assert.ok(!colored.includes("data-cut-layer"));
-assert.ok(colored.includes("max-inline-size:390px"));
+assert.ok(!colored.includes("max-inline-size:390px"));
+assert.ok(colored.includes("max-inline-size:100%"));
+assert.ok(!colored.includes("dco-cnc-cut-preview__canvas-fill"));
+assert.ok(colored.includes("dco-cnc-cut-preview__board-fill"));
+assert.ok(colored.includes('patternTransform="rotate(45)"'));
 assert.ok(colored.includes(ux.PROGRAM_COLORS.liner));
 assert.ok(colored.includes(ux.PROGRAM_COLORS.recessed_handle_cutout));
 assert.ok(colored.includes(ux.PROGRAM_COLORS.back_groove));
@@ -353,7 +357,8 @@ for (let index = 0; index < 10; index += 1) {
 assert.ok(panel.includes("data-preview-layout"));
 assert.ok(panel.includes("mountSheetSettingsPage("));
 assert.ok(!panel.includes("data-cnc-back-order"));
-assert.ok(!panel.includes("dco-cnc-sheet-page__actions"));
+assert.ok(panel.includes("dco-cnc-sheet-page__actions"));
+assert.ok(panel.includes("[data-cnc-page-actions]"));
 assert.ok(panel.includes("Save sheet settings"));
 assert.ok(panel.includes("Generate NC file"));
 assert.ok(panel.includes("data-cnc-export-bar"));
@@ -409,16 +414,134 @@ const pageMarkup = ux.dialogMarkup(
     { exportBar: true }
 );
 const settingsMarkup = pageMarkup.slice(pageMarkup.indexOf("dco-operational-sheet__settings"));
+assert.ok(settingsMarkup.includes("dco-cnc-sheet-page__identity"));
+assert.ok(settingsMarkup.indexOf("dco-cnc-sheet-page__identity") < settingsMarkup.indexOf('data-sheet-section="placement"'));
 assert.ok(settingsMarkup.indexOf('data-sheet-section="order"') < settingsMarkup.indexOf("data-cnc-export-bar"));
 assert.equal(settingsMarkup.includes("dco-operational-sheet__preview"), false);
 assert.equal(pageMarkup.includes("data-cnc-post-processor"), false);
 assert.ok(pageMarkup.includes("data-cnc-save-sheet"));
 assert.ok(pageMarkup.includes("data-cnc-generate-nc"));
+assert.ok(pageMarkup.indexOf("data-cnc-generate-nc") < pageMarkup.indexOf("data-cnc-save-sheet"));
+assert.ok(pageMarkup.includes("dco-cnc-preview-toolbar"));
+assert.ok(pageMarkup.includes("data-cnc-preview-zoom"));
+assert.ok(pageMarkup.indexOf("dco-cnc-preview-toolbar") < pageMarkup.indexOf("data-sheet-preview"));
+assert.equal(pageMarkup.includes("dco-operational-sheet__selection"), false);
+assert.equal(pageMarkup.includes("data-sheet-nc-status"), false);
 const dialogMarkup = ux.dialogMarkup(
     { can_prepare: true, cutting_plan: "PLAN", plan_revision: 3, cnc_machines: [] },
     { sheet_no: 1, status: "Settings Saved", machining: { associations: [], profiles: [] } },
     unset
 );
 assert.equal(dialogMarkup.includes("data-cnc-export-bar"), false);
+assert.equal(dialogMarkup.includes("dco-cnc-sheet-page__identity"), false);
+assert.ok(dialogMarkup.includes("dco-operational-sheet__selection"));
+assert.ok(dialogMarkup.includes("data-sheet-nc-status"));
+assert.ok(pageMarkup.includes("Machine placement"));
+assert.ok(pageMarkup.includes("Vector Associations"));
+assert.ok(pageMarkup.includes("Associations appear here after they are saved."));
+assert.ok(!pageMarkup.includes("dco-sheet-acc"));
+assert.ok(pageMarkup.indexOf('data-sheet-section="placement"') < pageMarkup.indexOf('data-sheet-section="perimeter"'));
+assert.ok(pageMarkup.indexOf('data-sheet-section="perimeter"') < pageMarkup.indexOf('data-sheet-section="associations"'));
+assert.ok(pageMarkup.indexOf('data-sheet-section="associations"') < pageMarkup.indexOf('data-sheet-section="order"'));
+assert.ok(panel.includes("data-cnc-page-actions"));
+assert.ok(panel.includes("placePageActions("));
+assert.ok(css.includes("grid-template-columns: minmax(0, 3fr) minmax(16rem, 2fr)"));
+assert.ok(panel.includes("data-sheet-grid-pattern"));
+assert.ok(panel.includes("8 / scale"));
+assert.ok(panel.includes('patternTransform="rotate(45)"'));
+assert.ok(panel.includes('fill="#ffffff"'));
+assert.ok(panel.includes('stroke="rgba(71,85,105,.18)"'));
+assert.ok(panel.includes('class="dco-cnc-preview-toolbar" dir="ltr"'));
+assert.ok(css.includes("dco-cnc-cut-preview__board-grid"));
+assert.ok(css.includes("dco-cnc-cut-preview__grid-line"));
+assert.ok(css.includes("rgba(71, 85, 105, 0.18)"));
+assert.ok(css.includes("background-size: 24px 24px"));
+assert.ok(css.includes("rgba(15, 23, 42, 0.03)"));
+assert.ok(css.includes(".dco-cnc-sheet-page .dco-cnc-preview-toolbar"));
+assert.ok(css.includes("justify-content: space-between"));
+assert.ok(css.includes(".dco-cnc-sheet-page [data-cnc-save-sheet]"));
+assert.ok(css.includes("background-color: var(--alm-accent);"));
+assert.ok(css.includes("direction: ltr;"));
+assert.ok(css.includes("100dvh - var(--navbar-height, 48px) - 2.15rem"));
+assert.ok(panel.includes("relocatePageZoomControls"));
+assert.ok(translations.includes("Machine placement,تموضع اللوح على الماكينة"));
+assert.ok(translations.includes("Vector Associations,ربط المتجهات"));
+assert.ok(translations.includes("Associations appear here after they are saved.,يظهر الربط هنا بعد حفظه."));
+assert.ok(translations.includes("{0} Vectors Selected,{0} متجهات محددة"));
+
+const shaped = ux.cutPathPreviewMarkup({
+    sheet_width_mm: 1000,
+    sheet_length_mm: 1220,
+    geometry_ready: true,
+    ready: true,
+    operations: [{
+        operation_key: "cut_path",
+        toolpaths: [{
+            path_key: "cut_path:a",
+            operation_key: "cut_path",
+            closed: false,
+            ready: true,
+            points: [[10, 10], [40, 10]],
+            motions: motionChain([[10, 10], [40, 10]], 6, false),
+        }],
+    }],
+}, {
+    layout: "page",
+    sheetNo: 1,
+    boardLayout: {
+        sheets: [{
+            sheet_no: 1,
+            pieces: [
+                {
+                    piece_instance_id: "leaf-l",
+                    geometry: {
+                        unit: "mm",
+                        coordinate_space: "usable_sheet",
+                        outer: [[0, 0], [80, 0], [80, 30], [40, 30], [40, 70], [0, 70]],
+                        holes: [],
+                    },
+                },
+                {
+                    piece_instance_id: "leaf-hole",
+                    geometry: {
+                        unit: "mm",
+                        coordinate_space: "usable_sheet",
+                        outer: [[200, 200], [400, 200], [400, 400], [200, 400]],
+                        holes: [[[250, 250], [300, 250], [300, 300], [250, 300]]],
+                    },
+                },
+            ],
+        }],
+    },
+});
+assert.ok(shaped.includes('data-piece-id="leaf-l"'));
+assert.ok(shaped.includes("40 1190"), "an inner corner of a non-rectangular leaf stays on the outline");
+assert.ok(shaped.includes('data-piece-id="leaf-hole"'));
+assert.ok(shaped.includes("250 970"), "an opening inside a leaf is drawn from its own ring");
+assert.ok(shaped.includes("10,10"));
+assert.ok(shaped.includes("40,10"));
+assert.equal((shaped.match(/dco-cnc-cut-preview__svg/g) || []).length, 1);
+
+const incompleteProgram = {
+    sheet_width_mm: 100,
+    sheet_length_mm: 200,
+    geometry_ready: false,
+    ready: false,
+    operations: [{
+        operation_key: "cut_path",
+        toolpaths: [{
+            path_key: "cut_path:bad",
+            operation_key: "cut_path",
+            closed: false,
+            ready: false,
+            points: [[0, 0], [10, 0]],
+            motions: [],
+        }],
+    }],
+};
+const incompletePage = ux.cutPathPreviewMarkup(incompleteProgram, { layout: "page" });
+const incompleteDialog = ux.cutPathPreviewMarkup(incompleteProgram);
+assert.equal(incompletePage.includes("Cutting path preview is incomplete."), false);
+assert.ok(incompleteDialog.includes("Cutting path preview is incomplete."));
 
 console.log("dco_operational_files_sheet_page.test.js passed");

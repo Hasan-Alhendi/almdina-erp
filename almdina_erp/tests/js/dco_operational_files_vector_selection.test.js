@@ -90,7 +90,8 @@ assert.ok(uncalculated.includes('data-vector-id="cut_path:raw"'));
 assert.ok(uncalculated.includes("-6,4"));
 const rawBox = viewBoxOf(uncalculated);
 assert.ok(rawBox[0] < -6, "a cutter path left of the sheet stays inside the viewBox");
-assert.ok(uncalculated.includes("max-inline-size:390px"));
+assert.ok(!uncalculated.includes("max-inline-size:390px"));
+assert.ok(uncalculated.includes("max-inline-size:100%"));
 
 const tall = ux.cutPathPreviewMarkup({
     sheet_width_mm: 100,
@@ -114,7 +115,10 @@ const tallBox = viewBoxOf(tall);
 const wideBox = viewBoxOf(wide);
 assert.ok(tallBox[3] > tallBox[2]);
 assert.ok(wideBox[2] > wideBox[3]);
-assert.ok(tall.includes(`aspect-ratio:${tallBox[2]} / ${tallBox[3]}`));
+assert.ok(tall.includes('preserveAspectRatio="xMidYMid meet"'));
+assert.ok(wide.includes('preserveAspectRatio="xMidYMid meet"'));
+assert.ok(tall.includes("max-inline-size:100%"));
+assert.ok(wide.includes("max-inline-size:100%"));
 
 const above = ux.cutPathPreviewMarkup({
     sheet_width_mm: 100,

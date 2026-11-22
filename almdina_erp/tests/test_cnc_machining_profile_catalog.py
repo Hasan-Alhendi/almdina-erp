@@ -123,14 +123,15 @@ def test_profile_editor_lives_on_the_operational_files_page_not_the_sheet_form()
     style = _text(PACKAGE / "public" / "css" / "door_cutting_order_operational_files.css")
     assert "Sheet Perimeter" in sheet_page
     assert "data-perimeter-join-mode=\"connected\"" in sheet_page
-    assert "dco-sheet-acc__toggle" in sheet_page
+    assert 'class="dco-sheet-group"' in sheet_page
+    assert "dco-sheet-acc__toggle" not in sheet_page
     assert "dco-sheet-acc__head" not in sheet_page
     assert "previewEndPoint" in sheet_page
     assert "event.shiftKey" in sheet_page
     assert "is-vector-picked" in style
     assert "#16A34A" in sheet_page
     assert "#DC2626" in sheet_page
-    assert "width: 26px" in style
+    assert "dco-cnc-cut-preview__grid-line" in style
     assert "Reverse Direction" in sheet_page
     assert "data-association-visibility" in sheet_page
     assert "data-delete-association" in sheet_page

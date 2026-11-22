@@ -175,6 +175,21 @@ class CustomEvent {
     // a future asset-order change cannot silently stop executing it.
     require("./offcut_plan_presentation.test.js");
 
+    const operational = registry.ensureForTab("operational_files_tab");
+    assert.equal(calls.length, 5);
+    const operationalAssets = calls[4].map(asset => asset.split("/").pop());
+    const edgeIndex = operationalAssets.indexOf("door_cutting_order_edge_display.js");
+    const rendererIndex = operationalAssets.indexOf("door_cutting_order_cutting_plan_renderer.js");
+    assert.ok(edgeIndex >= 0 && rendererIndex > edgeIndex,
+        "Operational files must load edge display before the cutting-plan renderer");
+    assert.equal(registry.isLoaded("operational_files"), false);
+    fakeWindow.AlmdinaCuttingPlanPieceGeometry = fakeWindow.AlmdinaCuttingPlanPieceGeometry || {};
+    fakeWindow.AlmdinaEdgeDisplay = {};
+    fakeWindow.AlmdinaCuttingPlanRender = {};
+    fakeWindow.AlmdinaOperationalFilesUX = {};
+    flights[4].resolve(calls[4]);
+    assert.equal(await operational, true);
+
     console.log("DCO workspace asset registry simulation passed");
 })().catch(error => {
     console.error(error);

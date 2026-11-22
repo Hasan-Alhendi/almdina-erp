@@ -4386,3 +4386,9 @@ Vertical edge protection (mm),هامش حماية عمودي (مم)
 "Minimum actual gap from original board edges when centering is not eligible. Trim already counts; zero disables this axis. Unsafe moves keep the existing plan.","المسافة الفعلية المستهدفة عن حواف اللوح الأصلية عند تعذر التوسيط. يُحتسب التشذيب ضمنها؛ الصفر يعطّل حماية هذا المحور. تُحفظ الخطة الحالية إذا تعذرت الحركة الآمنة."
 Edge protection margins must be finite non-negative numbers.,يجب أن تكون هوامش الحماية أرقامًا صالحة ومحدودة وغير سالبة.
 Edge protection settings changed. Recalculate the preview before saving.,تغيّرت إعدادات حماية الحواف. أعد حساب المعاينة قبل الحفظ.
+Machine placement,تموضع اللوح على الماكينة
+Vector Associations,ربط المتجهات
+Associations appear here after they are saved.,يظهر الربط هنا بعد حفظه.
+Editing,تعديل
+New association,ربط جديد
+{0} Vectors Selected,{0} متجهات محددة

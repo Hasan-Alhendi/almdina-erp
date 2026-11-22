@@ -30,11 +30,19 @@
         "plunge_rate_mm_min",
     ]);
 
-    function translate(message) {
+    function translate(message, replacements) {
         const locale = window.AlmdinaLocale;
-        if (locale && typeof locale.translate === "function") return locale.translate(message);
-        if (typeof __ === "function") return __(message);
-        return String(message || "");
+        if (locale && typeof locale.translate === "function") return locale.translate(message, replacements);
+        if (typeof __ === "function") {
+            return replacements === undefined ? __(message) : __(message, replacements);
+        }
+        let text = String(message || "");
+        if (Array.isArray(replacements)) {
+            replacements.forEach((value, index) => {
+                text = text.split(`{${index}}`).join(String(value));
+            });
+        }
+        return text;
     }
 
     function toolsOf(context) {
@@ -333,7 +341,7 @@
             </div>
             ${ownsSavedPerimeter ? `<label class="dco-artcam-note"><input type="checkbox" data-field="release_perimeter"> ${escapeHtml(translate("Release the sheet perimeter from this association"))}</label>` : ""}
             <p class="dco-artcam-note" data-vector-hint${selected ? "" : " hidden"}>${escapeHtml(translate("Shift + Click to select vectors"))}</p>
-            <p class="dco-artcam-note" data-vector-count${selected ? "" : " hidden"}>${escapeHtml(`${count} Vectors Selected`)}</p>
+            <p class="dco-artcam-note" data-vector-count${selected ? "" : " hidden"}>${escapeHtml(translate("{0} Vectors Selected", [count]))}</p>
             ${profileChosen ? `<div class="dco-artcam-row dco-artcam-row--pair">
                 ${PROFILE_FIELDS.map(([name, label]) => input(name, label, form.fields[name], "profile")).join("")}
             </div>
@@ -531,7 +539,7 @@
                 if (hint) hint.hidden = !selected;
                 if (count) {
                     count.hidden = !selected;
-                    count.textContent = `${(context.state.vectorSelection || []).length} Vectors Selected`;
+                    count.textContent = translate("{0} Vectors Selected", [(context.state.vectorSelection || []).length]);
                 }
                 if (typeof context.paintBoard === "function") context.paintBoard();
             }

@@ -143,7 +143,8 @@ assert.ok(dialog.includes("data-move=\"earlier\""));
 assert.ok(dialog.includes('data-move="later"'));
 assert.ok(dialog.includes('dco-operational-order__arrow'));
 assert.ok(dialog.includes('aria-hidden="true">↓</span>'));
-assert.ok(dialog.includes('<section class="dco-sheet-acc" data-sheet-section="order">'));
+assert.ok(dialog.includes('<section class="dco-sheet-group" data-sheet-section="order">'));
+assert.ok(!dialog.includes("dco-sheet-acc"));
 assert.ok(dialog.includes("data-delete-association=\"association:a\""));
 assert.ok(dialog.indexOf("dco-operational-sheet__preview") < dialog.indexOf("dco-operational-sheet__settings"));
 
