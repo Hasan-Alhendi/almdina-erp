@@ -450,7 +450,8 @@ def _materialize_piece(
                     tuple((num(p[0]), num(p[1])) for p in ring)
                     for ring in holes
                 ),
-            )
+            ),
+            posed.get("manufacturing"),
         )
     reserves_blank = geometry_reserves_blank(
         {

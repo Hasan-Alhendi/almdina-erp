@@ -255,7 +255,7 @@
         return result;
     }
 
-    function lwpolyline(layerName, points, closed) {
+    function lwpolyline(layerName, points, closed, bulges) {
         if (!Array.isArray(points) || points.length < 2) return "";
         let result = pair(0, "LWPOLYLINE")
             + pair(100, "AcDbEntity")
@@ -263,10 +263,47 @@
             + pair(100, "AcDbPolyline")
             + pair(90, points.length)
             + pair(70, closed ? 1 : 0);
-        points.forEach(point => {
+        points.forEach((point, index) => {
             result += pair(10, dxfNumber(point[0])) + pair(20, dxfNumber(point[1]));
+            const bulge = bulges && Number.isFinite(Number(bulges[index])) ? Number(bulges[index]) : 0;
+            if (Math.abs(bulge) > 1e-9) result += pair(42, dxfNumber(bulge));
         });
         return result;
+    }
+
+    function arcBulge(segment) {
+        if (!segment || segment.kind !== "arc") return 0;
+        const center = segment.center;
+        const start = Math.atan2(segment.start[1] - center[1], segment.start[0] - center[0]);
+        const end = Math.atan2(segment.end[1] - center[1], segment.end[0] - center[0]);
+        let sweep = end - start;
+        if (segment.ccw && sweep <= 1e-12) sweep += Math.PI * 2;
+        if (!segment.ccw && sweep >= -1e-12) sweep -= Math.PI * 2;
+        return Math.tan(sweep / 4);
+    }
+
+    function transformManufacturingPoint(point, placement) {
+        return topologyDxfPoints([point], placement)[0];
+    }
+
+    function manufacturingEntity(layerName, loop, placement) {
+        const segments = (loop && loop.segments) || [];
+        if (!segments.length) return "";
+        if (segments.length === 1 && segments[0].kind === "circle") {
+            const center = transformManufacturingPoint(segments[0].center, placement);
+            const radius = num(segments[0].radius);
+            const start = [center[0] + radius, center[1]];
+            const opposite = [center[0] - radius, center[1]];
+            const bulge = segments[0].ccw ? -1 : 1;
+            return lwpolyline(layerName, [start, opposite], true, [bulge, bulge]);
+        }
+        const points = [];
+        const bulges = [];
+        segments.forEach(segment => {
+            points.push(transformManufacturingPoint(segment.start, placement));
+            bulges.push(segment.kind === "arc" ? -arcBulge(segment) : 0);
+        });
+        return lwpolyline(layerName, points, loop.closed !== false, bulges);
     }
 
     function overlayPath(layerName, points, closed) {
@@ -1043,15 +1080,28 @@
                 // is derived from that ring; the kerf gap itself is not rewritten.
                 const rings = finishedRings(piece, placement);
                 shapes.push(rings);
-                entities += closedPath(FINISHED_GEOMETRY_LAYER, rings.outer);
-                rings.holes.forEach(hole => {
-                    entities += closedPath(FINISHED_GEOMETRY_LAYER, hole);
-                });
-                if (cutLayerForPiece(piece) === "OFFCUT") {
-                    entities += closedPath("OFFCUT", rings.outer);
-                    rings.holes.forEach(hole => {
-                        entities += closedPath("OFFCUT", hole);
+                const manufacturing = piece.geometry && piece.geometry.manufacturing;
+                const manufacturingLoops = manufacturing && Array.isArray(manufacturing.loops)
+                    ? manufacturing.loops
+                    : [];
+                if (manufacturingLoops.length) {
+                    manufacturingLoops.forEach(loop => {
+                        entities += manufacturingEntity(FINISHED_GEOMETRY_LAYER, loop, placement);
+                        if (cutLayerForPiece(piece) === "OFFCUT") {
+                            entities += manufacturingEntity("OFFCUT", loop, placement);
+                        }
                     });
+                } else {
+                    entities += closedPath(FINISHED_GEOMETRY_LAYER, rings.outer);
+                    rings.holes.forEach(hole => {
+                        entities += closedPath(FINISHED_GEOMETRY_LAYER, hole);
+                    });
+                    if (cutLayerForPiece(piece) === "OFFCUT") {
+                        entities += closedPath("OFFCUT", rings.outer);
+                        rings.holes.forEach(hole => {
+                            entities += closedPath("OFFCUT", hole);
+                        });
+                    }
                 }
                 const overlays = persistedOverlays(
                     piece,
@@ -1125,7 +1175,11 @@
                 entities += textOutlineEntities(piece, placement);
             });
             // Separation/trim CUT_PATH is manufacturing-only after plan approval.
-            if (includeSawCenters) {
+            if (includeSawCenters && Array.isArray(sheet.cutter_manufacturing) && sheet.cutter_manufacturing.length) {
+                sheet.cutter_manufacturing.forEach(loop => {
+                    entities += manufacturingEntity(SAW_CENTER_LAYER, loop, placement);
+                });
+            } else if (includeSawCenters) {
                 cutterCenterPaths(shapes, num(cutterMm) / 2).forEach(path => {
                     entities += path.closed
                         ? lwpolyline(SAW_CENTER_LAYER, path.points, true)

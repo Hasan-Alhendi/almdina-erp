@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from collections import Counter
 from typing import Any, Callable, Iterable
 
@@ -112,6 +113,99 @@ def _entity_is_closed(entity: Any) -> bool:
         return bool(int(flags or 0) & 1)
     except (TypeError, ValueError):
         return False
+
+
+def _point2(value: Any) -> tuple[float, float]:
+    if hasattr(value, "x"):
+        return (float(value.x), float(value.y))
+    return (float(value[0]), float(value[1]))
+
+
+def _manufacturing_segments(entity: Any) -> list[dict[str, Any]]:
+    """Exact curve primitives. Failure leaves the flattened analysis segments."""
+
+    from almdina_erp.almdina_erp.domain.cutting.manufacturing_curves import (
+        arc_from_bulge,
+        arc_segment,
+        circle_segment,
+        line_segment,
+    )
+
+    entity_type = entity.dxftype().upper()
+    if entity_type == "LINE":
+        return [line_segment(_point2(entity.dxf.start), _point2(entity.dxf.end))]
+    if entity_type == "ARC":
+        return [
+            arc_segment(
+                _point2(entity.start_point),
+                _point2(entity.end_point),
+                _point2(entity.dxf.center),
+                float(entity.dxf.radius),
+                ccw=True,
+            )
+        ]
+    if entity_type == "CIRCLE":
+        return [circle_segment(_point2(entity.dxf.center), float(entity.dxf.radius), ccw=True)]
+    if entity_type == "ELLIPSE":
+        major = entity.dxf.major_axis
+        return [
+            {
+                "kind": "ellipse",
+                "start": _point2(entity.start_point),
+                "end": _point2(entity.end_point),
+                "center": _point2(entity.dxf.center),
+                "major_axis": (float(major.x), float(major.y)),
+                "ratio": float(entity.dxf.ratio),
+                "start_param": float(entity.dxf.start_param),
+                "end_param": float(entity.dxf.end_param),
+            }
+        ]
+    if entity_type == "SPLINE":
+        controls = [_point2(point) for point in entity.control_points]
+        knots = [float(value) for value in entity.knots]
+        if len(controls) < 2 or len(knots) < int(entity.dxf.degree) + 2:
+            return []
+        return [
+            {
+                "kind": "spline",
+                "start": controls[0],
+                "end": controls[-1],
+                "degree": int(entity.dxf.degree),
+                "control_points": controls,
+                "knots": knots,
+                "fit_points": [],
+            }
+        ]
+    if entity_type in {"LWPOLYLINE", "POLYLINE"}:
+        if entity_type == "LWPOLYLINE":
+            vertices = [
+                (_point2(point), float(point[4]) if len(point) > 4 else 0.0)
+                for point in entity.get_points("xyseb")
+            ]
+            closed = bool(entity.closed)
+        else:
+            vertices = [
+                (_point2(vertex.dxf.location), float(getattr(vertex.dxf, "bulge", 0.0) or 0.0))
+                for vertex in entity.vertices
+            ]
+            closed = bool(entity.is_closed)
+        if len(vertices) < 2:
+            return []
+        count = len(vertices)
+        limit = count if closed else count - 1
+        segments: list[dict[str, Any]] = []
+        for index in range(limit):
+            start, bulge = vertices[index]
+            end = vertices[(index + 1) % count][0]
+            segment = arc_from_bulge(start, end, bulge)
+            if (
+                segment.get("kind") == "line"
+                and math.dist(segment["start"], segment["end"]) <= 1e-6
+            ):
+                continue
+            segments.append(segment)
+        return segments
+    return []
 
 
 def _segments_from_points(points: list[tuple[float, float]]) -> list[tuple[tuple[float, float], tuple[float, float]]]:
@@ -364,6 +458,7 @@ def read_dxf_geometry(
     doc = _load_ezdxf_document(ezdxf, file_path)
 
     segments: list[dict[str, Any]] = []
+    curves: list[dict[str, Any]] = []
     annotations: list[dict[str, Any]] = []
     unsupported: list[dict[str, str]] = []
     detected_layers: set[str] = set()
@@ -452,6 +547,20 @@ def read_dxf_geometry(
             entity_seq += 1
             closed = _entity_is_closed(entity)
             display_attrs = _entity_display_attrs(entity)
+            try:
+                primitives = _manufacturing_segments(entity)
+            except Exception:
+                primitives = []
+            if primitives:
+                curves.append(
+                    {
+                        "layer": layer,
+                        "entity_type": entity_type,
+                        "entity_id": entity_seq,
+                        "closed": closed or entity_type == "CIRCLE",
+                        "segments": primitives,
+                    }
+                )
             for start, end in _segments_from_points(flattened):
                 segments.append(
                     {
@@ -476,6 +585,7 @@ def read_dxf_geometry(
     )
     return {
         "segments": segments,
+        "curves": curves,
         "annotations": annotations,
         "unsupported": unsupported,
         "layer_defs": _layer_defs_from_document(

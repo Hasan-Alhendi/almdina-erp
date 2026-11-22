@@ -352,12 +352,45 @@ def _special_exact_geometry_mm(piece: Mapping[str, Any]) -> dict[str, Any] | Non
     outline_cm = material_outline_cm(piece)
     if outline_cm is None or len(outline_cm) < 3:
         return None
-    return serialize_geometry_mm(
+    geometry = serialize_geometry_mm(
         PartGeometry(
             outer=tuple((float(point[0]) * 10.0, float(point[1]) * 10.0) for point in outline_cm),
             holes=(),
         )
     )
+    raw = piece.get("special_shape_geometry_json")
+    payload = None
+    if isinstance(raw, str) and raw.strip():
+        import json
+
+        try:
+            payload = json.loads(raw)
+        except json.JSONDecodeError:
+            payload = None
+    elif isinstance(raw, Mapping):
+        payload = raw
+    loops = (payload or {}).get("manufacturing", {}) if isinstance(payload, Mapping) else {}
+    loop_rows = loops.get("loops") if isinstance(loops, Mapping) else None
+    if loop_rows:
+        from almdina_erp.almdina_erp.domain.cutting.manufacturing_curves import (
+            manufacturing_payload,
+            place_door_loops_mm,
+        )
+
+        placed = place_door_loops_mm(
+            loop_rows,
+            x_cm=float(piece.get("x") or 0),
+            y_cm=float(piece.get("y") or 0),
+            blank_w_cm=float(payload.get("blank_width_cm") or 0),
+            blank_h_cm=float(payload.get("blank_length_cm") or 0),
+            viewport_w_cm=float(piece.get("w") or 0),
+            viewport_h_cm=float(piece.get("h") or 0),
+            rotated=bool(piece.get("rotated")),
+        )
+        stored = manufacturing_payload(placed)
+        if stored is not None:
+            geometry["manufacturing"] = stored
+    return geometry
 
 
 def _cnc_raw_dims_trusted(piece: Mapping[str, Any]) -> bool:

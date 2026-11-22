@@ -134,6 +134,7 @@ def trusted_model_from_projection(
     """Trusted geometry for a review. Display settings are not included."""
 
     outlines: dict[str, list] = {}
+    manufacturing_by_instance: dict[str, Any] = {}
     outline_holes: dict[str, list] = {}
     for element in projection.get("elements") or []:
         if not isinstance(element, Mapping) or element.get("kind") != "finished_outline":
@@ -143,6 +144,8 @@ def trusted_model_from_projection(
         outer = geometry.get("outer") if isinstance(geometry, Mapping) else None
         if instance and isinstance(outer, list) and len(outer) >= 3:
             outlines[instance] = outer
+        if instance and isinstance(geometry, Mapping) and geometry.get("manufacturing"):
+            manufacturing_by_instance[instance] = deepcopy(geometry.get("manufacturing"))
         holes = geometry.get("holes") if isinstance(geometry, Mapping) else None
         if instance and isinstance(holes, list) and holes and instance not in outline_holes:
             outline_holes[instance] = holes
@@ -199,6 +202,9 @@ def trusted_model_from_projection(
             "width_mm": width,
             "length_mm": length,
             "outline_mm": outline,
+            "manufacturing": deepcopy(manufacturing_by_instance.get(instance))
+            if manufacturing_by_instance.get(instance)
+            else None,
             "glass_hole_local_mm": session_hole,
             "opening_rings_mm": deepcopy(opening_rings),
             "glass_host_piece_id": piece.get("glass_host_piece_id"),
@@ -662,6 +668,12 @@ def _entry_piece(instance: str, info: Mapping[str, Any]) -> dict[str, Any]:
         "allow_rotation": info.get("allow_rotation") is True,
         "allow_rotation_proven": info.get("allow_rotation_proven") is True,
         "outline_mm": deepcopy(outline) if isinstance(outline, list) else None,
+        "manufacturing": deepcopy(info.get("manufacturing"))
+        if isinstance(info.get("manufacturing"), Mapping)
+        else None,
+        "base_manufacturing": deepcopy(info.get("manufacturing"))
+        if isinstance(info.get("manufacturing"), Mapping)
+        else None,
         "glass_hole_local_mm": deepcopy(hole) if isinstance(hole, list) else None,
         "opening_rings_mm": deepcopy(info.get("opening_rings_mm"))
         if isinstance(info.get("opening_rings_mm"), list)

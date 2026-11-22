@@ -30,6 +30,7 @@ class CutterCenterPath:
 
     points: tuple[Point, ...]
     closed: bool
+    curves: tuple[dict, ...] = ()
 
 
 def cutter_center_paths(
@@ -67,6 +68,59 @@ def cutter_center_paths(
     merged = _merge_collinear(segments, tolerance)
     # Only overlapping centers reduce total length. Touching collinear sides
     # alone must not discard independent closed contours.
+    if sum(math.dist(*segment) for segment in segments) - sum(
+        math.dist(*segment) for segment in merged
+    ) > tolerance:
+        return [CutterCenterPath((start, end), False) for start, end in merged]
+    return paths
+
+
+def cutter_center_from_manufacturing(
+    shapes: Sequence[tuple[Sequence[Point], Sequence[Sequence[Point]], Sequence[Sequence[dict]]]],
+    radius_mm: float,
+    *,
+    tolerance: float = COLLINEAR_TOLERANCE_MM,
+) -> list[CutterCenterPath]:
+    """Offset finished rings, using exact curves where a ring provides them.
+
+    ``shapes`` entries are ``(outer polygon, holes, manufacturing loops)``.
+    Loops are ordered outer then holes. Missing loops use the polygon offset.
+    Shared centers still collapse to one straight network.
+    """
+
+    from almdina_erp.almdina_erp.domain.cutting.manufacturing_curves import (
+        CURVE_CHORD_TOLERANCE_MM,
+        offset_loop,
+        sample_loop,
+    )
+
+    radius = max(0.0, float(radius_mm or 0.0))
+    polygon_shapes = [(outer, holes) for outer, holes, _loops in shapes]
+    prepared = _prepare_shapes(polygon_shapes)
+    paths: list[CutterCenterPath] = []
+    segments: list[Segment] = []
+    for (outer, holes), (_raw_outer, _raw_holes, loops) in zip(prepared, shapes):
+        ordered_loops = list(loops or [])
+        outer_loop = ordered_loops[0] if ordered_loops else []
+        hole_loops = ordered_loops[1:] if len(ordered_loops) > 1 else []
+        rings = [(hole, hole_loops[index] if index < len(hole_loops) else []) for index, hole in enumerate(holes)]
+        rings.append((outer, outer_loop))
+        for ring, loop in rings:
+            sign = _waste_sign(ring, prepared, radius)
+            if loop and radius > tolerance:
+                curves = tuple(offset_loop(loop, radius, sign))
+                points = sample_loop(curves, closed=True, tolerance=CURVE_CHORD_TOLERANCE_MM)
+            elif radius <= tolerance and loop:
+                curves = tuple(loop)
+                points = sample_loop(curves, closed=True, tolerance=CURVE_CHORD_TOLERANCE_MM)
+            else:
+                curves = ()
+                points = ring if radius <= tolerance else _offset_closed(ring, radius, sign)
+            if len(points) < 3:
+                continue
+            paths.append(CutterCenterPath(tuple(points), True, curves))
+            segments.extend(zip(points, [*points[1:], points[0]]))
+    merged = _merge_collinear(segments, tolerance)
     if sum(math.dist(*segment) for segment in segments) - sum(
         math.dist(*segment) for segment in merged
     ) > tolerance:
@@ -436,6 +490,7 @@ __all__ = [
     "SAW_CENTER_INVALID",
     "SAW_CENTER_MATCH",
     "classify_saw_center_segments",
+    "cutter_center_from_manufacturing",
     "cutter_center_paths",
     "cutter_center_segments",
     "merge_collinear_segments",

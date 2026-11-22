@@ -44,6 +44,7 @@ from almdina_erp.almdina_erp.domain.cnc.program import (
 from almdina_erp.almdina_erp.domain.cnc.tool_preset import ToolPresetError, normalize_tool_preset
 from almdina_erp.almdina_erp.domain.cutting.cutter_center_paths import (
     classify_saw_center_segments,
+    cutter_center_from_manufacturing,
     cutter_center_paths,
     cutter_center_segments,
     merge_collinear_segments,
@@ -156,6 +157,31 @@ def _kerf_mm(snapshot: Mapping[str, Any]) -> float | None | str:
     if chosen is None or chosen <= 0:
         return None
     return chosen
+
+
+def _sheet_manufacturing_loops(
+    piece: Mapping[str, Any],
+    *,
+    trim_x: float,
+    trim_y: float,
+    length_mm: float,
+    hole_count: int,
+) -> list[list[dict[str, Any]]]:
+    geometry = piece.get("geometry") if isinstance(piece.get("geometry"), Mapping) else None
+    loops = ((geometry or {}).get("manufacturing") or {}).get("loops") if isinstance(geometry, Mapping) else None
+    if not isinstance(loops, list) or not loops:
+        return []
+    from almdina_erp.almdina_erp.domain.cutting.manufacturing_curves import map_loops
+
+    def mapper(point: tuple[float, float]) -> tuple[float, float]:
+        return (trim_x + float(point[0]), length_mm - trim_y - float(point[1]))
+
+    mapped = map_loops(loops, mapper, reflection=True)
+    outer = next((list(item.get("segments") or []) for item in mapped if item.get("role") != "hole"), [])
+    holes = [list(item.get("segments") or []) for item in mapped if item.get("role") == "hole"]
+    while len(holes) < hole_count:
+        holes.append([])
+    return [outer, *holes[:hole_count]]
 
 
 def _to_sheet(points: Sequence[Sequence[float]], *, trim_x: float, trim_y: float, length_mm: float) -> list[tuple[float, float]] | None:
@@ -275,6 +301,31 @@ def _complete_order(requested: Sequence[str], present: set[str]) -> list[str]:
     return list(merge_operation_order(sorted(present), known))
 
 
+def _uploaded_centers_match(uploaded, observed, expected, generated, shapes) -> bool:
+    if any(getattr(path, "curves", ()) for path in generated):
+        from almdina_erp.almdina_erp.domain.cutting.manufacturing_curves import (
+            SAW_CURVE_MATCH,
+            classify_curve_centers,
+        )
+        from almdina_erp.almdina_erp.services.dxf_import_service import _paths_to_loops
+
+        observed_loops = []
+        for path in (uploaded or {}).get("cut_paths") or []:
+            curves = path.get("curves") or []
+            if curves:
+                observed_loops.append(
+                    {"closed": bool(path.get("closed")), "segments": curves, "role": "outer"}
+                )
+        if not observed_loops:
+            return classify_saw_center_segments(observed, expected) == "match"
+        material = [(outer, holes) for outer, holes in shapes]
+        return (
+            classify_curve_centers(observed_loops, _paths_to_loops(generated), material)
+            == SAW_CURVE_MATCH
+        )
+    return classify_saw_center_segments(observed, expected) == "match"
+
+
 def _entity(
     *,
     layer: str,
@@ -286,6 +337,7 @@ def _entity(
     path_key: str = "",
     piece_id: str = "",
     piece_label: str = "",
+    curves: Sequence[Mapping[str, Any]] = (),
 ) -> CncSourceEntity:
     return CncSourceEntity(
         layer=layer,
@@ -297,6 +349,7 @@ def _entity(
         path_key=path_key,
         piece_instance_id=piece_id,
         piece_label=piece_label,
+        curves=tuple(curves),
     )
 
 
@@ -539,6 +592,13 @@ def compile_sheet_program(
         if hole_failed or outer is None:
             blocked_path("geometry_invalid", f"cut_path:{piece_id}:outer")
             continue
+        host_loops = _sheet_manufacturing_loops(
+            piece,
+            trim_x=trim_x,
+            trim_y=trim_y,
+            length_mm=length_mm,
+            hole_count=len(hole_pairs),
+        )
         hosts.append(
             {
                 "piece_id": piece_id,
@@ -547,6 +607,7 @@ def compile_sheet_program(
                 "outer_key": f"cut_path:{piece_id}:outer",
                 "holes": [points for _key, points in hole_pairs],
                 "hole_keys": [key for key, _points in hole_pairs],
+                "loops": host_loops,
             }
         )
         shapes.append((outer, [points for _key, points in hole_pairs]))
@@ -558,7 +619,16 @@ def compile_sheet_program(
             blocked_path("kerf_unknown", "")
     elif mode in {_GENERATED, _PRESENT} and shapes:
         radius = float(kerf) / 2.0
-        generated = cutter_center_paths(shapes, radius)
+        if any(host.get("loops") for host in hosts):
+            manufactured = []
+            for host in hosts:
+                loops = list(host.get("loops") or [])
+                while len(loops) < 1 + len(host["holes"]):
+                    loops.append([])
+                manufactured.append((host["outer"], host["holes"], loops[: 1 + len(host["holes"])]))
+            generated = cutter_center_from_manufacturing(manufactured, radius)
+        else:
+            generated = cutter_center_paths(shapes, radius)
         expected = cutter_center_segments(shapes, radius)
         use_generated = mode == _GENERATED
         if mode == _PRESENT:
@@ -575,7 +645,7 @@ def compile_sheet_program(
                 blocked_path("dxf_unreadable", "")
             elif str(uploaded.get("units") or "mm") != "mm":
                 use_generated = False
-            elif classify_saw_center_segments(observed, expected) != "match":
+            elif not _uploaded_centers_match(uploaded, observed, expected, generated, shapes):
                 use_generated = False
                 for segment in observed:
                     if len(segment) != 2:
@@ -613,6 +683,7 @@ def compile_sheet_program(
                             path_key=path_key,
                             piece_id=piece_id,
                             piece_label=label,
+                            curves=path.curves,
                         )
                     )
             else:

@@ -178,9 +178,22 @@ def apply_local_horizontal_mirror(piece: dict[str, Any]) -> None:
             center_x=center_x,
         )
     _reflect_opening_rings(piece, axis="h", center_x=center_x)
+    _reflect_manufacturing(piece, axis="h", center=center_x)
     _reflect_machining_paths(piece, axis="h")
     piece["mirrored"] = not _truthy_flag(piece.get("mirrored"))
     rederive_outline(piece)
+
+
+def _reflect_manufacturing(piece: dict[str, Any], *, axis: str, center: float) -> None:
+    stored = piece.get("base_manufacturing")
+    if not isinstance(stored, Mapping) or not stored.get("loops"):
+        return
+    from almdina_erp.almdina_erp.domain.cutting.manufacturing_curves import reflect_loops
+
+    piece["base_manufacturing"] = {
+        "schema_version": 1,
+        "loops": reflect_loops(stored["loops"], axis=axis, center=center),
+    }
 
 
 def _reflect_machining_paths(
@@ -230,6 +243,7 @@ def apply_local_flip_h(piece: dict[str, Any]) -> None:
             center_x=center_x,
         )
     _reflect_opening_rings(piece, axis="h", center_x=center_x)
+    _reflect_manufacturing(piece, axis="h", center=center_x)
     _reflect_machining_paths(piece, axis="h")
     piece["flip_h"] = not _truthy_flag(piece.get("flip_h"))
     rederive_outline(piece)
@@ -253,6 +267,7 @@ def apply_local_flip_v(piece: dict[str, Any]) -> None:
             center_y=center_y,
         )
     _reflect_opening_rings(piece, axis="v", center_y=center_y)
+    _reflect_manufacturing(piece, axis="v", center=center_y)
     _reflect_machining_paths(piece, axis="v")
     piece["flip_v"] = not _truthy_flag(piece.get("flip_v"))
     rederive_outline(piece)

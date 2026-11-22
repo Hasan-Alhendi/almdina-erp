@@ -184,6 +184,8 @@ def ensure_base_geometry(piece: dict[str, Any]) -> None:
             for ring in piece["opening_rings_mm"]
             if isinstance(ring, list) and len(ring) >= 3
         ]
+    if piece.get("base_manufacturing") is None and isinstance(piece.get("manufacturing"), Mapping):
+        piece["base_manufacturing"] = deepcopy(piece.get("manufacturing"))
     if not isinstance(piece.get("pivot_mm"), Mapping):
         piece["pivot_mm"] = pivot_from_piece(piece)
     if piece.get("entry_pivot_mm") is None:
@@ -192,6 +194,22 @@ def ensure_base_geometry(piece: dict[str, Any]) -> None:
             "y": num(piece["pivot_mm"]["y"]),
         }
     piece["rotation_deg"] = normalize_angle_deg(piece.get("rotation_deg"))
+
+
+def _rederive_manufacturing(piece: dict[str, Any]) -> None:
+    stored = piece.get("base_manufacturing")
+    if not isinstance(stored, Mapping) or not stored.get("loops"):
+        return
+    from almdina_erp.almdina_erp.domain.cutting.manufacturing_curves import rotate_loops
+
+    piece["manufacturing"] = {
+        "schema_version": 1,
+        "loops": rotate_loops(
+            stored["loops"],
+            (num(piece["pivot_mm"]["x"]), num(piece["pivot_mm"]["y"])),
+            num(piece.get("rotation_deg")),
+        ),
+    }
 
 
 def rederive_outline(piece: dict[str, Any]) -> None:
@@ -215,6 +233,7 @@ def rederive_outline(piece: dict[str, Any]) -> None:
     bounds = piece_footprint_mm(piece)["bounds"]
     piece["local_x_mm"] = bounds["x"]
     piece["local_y_mm"] = bounds["y"]
+    _rederive_manufacturing(piece)
 
 
 def translate_piece_geometry(piece: dict[str, Any], dx: float, dy: float) -> None:
@@ -240,6 +259,13 @@ def translate_piece_geometry(piece: dict[str, Any], dx: float, dy: float) -> Non
         piece["base_opening_rings_mm"] = [
             _shift(ring) for ring in piece["base_opening_rings_mm"] if isinstance(ring, list)
         ]
+    if isinstance(piece.get("base_manufacturing"), Mapping):
+        from almdina_erp.almdina_erp.domain.cutting.manufacturing_curves import translate_loops
+
+        piece["base_manufacturing"] = {
+            "schema_version": 1,
+            "loops": translate_loops(piece["base_manufacturing"].get("loops") or [], dx, dy),
+        }
     if isinstance(piece.get("opening_rings_mm"), list):
         piece["opening_rings_mm"] = [
             _shift(ring) for ring in piece["opening_rings_mm"] if isinstance(ring, list)
@@ -380,6 +406,17 @@ def _rigid_rotate_piece_about(
             for ring in piece["base_opening_rings_mm"]
             if isinstance(ring, list) and len(ring) >= 3
         ]
+    if isinstance(piece.get("base_manufacturing"), Mapping):
+        from almdina_erp.almdina_erp.domain.cutting.manufacturing_curves import rotate_loops
+
+        piece["base_manufacturing"] = {
+            "schema_version": 1,
+            "loops": rotate_loops(
+                piece["base_manufacturing"].get("loops") or [],
+                (num(host_pivot.get("x")), num(host_pivot.get("y"))),
+                delta,
+            ),
+        }
     old_pivot = [num(piece["pivot_mm"]["x"]), num(piece["pivot_mm"]["y"])]
     rotated_pivot = rotate_point(old_pivot, host_pivot, delta)
     piece["pivot_mm"] = {"x": rotated_pivot[0], "y": rotated_pivot[1]}

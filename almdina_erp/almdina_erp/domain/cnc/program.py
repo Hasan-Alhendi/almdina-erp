@@ -74,6 +74,7 @@ class CncSourceEntity:
     path_key: str = ""
     piece_instance_id: str = ""
     piece_label: str = ""
+    curves: tuple = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -82,6 +83,9 @@ class CncMotion:
     x_mm: float | None
     y_mm: float | None
     depth_mm: float | None
+    i_mm: float | None = None
+    j_mm: float | None = None
+    clockwise: bool | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -352,6 +356,70 @@ def _pass_depths(final_depth: float, pass_depth: float | None) -> tuple[float, .
         if len(depths) > 10000:
             return "geometry_invalid"
     return tuple(depths)
+
+
+def _arc_motion(segment: Mapping[str, Any], depth: float) -> CncMotion:
+    center = segment["center"]
+    start = segment["start"]
+    end = segment["end"]
+    clockwise = not bool(segment.get("ccw", True))
+    return CncMotion(
+        "arc",
+        float(end[0]),
+        float(end[1]),
+        depth,
+        float(center[0]) - float(start[0]),
+        float(center[1]) - float(start[1]),
+        clockwise,
+    )
+
+
+def _motions_from_curves(
+    curves: Sequence[Mapping[str, Any]],
+    *,
+    closed: bool,
+    depths: Sequence[float],
+) -> tuple[CncMotion, ...]:
+    if not curves:
+        return ()
+    motions: list[CncMotion] = []
+    start = curves[0]["start"]
+    end = curves[0]["start"] if closed else curves[-1]["end"]
+    for depth in depths:
+        motions.append(CncMotion("travel", float(start[0]), float(start[1]), None))
+        motions.append(CncMotion("plunge", float(start[0]), float(start[1]), depth))
+        for segment in curves:
+            kind = str(segment.get("kind") or "")
+            if kind == "line":
+                motions.append(CncMotion("cut", float(segment["end"][0]), float(segment["end"][1]), depth))
+            elif kind == "arc":
+                motions.append(_arc_motion(segment, depth))
+            elif kind == "circle":
+                center = segment["center"]
+                radius = float(segment["radius"])
+                ccw = bool(segment.get("ccw", True))
+                left = (float(center[0]) - radius, float(center[1]))
+                right = (float(center[0]) + radius, float(center[1]))
+                motions.append(
+                    _arc_motion(
+                        {"start": right, "end": left, "center": center, "ccw": ccw},
+                        depth,
+                    )
+                )
+                motions.append(
+                    _arc_motion(
+                        {"start": left, "end": right, "center": center, "ccw": ccw},
+                        depth,
+                    )
+                )
+            else:
+                from almdina_erp.almdina_erp.domain.cutting.manufacturing_curves import sample_segment
+
+                sampled = sample_segment(segment)
+                for point in sampled[1:]:
+                    motions.append(CncMotion("cut", float(point[0]), float(point[1]), depth))
+        motions.append(CncMotion("retract", float(end[0]), float(end[1]), None))
+    return tuple(motions)
 
 
 def _motions(
@@ -799,7 +867,12 @@ def build_board_program(
                 path_issues.append(depths)
                 ready = False
             else:
-                motions = _motions(points, closed=bool(item["closed"]), depths=depths)
+                curves = tuple(getattr(entity, "curves", ()) or ())
+                motions = (
+                    _motions_from_curves(curves, closed=bool(item["closed"]), depths=depths)
+                    if curves
+                    else _motions(points, closed=bool(item["closed"]), depths=depths)
+                )
         toolpath = CncToolpath(
             path_key=str(item["path_key"]),
             operation_key=operation.key,
@@ -1027,6 +1100,15 @@ def program_payload(program: CncBoardProgram) -> dict[str, object]:
                                 "x_mm": motion.x_mm,
                                 "y_mm": motion.y_mm,
                                 "depth_mm": motion.depth_mm,
+                                **(
+                                    {
+                                        "i_mm": motion.i_mm,
+                                        "j_mm": motion.j_mm,
+                                        "clockwise": motion.clockwise,
+                                    }
+                                    if motion.kind == "arc"
+                                    else {}
+                                ),
                             }
                             for motion in path.motions
                         ],

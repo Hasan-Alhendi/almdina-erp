@@ -828,6 +828,55 @@ def _attach_plan_text_outlines(order: Any, plan: Any, snapshot: dict[str, Any]) 
     return attach_approved_text_outlines(snapshot, rows)
 
 
+def _attach_curve_cutter_export(snapshot: dict[str, Any], kerf_mm: float) -> None:
+    """Add exact cutter loops for sheets that stored manufacturing curves.
+
+    Rectangular sheets keep the existing client offset. The stored plan is not
+    rewritten; this only enriches the export payload.
+    """
+
+    from almdina_erp.almdina_erp.domain.cutting.cutter_center_paths import (
+        cutter_center_from_manufacturing,
+    )
+    from almdina_erp.almdina_erp.domain.cutting.manufacturing_curves import (
+        loops_have_curves,
+    )
+    from almdina_erp.almdina_erp.services.dxf_import_service import _paths_to_loops
+
+    radius = max(0.0, float(kerf_mm or 0.0)) / 2.0
+    for sheet in snapshot.get("sheets") or []:
+        pieces = sheet.get("pieces") or []
+        if not any(
+            loops_have_curves(((piece.get("geometry") or {}).get("manufacturing") or {}).get("loops") or [])
+            for piece in pieces
+            if isinstance(piece, dict)
+        ):
+            continue
+        shapes = []
+        for piece in pieces:
+            geometry = piece.get("geometry") if isinstance(piece, dict) else None
+            if not isinstance(geometry, dict):
+                continue
+            outer = tuple((float(point[0]), float(point[1])) for point in geometry.get("outer") or [])
+            holes = tuple(
+                tuple((float(point[0]), float(point[1])) for point in hole)
+                for hole in geometry.get("holes") or []
+                if len(hole or []) >= 3
+            )
+            if len(outer) < 3:
+                continue
+            loops = ((geometry.get("manufacturing") or {}).get("loops") or [])
+            outer_loop = next((item.get("segments") or [] for item in loops if item.get("role") != "hole"), [])
+            hole_loops = [item.get("segments") or [] for item in loops if item.get("role") == "hole"]
+            while len(hole_loops) < len(holes):
+                hole_loops.append([])
+            shapes.append((outer, holes, [outer_loop, *hole_loops[: len(holes)]]))
+        if shapes:
+            sheet["cutter_manufacturing"] = _paths_to_loops(
+                cutter_center_from_manufacturing(shapes, radius)
+            )
+
+
 @frappe.whitelist()
 def get_validated_dxf_plan(
     order_name: str | None = None,
@@ -868,6 +917,8 @@ def get_validated_dxf_plan(
         snapshot = _with_tool_diameters(snapshot, plan)
         snapshot = _attach_plan_text_outlines(order, plan, snapshot)
         include_saw_centers = _include_saw_centers_for_export(plan, plan_source, order)
+        if include_saw_centers:
+            _attach_curve_cutter_export(snapshot, flt(plan.kerf_mm))
         prefer_original = prefer_original_uploaded_download(order, plan)
         if not prefer_original:
             _assert_layer_tool_diameters(snapshot)

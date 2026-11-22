@@ -218,6 +218,15 @@ def emit_nc(
                     else:
                         lines.append(f"G1 X{_number(x)} Y{_number(y)}")
                     cut_count += 1
+                elif kind == "arc":
+                    code = "G2" if motion.get("clockwise") else "G3"
+                    words = f"{code} X{_number(x)} Y{_number(y)} I{_number(motion.get('i_mm'))} J{_number(motion.get('j_mm'))}"
+                    if active_feed != path_feed:
+                        lines.append(f"{words} F{_number(path_feed, 1)}")
+                        active_feed = path_feed
+                    else:
+                        lines.append(words)
+                    cut_count += 1
                 elif kind == "retract":
                     lines.append(f"G0 Z{_number(path_safe)}")
                     current_z = path_safe
