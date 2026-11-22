@@ -933,16 +933,34 @@ html[dir="rtl"] .dco-operational-sheet-dialog .dco-operational-sheet__preview {
     justify-content: center;
     line-height: 1;
 }
-.dco-cnc-sheet-page [data-cnc-save-sheet] {
+.dco-cnc-sheet-page [data-cnc-save-sheet],
+.dco-cnc-sheet-page .btn.alm-btn-primary[data-cnc-save-sheet] {
     background-color: var(--alm-accent);
     border-color: var(--alm-accent);
     color: var(--alm-on-primary);
+    box-shadow: none;
+    height: var(--input-height, 28px);
+    min-height: var(--input-height, 28px);
+    padding: 0 10px;
+    border-radius: var(--border-radius, 8px);
+    font-weight: 600;
 }
 .dco-cnc-sheet-page [data-cnc-save-sheet]:hover:not(:disabled),
-.dco-cnc-sheet-page [data-cnc-save-sheet]:focus-visible:not(:disabled) {
+.dco-cnc-sheet-page [data-cnc-save-sheet]:focus-visible:not(:disabled),
+.dco-cnc-sheet-page .btn.alm-btn-primary[data-cnc-save-sheet]:hover:not(:disabled),
+.dco-cnc-sheet-page .btn.alm-btn-primary[data-cnc-save-sheet]:focus-visible:not(:disabled) {
     background-color: color-mix(in srgb, var(--alm-accent) 86%, var(--alm-text-strong));
     border-color: color-mix(in srgb, var(--alm-accent) 86%, var(--alm-text-strong));
     color: var(--alm-on-primary);
+    box-shadow: none;
+}
+.dco-cnc-sheet-page .dco-artcam-actions .btn.alm-btn-primary {
+    height: var(--input-height, 28px);
+    min-height: var(--input-height, 28px);
+    padding: 0 10px;
+    border-radius: var(--border-radius, 8px);
+    box-shadow: none;
+    font-weight: 600;
 }
 .dco-cnc-sheet-page[dir="rtl"] .dco-operational-sheet__settings,
 html[dir="rtl"] .dco-cnc-sheet-page .dco-operational-sheet__settings {
