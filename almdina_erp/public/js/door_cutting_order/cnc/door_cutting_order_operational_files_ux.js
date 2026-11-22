@@ -3861,6 +3861,9 @@
         const gridPattern = showSheetHatch
             ? `<pattern id="${escapeHtml(gridPatternId)}" data-sheet-grid-pattern patternUnits="userSpaceOnUse" patternTransform="rotate(45)" width="8" height="8"><line class="dco-cnc-cut-preview__grid-line" x1="0" y1="0" x2="0" y2="8" fill="none" stroke="rgba(71,85,105,.18)" stroke-width="1" pointer-events="none"/></pattern>`
             : "";
+        const machineBed = pageLayout && placement
+            ? `<rect class="dco-cnc-cut-preview__machine-bed" x="0" y="0" width="${formatPreviewNumber(width)}" height="${formatPreviewNumber(length)}" fill="#f3f5f8" pointer-events="none"/>`
+            : "";
         const sheetWindow = showSheetHatch
             ? `<rect class="dco-cnc-cut-preview__board-fill" data-sheet-window="1" x="${formatPreviewNumber(offsetX)}" y="${formatPreviewNumber(sheetWindowY)}" width="${formatPreviewNumber(sheetW)}" height="${formatPreviewNumber(sheetL)}" fill="#ffffff" pointer-events="none"/>
                     <rect class="dco-cnc-cut-preview__board-grid" x="${formatPreviewNumber(offsetX)}" y="${formatPreviewNumber(sheetWindowY)}" width="${formatPreviewNumber(sheetW)}" height="${formatPreviewNumber(sheetL)}" fill="url(#${escapeHtml(gridPatternId)})" pointer-events="none"/>`
@@ -3877,6 +3880,7 @@
                 extra: "",
                 overlay,
                 body: `<defs>${markers}${gridPattern}</defs>
+                    ${machineBed}
                     ${sheetWindow}
                     <g transform="translate(0,${length}) scale(1,-1)">
                         ${machineFrame}

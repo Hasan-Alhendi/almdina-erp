@@ -585,6 +585,10 @@ html[dir="rtl"] .dco-operational-sheet-dialog .dco-operational-sheet__preview {
     stroke: var(--alm-text-strong, #101828);
     stroke-width: 1.5;
 }
+.dco-cnc-sheet-page .dco-cnc-cut-preview__machine-bed {
+    fill: var(--alm-bg, #f3f5f8);
+    pointer-events: none;
+}
 .dco-cnc-sheet-page .dco-cnc-cut-preview__void {
     fill: none;
     pointer-events: none;
@@ -603,6 +607,9 @@ html[dir="rtl"] .dco-operational-sheet-dialog .dco-operational-sheet__preview {
 }
 [data-theme="dark"] .dco-cnc-sheet-page .dco-cnc-cut-preview__viewport {
     background-color: #121821;
+}
+[data-theme="dark"] .dco-cnc-sheet-page .dco-cnc-cut-preview__machine-bed {
+    fill: #121821;
 }
 [data-theme="dark"] .dco-cnc-sheet-page .dco-cnc-cut-preview__zero-label {
     color: var(--alm-status-danger-fg, #f87171);

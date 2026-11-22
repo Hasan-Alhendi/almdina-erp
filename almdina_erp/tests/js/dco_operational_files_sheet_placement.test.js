@@ -157,6 +157,8 @@ assert.ok(markup.includes("-2.5,200"));
 assert.ok(markup.includes("110,4002.5"));
 assert.ok(markup.includes("dco-cnc-cut-preview__void"));
 assert.ok(markup.includes("dco-cnc-cut-preview__machine"));
+assert.ok(markup.includes("dco-cnc-cut-preview__machine-bed"));
+assert.ok(markup.indexOf("dco-cnc-cut-preview__machine-bed") < markup.indexOf("dco-cnc-cut-preview__board-fill"));
 assert.ok(!markup.includes("dco-cnc-cut-preview__travel"));
 assert.ok(!markup.includes("The dashed line shows the configured cutter travel bounds."));
 assert.ok(markup.includes("dco-cnc-cut-preview__sheet"));
