@@ -337,7 +337,6 @@ def _build_session(order,source,settings,*,previous=None):
     return session
 
 
-@frappe.whitelist()
 def _rejected_addon_preview(order: Any, findings: list[dict[str, Any]]) -> dict[str, Any]:
     """Structured refusal. No preview is stored and the saved plan stays put."""
 
@@ -350,6 +349,7 @@ def _rejected_addon_preview(order: Any, findings: list[dict[str, Any]]) -> dict[
     }
 
 
+@frappe.whitelist()
 def preview_cutting_plan(
     order_name: str,
     packing_mode: str | None = None,

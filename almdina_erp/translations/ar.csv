@@ -4404,6 +4404,8 @@ The rear groove cutter would cut {0} outside the requested width,ريشة فرز
 "Separate the neighbouring door from the rear groove, or turn the groove toward an open edge.",أبعد الدرفة المجاورة عن فرزة الظهر، أو وجّه الفرزة نحو حافة فارغة.
 "The {0} cutter is wider than the add-on, so this distribution cannot be saved. Choose a cutter whose diameter is less than or equal to the add-on width.","ريشة {0} أكبر من عرض الإضافة، لذلك لا يمكن حفظ هذا التوزيع. اختر ريشة قطرها لا يتجاوز عرض الإضافة."
 "The cutting plan was not calculated. Correct the cutter and the add-on, then calculate again.",لم تُحسب خطة القص. صحّح الريشة والإضافة ثم أعد الحساب.
+"Door {0}: the {1} cutter extension overlaps another piece. The cutting plan cannot be calculated or approved.","الدرفة {0}: امتداد ريشة {1} يتداخل مع قطعة أخرى. لا يمكن حساب خطة القص ولا اعتمادها."
+"Move the doors apart along that edge, or change the add-on so its cutter stays clear of the neighboring piece, then calculate again.","أبعد الدرفتين عن هذه الحافة، أو غيّر الإضافة بحيث تبقى الريشة بعيدة عن القطعة المجاورة، ثم أعد الحساب."
 "The rear-groove cutter body enters a neighbouring door, so this distribution cannot be saved. Separate those doors or turn the groove toward an open edge.",جسم ريشة فرزة الظهر يدخل درفة مجاورة، لذلك لا يمكن حفظ هذا التوزيع. أبعد الدرفتين أو وجّه الفرزة نحو حافة فارغة.
 تعذر حساب خطة القص,تعذر حساب خطة القص
 تعذر اعتماد خطة القص,تعذر اعتماد خطة القص

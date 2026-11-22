@@ -320,15 +320,7 @@
             const payload = await api.preview(orderName, { ...requested });
             if (!current()) return false;
             if (payload && payload.calculation_rejected) {
-                state.status = "error";
-                state.previewId = null;
-                state.payload = null;
-                state.addonCutterRejections = Array.isArray(payload.addon_cutter_rejections)
-                    ? payload.addon_cutter_rejections
-                    : [];
-                state.error = state.addonCutterRejections.length
-                    ? "The cutting plan was not calculated. Correct the cutter and the add-on, then calculate again."
-                    : "No manufacturing-valid cutting plan was found.";
+                applyCalculationRejection(state, payload);
                 dispatch(frm);
                 return false;
             }
@@ -440,6 +432,10 @@
             const payload = continueSearch ? await api.continueSearch(frm.doc.name, token)
                 : await api.selectCandidate(frm.doc.name, token, candidateId);
             if (!current()) return false;
+            if (continueSearch && payload && payload.calculation_rejected) {
+                applyCalculationRejection(state, payload);
+                return false;
+            }
             if (!payload?.plan || payload.order_name !== frm.doc.name || !matchesSettings(payload, state.requestedSettings)
                 || (!continueSearch && (payload.preview_id !== token || payload.candidate_id !== candidateId
                     || payload.plan.preview_candidate_id !== candidateId
@@ -471,6 +467,18 @@
                 dispatch(frm);
             }
         }
+    }
+
+    function applyCalculationRejection(state, payload) {
+        state.status = "error";
+        state.previewId = null;
+        state.payload = null;
+        state.addonCutterRejections = Array.isArray(payload && payload.addon_cutter_rejections)
+            ? payload.addon_cutter_rejections
+            : [];
+        state.error = state.addonCutterRejections.length
+            ? "The cutting plan was not calculated. Correct the cutter and the add-on, then calculate again."
+            : "No manufacturing-valid cutting plan was found.";
     }
 
     function serverCalculationMessage(error) {

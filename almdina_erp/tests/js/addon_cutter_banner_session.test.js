@@ -42,6 +42,7 @@ const success = {
     }],
     candidate_id: "one",
     plan: { sheets: [{ sheet_no: 1, pieces: [] }], preview_candidate_id: "one" },
+    can_continue: true,
     expires_in_sec: 60,
 };
 
@@ -116,6 +117,11 @@ async function run() {
                 jobs.push(job);
                 return job.promise;
             },
+            continueSearch() {
+                const job = pending();
+                jobs.push(job);
+                return job.promise;
+            },
         },
         AlmdinaCuttingPlanRender: {
             mountAddonCutterBanner(root, findings) {
@@ -175,6 +181,40 @@ async function run() {
     assert.equal(ready.addonCutterRejections.length, 0);
     presenter.renderPreviewPlan(frm, ready, true);
     assert.equal(planRoot.querySelector(".dco-addon-cutter-warning"), null);
+    assert.equal(session.isCommittable(frm), true);
+
+    const staleSearch = session.continueSearch(frm);
+    session.invalidate(frm);
+    jobs.at(-1).resolve(rejection);
+    assert.equal(await staleSearch, false);
+    assert.equal(session.snapshot(frm).status, "stale");
+    assert.equal(session.snapshot(frm).addonCutterRejections.length, 0);
+    assert.equal(session.isCommittable(frm), false);
+
+    const restored = session.preview(frm, settings);
+    jobs.at(-1).resolve(success);
+    assert.equal(await restored, true);
+
+    const rejectedSearch = session.continueSearch(frm);
+    jobs.at(-1).resolve(rejection);
+    assert.equal(await rejectedSearch, false);
+    const searched = session.snapshot(frm);
+    assert.equal(searched.status, "error");
+    assert.equal(searched.payload, null);
+    assert.equal(searched.previewId, null);
+    assert.equal(searched.candidateBusy, false);
+    assert.equal(searched.addonCutterRejections.length, 2);
+    assert.equal(session.isCommittable(frm), false);
+    presenter.renderPersistedEditingState(frm, searched.status);
+    assert.equal(planRoot.children[0].className, "dco-addon-cutter-warning");
+    assert.doesNotMatch(planRoot.children[0].markup, /preview-1/);
+
+    const correctedAgain = session.preview(frm, settings);
+    jobs.at(-1).resolve(success);
+    assert.equal(await correctedAgain, true);
+    presenter.renderPreviewPlan(frm, session.snapshot(frm), true);
+    assert.equal(planRoot.querySelector(".dco-addon-cutter-warning"), null);
+    assert.equal(session.isCommittable(frm), true);
 }
 
 run().catch(error => {

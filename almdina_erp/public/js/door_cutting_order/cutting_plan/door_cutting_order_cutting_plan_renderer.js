@@ -1045,6 +1045,7 @@
         "liner_narrower_than_cutter",
         "rear_groove_oversize_unsafe",
         "rear_groove_neighbor_conflict",
+        "liner_extension_hits_piece",
     ]);
 
     function addonKindLabel(kind) {
@@ -1076,6 +1077,15 @@
                 translate("Separate the two doors along that edge, or turn the grooved door so the groove faces an open edge, then calculate again. The groove width and the cutter are not changed automatically."),
             ].join(" ");
         }
+        if (code === "liner_extension_hits_piece") {
+            return [
+                translate(
+                    "Door {0}: the {1} cutter extension overlaps another piece. The cutting plan cannot be calculated or approved.",
+                    [door, addonKindLabel(finding.kind)]
+                ),
+                translate("Move the doors apart along that edge, or change the add-on so its cutter stays clear of the neighboring piece, then calculate again."),
+            ].join(" ");
+        }
         if (code === "rear_groove_oversize_unsafe") {
             return [
                 translate(
@@ -1102,8 +1112,81 @@
         return `<div class="dco-addon-cutter-warning" role="alert"${origin} dir="${escape_html(uiDirection())}"><b>${htmlText("Warning:")}</b><ul class="dco-addon-cutter-warning__items">${items}</ul></div>`;
     }
 
+    let addonGuardCache = null;
+
+    function doorNoForPiece(piece) {
+        const head = String((piece && piece.label) || "").split(".")[0];
+        return piece && piece.source_piece_no != null && piece.source_piece_no !== ""
+            ? piece.source_piece_no
+            : (head || "—");
+    }
+
+    function rememberGuardedOverlays(frm, piece, sheet, frame, overlays) {
+        const guarded = () => guardLinerToolpath(frm, piece, sheet, frame, overlays);
+        if (!addonGuardCache) return guarded();
+        const key = [
+            sheet && sheet.sheet_no,
+            piece && (piece.id != null && piece.id !== "" ? piece.id : piece.label),
+            piece && piece.x,
+            piece && piece.y,
+            piece && piece.source_piece_no,
+        ].join(":");
+        if (!addonGuardCache.has(key)) addonGuardCache.set(key, guarded());
+        return addonGuardCache.get(key);
+    }
+
+    function extensionFindingsFromGuard(frm, plan) {
+        const geometry = window.AlmdinaCuttingPlanPieceGeometry;
+        const findings = [];
+        (plan.sheets || []).forEach(sheet => {
+            const frame = sheetBoardFrame(plan, sheet, frm);
+            (sheet.pieces || []).forEach(raw => {
+                const piece = pieceWithEdgeTypeSpec(
+                    frm,
+                    pieceWithDoubleSpec(frm, pieceWithLinerSpec(frm, raw))
+                );
+                if (String(piece.piece_type || "") === "Special") return;
+                const model = geometry && typeof geometry.resolve === "function"
+                    ? geometry.resolve(piece)
+                    : null;
+                if (model && model.source === "dxf") return;
+                const overlays = rememberGuardedOverlays(
+                    frm,
+                    piece,
+                    sheet,
+                    frame,
+                    drawingOverlays(piece)
+                );
+                (overlays || []).forEach(overlay => {
+                    if (!overlay || overlay.error !== "liner_extension_hits_piece") return;
+                    findings.push({
+                        door_no: doorNoForPiece(piece),
+                        kind: overlay.kind || "liner",
+                        code: "liner_extension_hits_piece",
+                    });
+                });
+            });
+        });
+        return findings;
+    }
+
+    function mergeAddonFindings(primary, extra) {
+        const rows = (primary || []).slice();
+        (extra || []).forEach(item => {
+            const known = rows.some(existing => existing
+                && String(existing.code || "") === String(item.code || "")
+                && String(existing.door_no) === String(item.door_no)
+                && String(existing.kind || "") === String(item.kind || ""));
+            if (!known) rows.push(item);
+        });
+        return rows;
+    }
+
     function collectAddonCutterFindings(frm, plan) {
-        if (plan && Array.isArray(plan.addon_cutter_rejections)) return plan.addon_cutter_rejections;
+        const extensionFindings = extensionFindingsFromGuard(frm, plan);
+        if (plan && Array.isArray(plan.addon_cutter_rejections)) {
+            return mergeAddonFindings(plan.addon_cutter_rejections, extensionFindings);
+        }
         const diameters = layerToolDiameters(plan, frm, planCutterDiameterMm(plan, frm));
         const specs = [
             ["liner", "extra_liner", "liner_width_cm", "liner_offset_cm"],
@@ -1121,11 +1204,8 @@
                     const diameter = diameters[kind];
                     if (!(diameter > 0) || widthMm + 0.25 >= diameter) return;
                     if (kind === "back_groove" && Math.abs(num(piece[offsetField]) * 10) <= 0.25) return;
-                    const head = String(piece.label || "").split(".")[0];
                     findings.push({
-                        door_no: piece.source_piece_no != null && piece.source_piece_no !== ""
-                            ? piece.source_piece_no
-                            : (head || "—"),
+                        door_no: doorNoForPiece(piece),
                         kind,
                         width_mm: widthMm,
                         diameter_mm: diameter,
@@ -1134,7 +1214,7 @@
                 });
             });
         });
-        return findings;
+        return mergeAddonFindings(findings, extensionFindings);
     }
 
     function mountAddonCutterBanner(planRoot, findings) {
@@ -1576,7 +1656,7 @@
         // order-side settings can reverse their orientation after a half-turn.
         const overlays = geometryModel && geometryModel.source === "dxf"
             ? dxfDisplayOverlays(piece)
-            : guardLinerToolpath(
+            : rememberGuardedOverlays(
                 frm,
                 spec,
                 sheet,
@@ -1854,6 +1934,15 @@
 
     function build_cutting_plan_html(frm, plan) {
         if (!plan || !plan.sheets || !plan.sheets.length) return "";
+        addonGuardCache = new Map();
+        try {
+        return buildCuttingPlanMarkup(frm, plan);
+        } finally {
+            addonGuardCache = null;
+        }
+    }
+
+    function buildCuttingPlanMarkup(frm, plan) {
 
         const board_w_cm = num(plan.usable_board_width_cm);
         const board_h_cm = num(plan.usable_board_length_cm);
