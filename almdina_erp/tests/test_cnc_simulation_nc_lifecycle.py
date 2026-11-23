@@ -104,7 +104,8 @@ def test_generate_returns_content_without_saving_a_file_or_settings():
         "workspace",
     ):
         assert retired not in generate
-    assert "Capability.PREPARE_CNC_OPERATIONAL_FILES" in download
+    assert "Capability.VIEW_CNC_OPERATIONAL_FILES" in download
+    assert "Capability.PREPARE_CNC_OPERATIONAL_FILES" not in download
     assert "stored_nc_unavailable" in download
     assert "filecontent" not in download
     assert "save_file" not in repo

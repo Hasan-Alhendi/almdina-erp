@@ -195,13 +195,13 @@ _CAPABILITY_DEFINITIONS = (
         Capability.VIEW_CNC_OPERATIONAL_FILES,
         Capability.VIEW_CNC_OPERATIONAL_FILES,
         _ORDER_DOCTYPE,
-        "cutting_plan",
+        "operational_files",
     ),
     CapabilityDefinition(
         Capability.PREPARE_CNC_OPERATIONAL_FILES,
         Capability.PREPARE_CNC_OPERATIONAL_FILES,
         _ORDER_DOCTYPE,
-        "cutting_plan",
+        "operational_files",
     ),
     # The special-door drawing edits order-piece input. DXF file actions mutate
     # canonical Cutting Plan revisions and therefore belong to that aggregate.
@@ -240,7 +240,7 @@ _CAPABILITY_DEFINITIONS = (
         Capability.EDIT_FACTORY_CNC_DEFAULTS,
         Capability.EDIT_FACTORY_CNC_DEFAULTS,
         _SETTINGS_DOCTYPE,
-        "factory_settings",
+        "operational_files",
     ),
     CapabilityDefinition(Capability.MANAGE_WHATSAPP_SESSION, Capability.MANAGE_WHATSAPP_SESSION, _SETTINGS_DOCTYPE, "factory_settings"),
     CapabilityDefinition(Capability.EDIT_WHATSAPP_MESSAGES, Capability.EDIT_WHATSAPP_MESSAGES, _SETTINGS_DOCTYPE, "factory_settings"),
@@ -290,18 +290,24 @@ def _category_capabilities(*categories: str) -> frozenset[str]:
 ORDER_CAPABILITIES = _category_capabilities("order")
 COSTING_CAPABILITIES = _category_capabilities("costing", "documents")
 PLANNING_CAPABILITIES = _category_capabilities("cutting_plan")
+OPERATIONAL_FILES_CAPABILITIES = _category_capabilities("operational_files")
 DRAWING_CAPABILITIES = _category_capabilities("drawing")
 PRODUCTION_CAPABILITIES = _category_capabilities("production")
 CONTROL_CENTER_CAPABILITIES = _category_capabilities("control_center") | frozenset(
     {Capability.APPROVE_ORDER, Capability.REJECT_ORDER}
 )
 WORKFORCE_CAPABILITIES = _category_capabilities("workforce")
-FACTORY_SETTINGS_CAPABILITIES = _category_capabilities("factory_settings")
+# CNC factory defaults are presented under Operational files, but they still
+# open the factory-settings surface and must keep that navigation grant.
+FACTORY_SETTINGS_CAPABILITIES = _category_capabilities("factory_settings") | frozenset(
+    {Capability.EDIT_FACTORY_CNC_DEFAULTS}
+)
 MASTER_DATA_CAPABILITIES = _category_capabilities("master_data")
 ADMINISTRATION_CAPABILITIES = (
     _category_capabilities("administration")
     | FACTORY_SETTINGS_CAPABILITIES
     | MASTER_DATA_CAPABILITIES
+    | OPERATIONAL_FILES_CAPABILITIES
 )
 
 PRODUCTION_OPERATOR_CAPABILITIES = frozenset(
@@ -375,6 +381,7 @@ __all__ = [
     "DRAWING_CAPABILITIES",
     "FACTORY_SETTINGS_CAPABILITIES",
     "MASTER_DATA_CAPABILITIES",
+    "OPERATIONAL_FILES_CAPABILITIES",
     "ORDER_CAPABILITIES",
     "PLANNING_CAPABILITIES",
     "PRODUCTION_CAPABILITIES",

@@ -1253,9 +1253,13 @@
         return "↓";
     }
 
-    function exportControlsMarkup(workspace) {
+    function exportControlsMarkup(workspace, sheet) {
         const canPrepare = Boolean(workspace && workspace.can_prepare);
-        const control = generateNcControlState({ canPrepare });
+        const control = generateNcControlState({
+            canPrepare,
+            canGenerateNc: Boolean(workspace && workspace.can_generate_nc),
+            sheet,
+        });
         const downloadLabel = translate("Download cutting file");
         const downloadTitle = control.disabled ? (control.reason || "") : downloadLabel;
         return `<div class="dco-operational-sheet__export" data-cnc-export-bar>
@@ -1310,7 +1314,7 @@
             state._artcamSheetNo = Number(sheet && sheet.sheet_no);
         }
         if (!state.sections) state.sections = { placement: false, perimeter: false, associations: true, order: true };
-        const exportBar = options && options.exportBar ? exportControlsMarkup(workspace, state) : "";
+        const exportBar = options && options.exportBar ? exportControlsMarkup(workspace, sheet) : "";
         const pageChrome = Boolean(exportBar);
         const previewToolbar = pageChrome
             ? `<div class="dco-cnc-preview-toolbar" dir="ltr">
@@ -1349,11 +1353,27 @@
         </div>`;
     }
 
-    function generateNcControlState({ canPrepare }) {
-        if (!canPrepare) {
+    function sheetHasTrustedNcSettings(sheet) {
+        if (!sheet) return false;
+        if (sheet.persisted || sheet.operational_file) return true;
+        const status = String(sheet.status || "");
+        return status === "Settings Saved" || status === "Generated";
+    }
+
+    function generateNcControlState({ canPrepare, canGenerateNc, sheet }) {
+        const generateAllowed = canGenerateNc == null
+            ? Boolean(canPrepare)
+            : Boolean(canGenerateNc);
+        if (!generateAllowed) {
             return {
                 disabled: true,
                 reason: translate("You can review these settings. Preparing operational files is not available for your current permissions."),
+            };
+        }
+        if (!canPrepare && !sheetHasTrustedNcSettings(sheet)) {
+            return {
+                disabled: true,
+                reason: translate("Save the sheet settings before generating the NC file."),
             };
         }
         return {
@@ -2319,7 +2339,9 @@
         if (!actions.length) return;
         actions.find("[data-cnc-footer-action]").remove();
         const canPrepare = Boolean(workspace && workspace.can_prepare);
-        const control = generateNcControlState({ canPrepare });
+        const canGenerateNc = Boolean(workspace && workspace.can_generate_nc);
+        const liveSheet = (dialog._almdinaSheet && dialog._almdinaSheet.sheet) || sheet;
+        const control = generateNcControlState({ canPrepare, canGenerateNc, sheet: liveSheet });
         const generate = $(`<button type="button" class="btn btn-default btn-sm" data-cnc-footer-action="generate" data-cnc-generate-nc title="${escapeHtml(control.reason)}"></button>`);
         generate.text(translate("Generate NC file"));
         generate.prop("disabled", Boolean(control.disabled));
@@ -2328,6 +2350,7 @@
         if (!live) return;
         bindGenerateNc(dialog, dialog.$wrapper[0], {
             canPrepare,
+            canGenerateNc,
             args: sheetGenerateArgs(live.frm, live.workspace || workspace, live.sheet || sheet, live.state || state),
             sheetNo: (live.sheet || sheet).sheet_no,
             frm: live.frm,
@@ -2387,9 +2410,10 @@
         if (!ui || !ui.root) return;
         placePageActions(ui);
         const canPrepare = Boolean(workspace && workspace.can_prepare);
+        const canGenerateNc = Boolean(workspace && workspace.can_generate_nc);
         const save = ui.root.querySelector("[data-cnc-save-sheet]");
         const generate = ui.root.querySelector("[data-cnc-generate-nc]");
-        const control = generateNcControlState({ canPrepare });
+        const control = generateNcControlState({ canPrepare, canGenerateNc, sheet });
         if (save) save.disabled = !canPrepare;
         if (generate) {
             generate.disabled = Boolean(control.disabled);
@@ -2397,6 +2421,7 @@
         }
         bindGenerateNc(ui, ui.root, {
             canPrepare,
+            canGenerateNc,
             args: sheetGenerateArgs(ui.frm, workspace, sheet, state),
             sheetNo: sheet.sheet_no,
             frm: ui.frm,
@@ -4703,38 +4728,51 @@
     function bindGenerateNc(dialog, root, context) {
         if (!root || !context) return;
         const canPrepare = Boolean(context.canPrepare);
-        const control = generateNcControlState({ canPrepare });
+        const canGenerateNc = context.canGenerateNc == null
+            ? canPrepare
+            : Boolean(context.canGenerateNc);
+        const control = generateNcControlState({
+            canPrepare,
+            canGenerateNc,
+            sheet: context.sheet,
+        });
         const generate = applyGenerateNcControl(root, control);
         if (!generate) return;
         generate.onclick = null;
-        if (!canPrepare) return;
+        if (!canGenerateNc) return;
         generate.onclick = () => {
             if (!window.frappe || typeof frappe.call !== "function") return;
             if (dialog._cncNcInFlight) return;
-            if (cutPathIsEarly(context.state.order) && !context.state.confirmed) {
-                frappe.msgprint(translate("Cutting first may let the pieces move after they separate from the board."));
+            if (!canPrepare && !sheetHasTrustedNcSettings(context.sheet)) {
+                frappe.msgprint(translate("Save the sheet settings before generating the NC file."));
                 return;
             }
-            if (normalizePerimeterJoinMode(context.state.perimeterJoinMode) === "connected"
-                && sheetPerimeterPrecedesMilling(context.state.order)
-                && !context.state.perimeterEarlyConfirmed) {
-                frappe.msgprint(translate("Cutting the sheet perimeter before milling may let pieces move after they separate from the board."));
-                return;
-            }
-            const conflict = toolConflict(context.workspace, context.sheet, context.state);
-            if (conflict) {
-                frappe.msgprint(translate(CONFLICT_MESSAGES[conflict]));
-                return;
-            }
-            if (!reportPlacementValidation(
-                validateSheetPlacementFits(context.workspace, context.state, { requireMachine: true })
-            )) {
-                return;
-            }
-            const machine = findCncMachine(context.workspace, context.state.cncMachine);
-            if (!machine || !String(machine.post_processor || "").trim()) {
-                frappe.msgprint(translate("Complete the CNC machine settings. Choose the post processor on the machine before generating a new NC file."));
-                return;
+            if (canPrepare) {
+                if (cutPathIsEarly(context.state.order) && !context.state.confirmed) {
+                    frappe.msgprint(translate("Cutting first may let the pieces move after they separate from the board."));
+                    return;
+                }
+                if (normalizePerimeterJoinMode(context.state.perimeterJoinMode) === "connected"
+                    && sheetPerimeterPrecedesMilling(context.state.order)
+                    && !context.state.perimeterEarlyConfirmed) {
+                    frappe.msgprint(translate("Cutting the sheet perimeter before milling may let pieces move after they separate from the board."));
+                    return;
+                }
+                const conflict = toolConflict(context.workspace, context.sheet, context.state);
+                if (conflict) {
+                    frappe.msgprint(translate(CONFLICT_MESSAGES[conflict]));
+                    return;
+                }
+                if (!reportPlacementValidation(
+                    validateSheetPlacementFits(context.workspace, context.state, { requireMachine: true })
+                )) {
+                    return;
+                }
+                const machine = findCncMachine(context.workspace, context.state.cncMachine);
+                if (!machine || !String(machine.post_processor || "").trim()) {
+                    frappe.msgprint(translate("Complete the CNC machine settings. Choose the post processor on the machine before generating a new NC file."));
+                    return;
+                }
             }
             const request = (dialog._cncNcRequest || 0) + 1;
             dialog._cncNcRequest = request;
@@ -4743,19 +4781,33 @@
                 disabled: true,
                 reason: translate("Preparing the NC file..."),
             });
-            const args = sheetGenerateArgs(
-                context.frm,
-                context.workspace,
-                context.sheet,
-                context.state
-            );
+            const liveWorkspace = context.workspace || {};
+            const args = canPrepare
+                ? sheetGenerateArgs(
+                    context.frm,
+                    liveWorkspace,
+                    context.sheet,
+                    context.state
+                )
+                : {
+                    order_name: (context.frm && context.frm.doc && context.frm.doc.name)
+                        || liveWorkspace.order_name
+                        || liveWorkspace.order
+                        || "",
+                    sheet_no: context.sheetNo || (context.sheet && context.sheet.sheet_no),
+                    viewed_plan_token: `${liveWorkspace.cutting_plan || ""}::${liveWorkspace.plan_revision || ""}`,
+                };
             frappe.call({
                 method: `${METHOD}.generate_cnc_sheet_nc`,
                 args,
                 callback(response) {
                     if (dialog._cncNcRequest !== request) return;
                     dialog._cncNcInFlight = false;
-                    applyGenerateNcControl(root, generateNcControlState({ canPrepare: true }));
+                    applyGenerateNcControl(root, generateNcControlState({
+                        canPrepare,
+                        canGenerateNc,
+                        sheet: context.sheet,
+                    }));
                     const payload = (response && response.message) || {};
                     const verification = payload.verification || {};
                     if (!payload.filename || !payload.content_b64 || verification.ok !== true) {
@@ -4792,7 +4844,19 @@
                 error(err) {
                     if (dialog._cncNcRequest !== request) return;
                     dialog._cncNcInFlight = false;
-                    applyGenerateNcControl(root, generateNcControlState({ canPrepare: true }));
+                    applyGenerateNcControl(root, generateNcControlState({
+                        canPrepare,
+                        canGenerateNc,
+                        sheet: context.sheet,
+                    }));
+                    if (!canPrepare) {
+                        if (window.frappe && typeof frappe.msgprint === "function") {
+                            const message = (err && (err.message || err.exc || err._server_messages))
+                                || translate("The NC file could not be prepared.");
+                            frappe.msgprint(typeof message === "string" ? message : translate("The NC file could not be prepared."));
+                        }
+                        return;
+                    }
                     loadProgramForIssues(args).then(program => {
                         if (dialog._cncNcRequest !== request) return;
                         showGenerationIssueDialog(err, program, context.sheetNo);
