@@ -2960,9 +2960,29 @@
                 if (!finishSheetMutation(state, mutationRequest)) return;
                 state.reverseBusy = "";
                 state.directionReport = pathKey;
+                const message = (response && response.message) || {};
+                const saved = (message.sheets || []).find(item => Number(item.sheet_no) === Number(sheet.sheet_no));
+                if (saved) {
+                    // Server wrote current settings and the new direction together.
+                    const next = sheetState(saved);
+                    state.operations = next.operations;
+                    state.sources = next.sources;
+                    state.factoryPresets = next.factoryPresets;
+                    state.overrides = next.overrides;
+                    state.order = next.order;
+                    state.confirmed = next.confirmed;
+                    state.perimeterJoinMode = next.perimeterJoinMode;
+                    state.cutPathSequence = next.cutPathSequence;
+                    state.perimeterEarlyConfirmed = next.perimeterEarlyConfirmed;
+                    state.cncMachine = next.cncMachine;
+                    state.sheetStops = next.sheetStops;
+                    state.settingsRevision = next.settingsRevision;
+                    state.sheetWidthCm = next.sheetWidthCm;
+                    state.sheetLengthCm = next.sheetLengthCm;
+                }
                 const onWorkspace = dialog._almdinaOnWorkspace;
                 if (typeof onWorkspace === "function") {
-                    onWorkspace((response && response.message) || {});
+                    onWorkspace(message);
                 }
             },
             error(error) {

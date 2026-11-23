@@ -131,6 +131,9 @@ def test_mutations_use_revision_while_fingerprint_stays_a_manufacturing_identity
     assert "base_revision" in calculate
     assert "post_processor" in calculate
     assert "post_processor=post_processor" in calculate
+    assert "width_stop_side" in calculate
+    assert "width_stop_side=width_stop_side" in calculate
+    assert "length_stop_cm=length_stop_cm" in calculate
     assert "expected_revision=_revision(base_revision)" in calculate
     assert "base_fingerprint" not in service
     assert "_snapshot_for_request" in calculate

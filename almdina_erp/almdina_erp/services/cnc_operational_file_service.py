@@ -685,6 +685,10 @@ def calculate_cnc_association_toolpath(
     cnc_machine: str | None = None,
     offset_left_cm: float | int | str | None = None,
     offset_bottom_cm: float | int | str | None = None,
+    width_stop_side: str | None = None,
+    width_stop_cm: float | int | str | None = None,
+    length_stop_side: str | None = None,
+    length_stop_cm: float | int | str | None = None,
     machining_profiles: str | list[Any] | None = None,
     vector_associations: str | list[Any] | None = None,
     calculation_request_id: str | None = None,
@@ -834,6 +838,10 @@ def calculate_cnc_association_toolpath(
             cnc_machine=(saved or {}).get("cnc_machine") if cnc_machine is None else cnc_machine,
             offset_left_cm=(saved or {}).get("offset_left_cm") if offset_left_cm is None else offset_left_cm,
             offset_bottom_cm=(saved or {}).get("offset_bottom_cm") if offset_bottom_cm is None else offset_bottom_cm,
+            width_stop_side=width_stop_side,
+            width_stop_cm=width_stop_cm,
+            length_stop_side=length_stop_side,
+            length_stop_cm=length_stop_cm,
             machine_catalog=list_cnc_machines(),
             plan_snapshot=approved_plan_snapshot(order),
             toolpath_snapshots=snapshots,
@@ -1240,22 +1248,31 @@ def set_cnc_path_direction(
     path_overrides: str | dict[str, Any] | None = None,
     operation_order: str | list[Any] | None = None,
     cut_path_early_confirmed: int | str | bool = 0,
+    operation_sources: str | dict[str, Any] | None = None,
     perimeter_join_mode: str | None = None,
     cut_path_sequence: str | list[Any] | None = None,
     perimeter_cut_early_confirmed: int | str | bool = 0,
     cnc_machine: str | None = None,
     offset_left_cm: float | int | str | None = None,
     offset_bottom_cm: float | int | str | None = None,
+    width_stop_side: str | None = None,
+    width_stop_cm: float | int | str | None = None,
+    length_stop_side: str | None = None,
+    length_stop_cm: float | int | str | None = None,
     post_processor: str | None = None,
     base_revision: int | str | None = None,
 ) -> dict[str, Any]:
-    """Toggle one path direction and persist the exact geometry settings used."""
+    """Toggle one path direction and persist the current sheet settings with it.
+
+    A prior sheet save is not required. The request carries the settings the
+    operator currently sees; validation runs first, then one ``save_sheet``
+    writes settings and the new direction together. A failure before that
+    write leaves no partial sheet row.
+    """
 
     order = _authorized_order(order_name, Capability.PREPARE_CNC_OPERATIONAL_FILES)
     plan = approved_plan_ref(order)
     saved = _existing_sheet(str(order.name), plan, cint(sheet_no))
-    if not saved or not saved.get("name"):
-        frappe.throw(_message("sheet_settings_required"), frappe.ValidationError)
     _reject_stale_sheet(saved, base_revision)
     key = str(path_key or "").strip()
     if not key:
@@ -1285,6 +1302,10 @@ def set_cnc_path_direction(
             for item, value in probe_operations.items():
                 if str(value or "").strip() != str(operations.get(item) or "").strip():
                     probe_sources[item] = "sheet"
+    if operation_sources is not None:
+        parsed_sources = frappe.parse_json(operation_sources) if isinstance(operation_sources, str) else dict(operation_sources or {})
+        if isinstance(parsed_sources, dict):
+            probe_sources = {str(item): value for item, value in parsed_sources.items()}
     if path_overrides is not None:
         parsed_paths = frappe.parse_json(path_overrides) if isinstance(path_overrides, str) else dict(path_overrides or {})
         if isinstance(parsed_paths, dict):
@@ -1293,11 +1314,15 @@ def set_cnc_path_direction(
         parsed_order = frappe.parse_json(operation_order) if isinstance(operation_order, str) else list(operation_order or [])
         if isinstance(parsed_order, list):
             probe_order = [str(item) for item in parsed_order]
+            probe_confirmed = bool(cint(cut_path_early_confirmed))
     if perimeter_join_mode is not None:
         probe_join = str(perimeter_join_mode or join_mode)
         probe_sequence = _parse_optional_sequence(cut_path_sequence)
         probe_early = bool(cint(perimeter_cut_early_confirmed))
-        probe_confirmed = bool(cint(cut_path_early_confirmed))
+        if operation_order is None:
+            probe_confirmed = bool(cint(cut_path_early_confirmed))
+    snapshots = list((saved or {}).get("toolpath_snapshots") or [])
+    associations = list((saved or {}).get("vector_associations") or [])
     try:
         _plan, program, _presets = _compile_authorized_program(
             order,
@@ -1316,12 +1341,12 @@ def set_cnc_path_direction(
     try:
         direction_program = unreversed_operational_program(
             program,
-            snapshots=list(saved.get("toolpath_snapshots") or []),
-            associations=list(saved.get("vector_associations") or []),
+            snapshots=snapshots,
+            associations=associations,
         )
         current_records = clear_reversed_direction_conflicts(
             direction_program,
-            saved.get("reversed_path_keys"),
+            (saved or {}).get("reversed_path_keys"),
         )
         records = toggle_reversed_path(
             current_records,
@@ -1356,18 +1381,24 @@ def set_cnc_path_direction(
             perimeter_join_mode=probe_join,
             cut_path_sequence=probe_sequence,
             perimeter_cut_early_confirmed=probe_early,
-            cnc_machine=saved.get("cnc_machine") if cnc_machine is None else cnc_machine,
-            offset_left_cm=saved.get("offset_left_cm") if offset_left_cm is None else offset_left_cm,
-            offset_bottom_cm=saved.get("offset_bottom_cm") if offset_bottom_cm is None else offset_bottom_cm,
+            cnc_machine=(saved or {}).get("cnc_machine") if cnc_machine is None else cnc_machine,
+            offset_left_cm=(saved or {}).get("offset_left_cm") if offset_left_cm is None else offset_left_cm,
+            offset_bottom_cm=(saved or {}).get("offset_bottom_cm") if offset_bottom_cm is None else offset_bottom_cm,
+            width_stop_side=width_stop_side,
+            width_stop_cm=width_stop_cm,
+            length_stop_side=length_stop_side,
+            length_stop_cm=length_stop_cm,
             post_processor=post_processor,
             machine_catalog=list_cnc_machines(),
             plan_snapshot=approved_plan_snapshot(order),
-            toolpath_snapshots=list(saved.get("toolpath_snapshots") or []),
-            vector_associations=list(saved.get("vector_associations") or []),
+            toolpath_snapshots=snapshots,
+            vector_associations=associations,
             reversed_path_keys=records,
         )
+        # Omit machining JSON keys so existing Profiles/Associations/Snapshots
+        # stay untouched. A first save creates those fields empty.
         save_sheet(
-            str(saved.get("name") or ""),
+            str((saved or {}).get("name") or ""),
             prepared,
             expected_revision=_revision(base_revision),
         )
