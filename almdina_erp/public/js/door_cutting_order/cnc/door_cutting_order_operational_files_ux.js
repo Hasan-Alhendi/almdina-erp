@@ -3862,7 +3862,7 @@
             ? `<pattern id="${escapeHtml(gridPatternId)}" data-sheet-grid-pattern patternUnits="userSpaceOnUse" patternTransform="rotate(45)" width="8" height="8"><line class="dco-cnc-cut-preview__grid-line" x1="0" y1="0" x2="0" y2="8" fill="none" stroke="rgba(71,85,105,.18)" stroke-width="1" pointer-events="none"/></pattern>`
             : "";
         const machineBed = pageLayout && placement
-            ? `<rect class="dco-cnc-cut-preview__machine-bed" x="0" y="0" width="${formatPreviewNumber(width)}" height="${formatPreviewNumber(length)}" fill="#f3f5f8" pointer-events="none"/>`
+            ? `<rect class="dco-cnc-cut-preview__machine-bed" x="0" y="0" width="${formatPreviewNumber(width)}" height="${formatPreviewNumber(length)}" fill="#e4e8ef" pointer-events="none"/>`
             : "";
         const sheetWindow = showSheetHatch
             ? `<rect class="dco-cnc-cut-preview__board-fill" data-sheet-window="1" x="${formatPreviewNumber(offsetX)}" y="${formatPreviewNumber(sheetWindowY)}" width="${formatPreviewNumber(sheetW)}" height="${formatPreviewNumber(sheetL)}" fill="#ffffff" pointer-events="none"/>
@@ -3870,9 +3870,6 @@
             : "";
         const pieceMarkup = pageLayout ? previewBoardPiecesMarkup(options, sheetL) : "";
         const sheetGroup = `<g data-sheet-geometry transform="translate(${offsetX},${offsetY})">${pieceMarkup}${strokes}<g data-path-markers></g></g>`;
-        const placementNote = placement
-            ? `<p class="dco-operational-files__note" data-placement-caption>${escapeHtml(translate("The sheet is placed with this machine's stops. Work zero is applied only in the NC file."))}</p>`
-            : "";
 
         return `<div class="dco-cnc-cut-preview" data-marker-scope="${escapeHtml(markerScope)}" style="${previewShellStyle}">
             ${boardSurface({
@@ -3887,7 +3884,6 @@
                         ${sheetGroup}
                     </g>`,
             })}
-            ${placementNote}
             ${pageLayout ? "" : notes.map(note => `<p class="dco-operational-files__note" role="status">${escapeHtml(note)}</p>`).join("")}
         </div>`;
     }

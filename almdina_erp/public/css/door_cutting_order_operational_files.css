@@ -586,7 +586,8 @@ html[dir="rtl"] .dco-operational-sheet-dialog .dco-operational-sheet__preview {
     stroke-width: 1.5;
 }
 .dco-cnc-sheet-page .dco-cnc-cut-preview__machine-bed {
-    fill: var(--alm-bg, #f3f5f8);
+    /* One shade darker than page/canvas greys so the solid machine bed reads apart from the hatched sheet. */
+    fill: #e4e8ef;
     pointer-events: none;
 }
 .dco-cnc-sheet-page .dco-cnc-cut-preview__void {

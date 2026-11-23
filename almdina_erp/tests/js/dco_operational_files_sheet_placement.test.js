@@ -216,7 +216,9 @@ assert.ok(!cornerMarkup.includes("Right Stop"));
 assert.strictEqual(ux.validateSheetPlacementFits({
     cnc_machines: [{ ...cornerWorkspace.cnc_machines[0], work_zero_position: "Center" }],
 }, cornerState).code, "work_zero_center_retired");
-assert.ok(markup.includes("data-placement-caption"));
+assert.ok(!markup.includes("data-placement-caption"));
+assert.ok(!markup.includes("The sheet is placed with this machine's stops. Work zero is applied only in the NC file."));
+assert.ok(markup.includes('fill="#e4e8ef"') || markup.includes("dco-cnc-cut-preview__machine-bed"));
 assert.ok(!markup.includes("dco-cnc-cut-preview__dim"));
 assert.ok(!markup.includes("Left offset"));
 // Path numbers stay on sheet-local geometry; geometry points are not rewritten in the program.

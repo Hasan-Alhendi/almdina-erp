@@ -35,14 +35,14 @@ app_include_css = [
     "/assets/almdina_erp/css/door_cutting_order_extra_addons.css?v=d5f79a37c7cf",
     "/assets/almdina_erp/css/door_cutting_order_glass_shape.css?v=2",
     "/assets/almdina_erp/css/door_cutting_order_final_price_approval.css?v=1",
-    "/assets/almdina_erp/css/door_cutting_order_operational_files.css?v=22",
+    "/assets/almdina_erp/css/door_cutting_order_operational_files.css?v=23",
     "/assets/almdina_erp/css/notes.css?v=1",
     "/assets/almdina_erp/css/notes_interactions.css?v=1",
 ]
 
 app_include_js = [
     "/assets/almdina_erp/js/almdina_locale.js",
-    "/assets/almdina_erp/js/cnc/cnc_field_labels.js",
+    "/assets/almdina_erp/js/cnc/cnc_field_labels.js?v=3",
     "/assets/almdina_erp/js/cnc/cnc_tool_picker.js",
     # Desk app-name menu language item. Loads after locale; binds sidebar_setup.
     "/assets/almdina_erp/js/almdina_language_switcher.js",
