@@ -404,3 +404,8 @@ def test_direction_reconciliation_is_read_only_in_preview_and_persisted_on_save(
     assert "clear_conflicts" not in direction_body
     assert "operation_presets=probe_operations" in direction_body
     assert "perimeter_join_mode=probe_join" in direction_body
+    assert "sheet_settings_required" not in direction_body
+    assert "save_sheet(" in direction_body
+    assert 'str((saved or {}).get("name") or "")' in direction_body
+    assert "operation_sources" in direction_body
+    assert "reversed_path_keys=records" in direction_body

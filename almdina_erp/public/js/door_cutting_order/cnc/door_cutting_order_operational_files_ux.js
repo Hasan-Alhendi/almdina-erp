@@ -2960,9 +2960,29 @@
                 if (!finishSheetMutation(state, mutationRequest)) return;
                 state.reverseBusy = "";
                 state.directionReport = pathKey;
+                const message = (response && response.message) || {};
+                const saved = (message.sheets || []).find(item => Number(item.sheet_no) === Number(sheet.sheet_no));
+                if (saved) {
+                    // Server wrote current settings and the new direction together.
+                    const next = sheetState(saved);
+                    state.operations = next.operations;
+                    state.sources = next.sources;
+                    state.factoryPresets = next.factoryPresets;
+                    state.overrides = next.overrides;
+                    state.order = next.order;
+                    state.confirmed = next.confirmed;
+                    state.perimeterJoinMode = next.perimeterJoinMode;
+                    state.cutPathSequence = next.cutPathSequence;
+                    state.perimeterEarlyConfirmed = next.perimeterEarlyConfirmed;
+                    state.cncMachine = next.cncMachine;
+                    state.sheetStops = next.sheetStops;
+                    state.settingsRevision = next.settingsRevision;
+                    state.sheetWidthCm = next.sheetWidthCm;
+                    state.sheetLengthCm = next.sheetLengthCm;
+                }
                 const onWorkspace = dialog._almdinaOnWorkspace;
                 if (typeof onWorkspace === "function") {
-                    onWorkspace((response && response.message) || {});
+                    onWorkspace(message);
                 }
             },
             error(error) {
@@ -3861,15 +3881,15 @@
         const gridPattern = showSheetHatch
             ? `<pattern id="${escapeHtml(gridPatternId)}" data-sheet-grid-pattern patternUnits="userSpaceOnUse" patternTransform="rotate(45)" width="8" height="8"><line class="dco-cnc-cut-preview__grid-line" x1="0" y1="0" x2="0" y2="8" fill="none" stroke="rgba(71,85,105,.18)" stroke-width="1" pointer-events="none"/></pattern>`
             : "";
+        const machineBed = pageLayout && placement
+            ? `<rect class="dco-cnc-cut-preview__machine-bed" x="0" y="0" width="${formatPreviewNumber(width)}" height="${formatPreviewNumber(length)}" fill="#e4e8ef" pointer-events="none"/>`
+            : "";
         const sheetWindow = showSheetHatch
             ? `<rect class="dco-cnc-cut-preview__board-fill" data-sheet-window="1" x="${formatPreviewNumber(offsetX)}" y="${formatPreviewNumber(sheetWindowY)}" width="${formatPreviewNumber(sheetW)}" height="${formatPreviewNumber(sheetL)}" fill="#ffffff" pointer-events="none"/>
                     <rect class="dco-cnc-cut-preview__board-grid" x="${formatPreviewNumber(offsetX)}" y="${formatPreviewNumber(sheetWindowY)}" width="${formatPreviewNumber(sheetW)}" height="${formatPreviewNumber(sheetL)}" fill="url(#${escapeHtml(gridPatternId)})" pointer-events="none"/>`
             : "";
         const pieceMarkup = pageLayout ? previewBoardPiecesMarkup(options, sheetL) : "";
         const sheetGroup = `<g data-sheet-geometry transform="translate(${offsetX},${offsetY})">${pieceMarkup}${strokes}<g data-path-markers></g></g>`;
-        const placementNote = placement
-            ? `<p class="dco-operational-files__note" data-placement-caption>${escapeHtml(translate("The sheet is placed with this machine's stops. Work zero is applied only in the NC file."))}</p>`
-            : "";
 
         return `<div class="dco-cnc-cut-preview" data-marker-scope="${escapeHtml(markerScope)}" style="${previewShellStyle}">
             ${boardSurface({
@@ -3877,13 +3897,13 @@
                 extra: "",
                 overlay,
                 body: `<defs>${markers}${gridPattern}</defs>
+                    ${machineBed}
                     ${sheetWindow}
                     <g transform="translate(0,${length}) scale(1,-1)">
                         ${machineFrame}
                         ${sheetGroup}
                     </g>`,
             })}
-            ${placementNote}
             ${pageLayout ? "" : notes.map(note => `<p class="dco-operational-files__note" role="status">${escapeHtml(note)}</p>`).join("")}
         </div>`;
     }
