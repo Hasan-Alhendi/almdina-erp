@@ -41,6 +41,24 @@ def line_segment(start: Sequence[float], end: Sequence[float]) -> dict[str, Any]
     return {"kind": "line", "start": _pt(start), "end": _pt(end)}
 
 
+def paths_to_loops(paths: Sequence[Any]) -> list[dict[str, Any]]:
+    loops = []
+    for path in paths:
+        curves = tuple(getattr(path, "curves", ()) or ())
+        if curves and path.closed:
+            loops.append({"closed": True, "segments": list(curves), "role": "outer"})
+            continue
+        points = list(path.points)
+        segments = [
+            line_segment(points[index], points[index + 1])
+            for index in range(len(points) - 1)
+        ]
+        if path.closed and len(points) >= 3:
+            segments.append(line_segment(points[-1], points[0]))
+        loops.append({"closed": bool(path.closed), "segments": segments, "role": "outer"})
+    return loops
+
+
 def arc_segment(
     start: Sequence[float],
     end: Sequence[float],

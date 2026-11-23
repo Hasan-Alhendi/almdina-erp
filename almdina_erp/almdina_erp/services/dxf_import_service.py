@@ -7,6 +7,10 @@ from dataclasses import replace
 from collections import Counter
 from typing import Any, Sequence
 
+from almdina_erp.almdina_erp.domain.cutting.manufacturing_curves import (
+    paths_to_loops as _paths_to_loops,
+)
+
 import frappe
 from frappe import _
 from frappe.utils import cint, flt
@@ -3276,24 +3280,6 @@ def _attach_manufacturing_curves(
             piece["_manufacturing_file"] = file_loops
 
 
-def _paths_to_loops(paths: Sequence[Any]) -> list[dict[str, Any]]:
-    from almdina_erp.almdina_erp.domain.cutting.manufacturing_curves import line_segment
-
-    loops = []
-    for path in paths:
-        curves = tuple(getattr(path, "curves", ()) or ())
-        if curves and path.closed:
-            loops.append({"closed": True, "segments": list(curves), "role": "outer"})
-            continue
-        points = list(path.points)
-        segments = [
-            line_segment(points[index], points[index + 1])
-            for index in range(len(points) - 1)
-        ]
-        if path.closed and len(points) >= 3:
-            segments.append(line_segment(points[-1], points[0]))
-        loops.append({"closed": bool(path.closed), "segments": segments, "role": "outer"})
-    return loops
 
 
 def _observed_curve_loops(

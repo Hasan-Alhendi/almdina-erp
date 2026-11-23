@@ -306,8 +306,8 @@ def _uploaded_centers_match(uploaded, observed, expected, generated, shapes) -> 
         from almdina_erp.almdina_erp.domain.cutting.manufacturing_curves import (
             SAW_CURVE_MATCH,
             classify_curve_centers,
+            paths_to_loops,
         )
-        from almdina_erp.almdina_erp.services.dxf_import_service import _paths_to_loops
 
         observed_loops = []
         for path in (uploaded or {}).get("cut_paths") or []:
@@ -320,7 +320,7 @@ def _uploaded_centers_match(uploaded, observed, expected, generated, shapes) -> 
             return classify_saw_center_segments(observed, expected) == "match"
         material = [(outer, holes) for outer, holes in shapes]
         return (
-            classify_curve_centers(observed_loops, _paths_to_loops(generated), material)
+            classify_curve_centers(observed_loops, paths_to_loops(generated), material)
             == SAW_CURVE_MATCH
         )
     return classify_saw_center_segments(observed, expected) == "match"

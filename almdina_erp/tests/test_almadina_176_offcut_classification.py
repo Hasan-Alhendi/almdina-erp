@@ -458,6 +458,12 @@ def test_unassigned_offcut_does_not_block_existing_approval_rules(monkeypatch):
         "freshness_expected_fingerprint",
         lambda *_args: "same-fingerprint",
     )
+    # This contract covers OFFCUT classification, not the separate add-on cutter gate.
+    monkeypatch.setattr(
+        cutting_plan_command_service,
+        "_assert_addon_cutter_approval",
+        lambda _plan: None,
+    )
 
     cutting_plan_command_service._assert_plan_ready_for_approval(order, plan)
 
