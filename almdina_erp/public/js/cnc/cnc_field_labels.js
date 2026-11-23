@@ -434,12 +434,54 @@
         entry.docfields = (entry.docfields || []).map(df => Object.assign({}, df));
     }
 
+    // Quick Entry attaches doctype/docname then refreshes controls. When the
+    // client-side Custom DocPerm for CNC Machine is read-only (write=0) and
+    // System Settings hide_empty_read_only_fields is on, empty create fields
+    // become disp_status None and disappear. Keep Quick Entry candidates
+    // writable/visible; server has_permission still gates save.
+    function ensureQuickEntryFieldsWritable(dialog) {
+        if (!dialog) return;
+        const allowed = new Set(
+            (dialog.docfields || [])
+                .map(df => (df && df.fieldname) || "")
+                .filter(Boolean)
+        );
+        Object.keys(dialog.fields_dict || {}).forEach(name => {
+            if (!allowed.has(name) || STOP_FIELD_NAMES.includes(name)) return;
+            const field = dialog.fields_dict[name];
+            if (!field || !field.df) return;
+            field.df.get_status = function getQuickEntryStatus(control) {
+                const df = control && control.df ? control.df : field.df;
+                if (Number(df.hidden || 0) || Number(df.hidden_due_to_dependency || 0)) {
+                    return "None";
+                }
+                return "Write";
+            };
+            // Select.set_options records last_options even when $input is missing
+            // (Read-only path). Later make_input skips rebuild and leaves an empty
+            // <select>. Clear the cache and force options back onto the DOM.
+            if (field.df.fieldtype === "Select") field.last_options = null;
+            if (typeof field.refresh === "function") field.refresh();
+            if (field.df.fieldtype === "Select" && typeof field.set_options === "function") {
+                field.last_options = null;
+                const selected = field.doc && name in field.doc
+                    ? field.doc[name]
+                    : field.value;
+                field.set_options(selected);
+                if (selected != null && field.$input && typeof field.$input.val === "function") {
+                    field.$input.val(selected);
+                }
+            }
+        });
+    }
+
     function finishQuickEntry(doctype, entry) {
         const dialog = entry || (window.frappe && window.frappe.quick_entry);
         if (!dialog) return;
         if (doctype === "CNC Tool Preset") applyToolFieldLabels(dialog);
         if (doctype === "CNC Machine") {
             applyMachineFieldLabels(dialog);
+            ensureQuickEntryFieldsWritable(dialog);
             applyCornerStops(dialog);
             bindMachineWorkZero(dialog);
             applyPostProcessorChoice(dialog);

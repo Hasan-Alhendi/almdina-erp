@@ -2,7 +2,7 @@
     "use strict";
 
     const PAGE_ROUTE = "cnc-sheet-settings";
-    const STYLE = "/assets/almdina_erp/css/door_cutting_order_operational_files.css?v=21";
+    const STYLE = "/assets/almdina_erp/css/door_cutting_order_operational_files.css?v=22";
     // frappe.require reads the extension before the query string. A "?v="
     // suffix makes the loader throw before the script request is sent.
     const ASSETS = Object.freeze([
