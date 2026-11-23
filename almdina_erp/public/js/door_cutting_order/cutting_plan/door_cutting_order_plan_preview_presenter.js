@@ -368,7 +368,20 @@
                 </div>
             `);
         }
+        syncAddonCutterBanner(frm);
         return true;
+    }
+
+    function syncAddonCutterBanner(frm) {
+        const owner = window.AlmdinaPlanPreviewSession;
+        const renderer = window.AlmdinaCuttingPlanRender;
+        const wrapper = planWrapper(frm);
+        if (!owner || !renderer || typeof renderer.mountAddonCutterBanner !== "function" || !wrapper) return;
+        const state = typeof owner.snapshot === "function" ? owner.snapshot(frm) : null;
+        const findings = state && state.status === "error" ? state.addonCutterRejections || [] : [];
+        wrapper.find(".dco-cutting-plan").each((_, node) => {
+            renderer.mountAddonCutterBanner(node, findings);
+        });
     }
 
     function renderPreviewPlan(frm, previewState, committable) {
@@ -378,6 +391,7 @@
         if (!plan || !Array.isArray(plan.sheets) || !plan.sheets.length) {
             return false;
         }
+        syncAddonCutterBanner(frm);
 
         const tabs = window.AlmdinaPlanTabsUX;
         frm.__almdina_active_plan_tab = "System";
@@ -417,6 +431,7 @@
         const decorations = window.AlmdinaPlanContentUX;
         if (decorations && typeof decorations.apply === "function") decorations.apply(frm);
         renderPreviewSummary(frm, payload.summary || {}, plan);
+        syncAddonCutterBanner(frm);
         return true;
     }
 

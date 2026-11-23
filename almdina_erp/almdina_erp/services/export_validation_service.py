@@ -556,6 +556,23 @@ def validate_cutting_plan_issues(plan: Any) -> list[DxfValidationIssue]:
                         },
                     ))
 
+    from almdina_erp.almdina_erp.domain.cutting.addon_cutter_rules import (
+        as_dxf_issues,
+        assess_piece_addons,
+        layout_conflicts,
+    )
+    from almdina_erp.almdina_erp.domain.cutting.tool_diameters import diameters_for_record
+
+    diameters = diameters_for_record(plan)
+    findings = []
+    for sheet in snapshot.get("sheets") or ():
+        if not isinstance(sheet, dict):
+            continue
+        for piece in sheet.get("pieces") or ():
+            if isinstance(piece, dict):
+                findings.extend(assess_piece_addons(piece, diameters))
+    findings.extend(layout_conflicts(snapshot, diameters))
+    issues.extend(as_dxf_issues(findings))
     return issues
 
 

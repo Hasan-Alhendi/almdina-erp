@@ -147,6 +147,10 @@ def read_operational_dxf(
     grouped: dict[tuple[int, str], list[dict[str, Any]]] = defaultdict(list)
     for segment in geometry.get("segments") or []:
         grouped[(int(segment["entity_id"]), str(segment["layer"]))].append(segment)
+    curves_by_entity = {
+        (int(curve["entity_id"]), str(curve["layer"])): curve
+        for curve in geometry.get("curves") or []
+    }
     unsupported = [
         item
         for item in geometry.get("unsupported") or []
@@ -198,6 +202,15 @@ def read_operational_dxf(
                 path_points = local_points[:-1]
             else:
                 path_points = local_points
+            source_curve = curves_by_entity.get((entity_id, layer))
+            local_curves = []
+            if source_curve and source_curve.get("segments"):
+                from almdina_erp.almdina_erp.domain.cutting.manufacturing_curves import map_loops
+
+                local_curves = map_loops(
+                    [{"role": "outer", "closed": path_closed, "segments": source_curve["segments"]}],
+                    local,
+                )[0]["segments"]
             cut_paths.append(
                 {
                     "entity_id": int(entity_id),
@@ -206,6 +219,7 @@ def read_operational_dxf(
                     "closed": path_closed,
                     "layer": canonical,
                     "sheet_no": requested,
+                    "curves": local_curves,
                 }
             )
             cut_segments.extend(zip(local_points, local_points[1:]))

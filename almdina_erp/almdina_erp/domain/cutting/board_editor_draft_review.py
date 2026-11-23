@@ -134,6 +134,7 @@ def trusted_model_from_projection(
     """Trusted geometry for a review. Display settings are not included."""
 
     outlines: dict[str, list] = {}
+    manufacturing_by_instance: dict[str, Any] = {}
     outline_holes: dict[str, list] = {}
     for element in projection.get("elements") or []:
         if not isinstance(element, Mapping) or element.get("kind") != "finished_outline":
@@ -143,6 +144,8 @@ def trusted_model_from_projection(
         outer = geometry.get("outer") if isinstance(geometry, Mapping) else None
         if instance and isinstance(outer, list) and len(outer) >= 3:
             outlines[instance] = outer
+        if instance and isinstance(geometry, Mapping) and geometry.get("manufacturing"):
+            manufacturing_by_instance[instance] = deepcopy(geometry.get("manufacturing"))
         holes = geometry.get("holes") if isinstance(geometry, Mapping) else None
         if instance and isinstance(holes, list) and holes and instance not in outline_holes:
             outline_holes[instance] = holes
@@ -199,6 +202,9 @@ def trusted_model_from_projection(
             "width_mm": width,
             "length_mm": length,
             "outline_mm": outline,
+            "manufacturing": deepcopy(manufacturing_by_instance.get(instance))
+            if manufacturing_by_instance.get(instance)
+            else None,
             "glass_hole_local_mm": session_hole,
             "opening_rings_mm": deepcopy(opening_rings),
             "glass_host_piece_id": piece.get("glass_host_piece_id"),
@@ -662,6 +668,12 @@ def _entry_piece(instance: str, info: Mapping[str, Any]) -> dict[str, Any]:
         "allow_rotation": info.get("allow_rotation") is True,
         "allow_rotation_proven": info.get("allow_rotation_proven") is True,
         "outline_mm": deepcopy(outline) if isinstance(outline, list) else None,
+        "manufacturing": deepcopy(info.get("manufacturing"))
+        if isinstance(info.get("manufacturing"), Mapping)
+        else None,
+        "base_manufacturing": deepcopy(info.get("manufacturing"))
+        if isinstance(info.get("manufacturing"), Mapping)
+        else None,
         "glass_hole_local_mm": deepcopy(hole) if isinstance(hole, list) else None,
         "opening_rings_mm": deepcopy(info.get("opening_rings_mm"))
         if isinstance(info.get("opening_rings_mm"), list)
@@ -749,9 +761,10 @@ def _entry_machining_paths(
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """Build cutter-center paths once in the entry usable-sheet frame.
 
-    Each add-on uses the diameter resolved for its layer. A liner whose bit is
-    wider than the strip does not block plan-copy readiness and does not receive
-    a center path. Other unproven geometry still blocks.
+    Each add-on uses the diameter resolved for its layer. A cutter wider than
+    its add-on has no center path and blocks readiness. A rear groove that
+    starts on the door edge is the only wider-cutter path, and only after the
+    outward center shift stays inside the requested width.
     """
 
     issues: list[dict[str, Any]] = []
@@ -936,21 +949,6 @@ def _entry_machining_paths(
                 ]
         except (LinerGeometryError, DoorLinerError, TypeError, ValueError) as exc:
             reason = getattr(exc, "code", "") or "addon_toolpath_unproven"
-            # Saving a plan copy is separate from storing a machinable center.
-            # A liner bit wider than the strip keeps the liner definition and
-            # records the refusal, but it must not invent a center path.
-            if kind == "liner" and reason == "liner_narrower_than_cutter":
-                issues.append(
-                    _issue(
-                        "machining_path_unproven",
-                        severity=WARNING,
-                        piece_instance_ids=[str(info.get("piece_instance_id") or "")],
-                        piece_ids=_ids(info),
-                        reason=str(reason),
-                        addon_kind=kind,
-                    )
-                )
-                continue
             issues.append(
                 _issue(
                     "geometry_unproven",

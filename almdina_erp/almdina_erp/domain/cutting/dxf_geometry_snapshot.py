@@ -114,7 +114,23 @@ def _validate_part_geometry(geometry: PartGeometry) -> None:
                 )
 
 
-def serialize_geometry_mm(geometry: PartGeometry) -> dict[str, Any]:
+def _manufacturing_or_none(value: Any) -> dict[str, Any] | None:
+    if value in (None, "", []):
+        return None
+    from almdina_erp.almdina_erp.domain.cutting.manufacturing_curves import (
+        validate_manufacturing,
+    )
+
+    try:
+        return validate_manufacturing(value)
+    except ValueError as exc:
+        raise DxfGeometrySnapshotError(str(exc)) from exc
+
+
+def serialize_geometry_mm(
+    geometry: PartGeometry,
+    manufacturing: Any = None,
+) -> dict[str, Any]:
     """Serialize plan-local material topology using one versioned public contract.
 
     Coordinates are millimetres in the usable-sheet coordinate space: origin at
@@ -122,7 +138,7 @@ def serialize_geometry_mm(geometry: PartGeometry) -> dict[str, Any]:
     coordinate system used by persisted Cutting Plan x/y values.
     """
 
-    return {
+    payload = {
         "schema_version": GEOMETRY_SCHEMA_VERSION,
         "unit": GEOMETRY_UNIT,
         "coordinate_space": GEOMETRY_COORDINATE_SPACE,
@@ -132,6 +148,10 @@ def serialize_geometry_mm(geometry: PartGeometry) -> dict[str, Any]:
             for hole in geometry.holes
         ],
     }
+    stored = _manufacturing_or_none(manufacturing)
+    if stored is not None:
+        payload["manufacturing"] = stored
+    return payload
 
 
 def serialize_geometry_from_cm(geometry: PartGeometry) -> dict[str, Any]:
@@ -319,8 +339,15 @@ def canonicalize_snapshot_geometries(value: Any) -> Any:
                         continue
                     normalized_piece = dict(piece)
                     if "geometry" in normalized_piece:
+                        raw_geometry = normalized_piece["geometry"]
+                        manufacturing = (
+                            raw_geometry.get("manufacturing")
+                            if isinstance(raw_geometry, Mapping)
+                            else None
+                        )
                         normalized_piece["geometry"] = serialize_geometry_mm(
-                            parse_geometry_mm(normalized_piece["geometry"])
+                            parse_geometry_mm(raw_geometry),
+                            manufacturing,
                         )
                     overlays = _canonicalize_piece_overlays(normalized_piece)
                     if overlays is not None:
@@ -394,7 +421,9 @@ def snapshot_geometry_index(snapshot: Any) -> tuple[dict[tuple[int, int], dict[s
             raise DxfGeometrySnapshotError(
                 f"persisted DXF topology contains duplicate piece identity {sheet_no}:{piece_id}."
             )
-        indexed[key] = serialize_geometry_mm(parse_geometry_mm(piece["geometry"]))
+        raw_geometry = piece["geometry"]
+        manufacturing = raw_geometry.get("manufacturing") if isinstance(raw_geometry, Mapping) else None
+        indexed[key] = serialize_geometry_mm(parse_geometry_mm(raw_geometry), manufacturing)
     return indexed, True
 
 

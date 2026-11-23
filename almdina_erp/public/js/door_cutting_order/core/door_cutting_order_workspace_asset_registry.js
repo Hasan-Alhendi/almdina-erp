@@ -76,12 +76,14 @@
             activationField: "operational_files_tab",
             assets: Object.freeze([
                 `${ASSET_ROOT}/cutting_plan/door_cutting_order_piece_geometry.js`,
+                `${ASSET_ROOT}/cutting_plan/door_cutting_order_edge_display.js`,
                 `${ASSET_ROOT}/cutting_plan/door_cutting_order_cutting_plan_renderer.js`,
                 "/assets/almdina_erp/js/cnc/artcam_machining_ux.js",
                 `${ASSET_ROOT}/cnc/door_cutting_order_operational_files_ux.js`,
             ]),
             readyGlobals: Object.freeze([
                 "AlmdinaCuttingPlanPieceGeometry",
+                "AlmdinaEdgeDisplay",
                 "AlmdinaCuttingPlanRender",
                 "AlmdinaOperationalFilesUX",
             ]),

@@ -495,6 +495,20 @@ const centers = copy(geometry.cutterCenterOffsetsMm(18, 5)).map(value => Math.ro
 assert.deepEqual(centers, [2.5, 7.5, 10.5, 15.5]);
 assert.deepEqual(copy(geometry.cutterCenterOffsetsMm(5, 5)), [2.5]);
 assert.throws(() => geometry.cutterCenterOffsetsMm(4, 5), /liner_narrower_than_cutter/);
+assert.deepEqual(
+    copy(geometry.cutterCenterOffsetsMm(5, 8, { kind: "back_groove", offsetMm: 0 })).map(value => Math.round(value * 1000) / 1000),
+    [1]
+);
+assert.throws(
+    () => geometry.cutterCenterOffsetsMm(5, 8, { kind: "back_groove", offsetMm: 10 }),
+    /liner_narrower_than_cutter/
+);
+const edgeGroove = geometry.toolpathMm(regular, "edge_width_top", 0, 0.5, 8, 0, 0, { addonKind: "back_groove" });
+assert.ok(edgeGroove.every(point => Math.abs(point[1] - 1) < 0.001));
+assert.throws(
+    () => geometry.toolpathMm(regular, "edge_width_top", 0, 0.5, 8, 5, 10, { addonKind: "back_groove" }),
+    /rear_groove_oversize_unsafe/
+);
 const center = geometry.centerlineMm(regular, "edge_width_top", 2, 1.5);
 assert.deepEqual(copy(center), [[0, 27.5], [400, 27.5]]);
 const lCenter = geometry.centerlineMm(shapedLiner, "edge_break", 0, 1.8);

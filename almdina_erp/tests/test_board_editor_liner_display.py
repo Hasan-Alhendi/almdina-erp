@@ -1,8 +1,8 @@
 """Visual liner centerlines stay separate from stored cutter paths.
 
 The picture is rebuilt from saved liner fields in the piece outline's frame.
-It is not written onto machining overlays, so a missing or wider-bit toolpath
-cannot hide it and a stored center path cannot skip DXF diameter checks.
+A cutter wider than the liner blocks the copy. A fitting cutter stores one
+center path, and that path is what later moves, rotations, and mirrors pose.
 """
 
 from __future__ import annotations
@@ -18,6 +18,7 @@ from almdina_erp.almdina_erp.domain.cutting.board_editor_draft_review import (
     apply_plan_tool_diameters,
 )
 from almdina_erp.almdina_erp.domain.cutting.board_editor_plan_materialize import (
+    BoardEditorMaterializeError,
     materialize_plan_snapshot,
 )
 from almdina_erp.almdina_erp.domain.cutting.board_editor_rotation import rotate_point
@@ -100,45 +101,34 @@ def _stored_piece(snapshot, instance="pi-a"):
 
 
 class LinerDisplaySeparationTests(unittest.TestCase):
-    def test_wider_and_narrower_bits_draw_the_same_centerline(self):
+    def test_wider_bit_blocks_the_copy_and_a_fitting_bit_keeps_its_center(self):
         machining = liner_fields(side="edge_width_top", offset=0, width=0.6, start=0, length=0)
         pieces = [projection_piece("pi-a", 1, 100, 100, 400, 500, machining=machining)]
-        wider = _copy(pieces, kerf_mm=4, liner_diameter=8)
+        with self.assertRaises(BoardEditorMaterializeError):
+            _copy(pieces, kerf_mm=4, liner_diameter=8)
         narrower = _copy(pieces, kerf_mm=8, liner_diameter=4)
-        wider_piece = _stored_piece(wider)
         narrower_piece = _stored_piece(narrower)
-        self.assertFalse(any(item.get("kind") == "liner" for item in wider_piece["overlays"]))
         self.assertTrue(any(item.get("kind") == "liner" for item in narrower_piece["overlays"]))
         self.assertFalse(any(
             item.get("geometry_source") == "parametric_visual" or item.get("display_only")
             for item in narrower_piece["overlays"]
         ))
-        wider_view = _visual_liners(project_board_editor(wider))
         narrower_view = _visual_liners(project_board_editor(narrower))
-        self.assertEqual(len(wider_view), 1)
         self.assertEqual(len(narrower_view), 1)
-        self.assertTrue(wider_view[0]["payload"]["display_only"])
-        self.assertEqual(wider_view[0]["payload"]["geometry_source"], "parametric_visual")
-        self.assertEqual(
-            wider_view[0]["geometry"]["path"],
-            narrower_view[0]["geometry"]["path"],
-        )
-        path = wider_view[0]["geometry"]["path"]
+        path = narrower_view[0]["geometry"]["path"]
         self.assertGreaterEqual(len(path), 2)
         self.assertTrue(all(abs(point[1] - 103) < 0.05 for point in path))
-
-        diameters = diameters_for_record({
-            "kerf_mm": 4,
-            "liner_tool_diameter_mm": 8,
-        })
-        errors = snapshot_tool_errors(wider, diameters)
-        self.assertEqual(errors[0]["code"], "liner_narrower_than_cutter")
-        self.assertEqual(errors[0]["kind"], "liner")
+        stored_path = next(
+            item["geometry"]["path"]
+            for item in narrower_piece["overlays"]
+            if item.get("kind") == "liner"
+        )
+        self.assertTrue(all(abs(point[1] - 102) < 0.05 for point in stored_path[:2]))
 
     def test_reopen_and_second_copy_keep_one_line(self):
         machining = liner_fields(side="edge_width_top", offset=0, width=0.6, start=0, length=0)
         pieces = [projection_piece("pi-a", 1, 100, 100, 400, 500, machining=machining)]
-        first = _copy(pieces, kerf_mm=4, liner_diameter=8)
+        first = _copy(pieces, kerf_mm=4, liner_diameter=6)
         reopened = project_board_editor(first)
         self.assertEqual(len(_visual_liners(reopened)), 1)
         second_layout = layout_rows(pieces)
@@ -165,7 +155,7 @@ class LinerDisplaySeparationTests(unittest.TestCase):
         moved = _copy(
             pieces,
             kerf_mm=4,
-            liner_diameter=8,
+            liner_diameter=4,
             layout=layout_rows(pieces, **{"pi-a": {"x": 250, "y": 100}}),
         )
         moved_path = _visual_liners(project_board_editor(moved))[0]["geometry"]["path"]
@@ -174,7 +164,7 @@ class LinerDisplaySeparationTests(unittest.TestCase):
         turned = _copy(
             pieces,
             kerf_mm=4,
-            liner_diameter=8,
+            liner_diameter=4,
             layout=layout_rows(pieces, **{"pi-a": {"x": 100, "y": 100, "rotation": 35}}),
         )
         turned_piece = _stored_piece(turned)
@@ -191,7 +181,7 @@ class LinerDisplaySeparationTests(unittest.TestCase):
 
         mirrored_layout = layout_rows(pieces, **{"pi-a": {"x": 100, "y": 100}})
         mirrored_layout["pieces"][0]["flip_h"] = True
-        mirrored = _copy(pieces, kerf_mm=4, liner_diameter=8, layout=mirrored_layout)
+        mirrored = _copy(pieces, kerf_mm=4, liner_diameter=6, layout=mirrored_layout)
         mirrored_path = _visual_liners(project_board_editor(mirrored))[0]["geometry"]["path"]
         self.assertTrue(all(abs(point[0] - 497) < 0.75 for point in mirrored_path))
 
@@ -204,7 +194,7 @@ class LinerDisplaySeparationTests(unittest.TestCase):
         transferred = _copy(
             pieces,
             kerf_mm=4,
-            liner_diameter=8,
+            liner_diameter=4,
             layout=transferred_layout,
             sheets={1: dict(board, sheet_no=1), 2: dict(board, sheet_no=2)},
         )
@@ -231,9 +221,9 @@ class LinerDisplaySeparationTests(unittest.TestCase):
         ))
         machining.update(groove_fields(side="edge_long_right", offset=1, width=1.8, start=0, length=20))
         pieces = [projection_piece("pi-a", 1, 100, 100, 400, 500, machining=machining)]
-        snapshot = _copy(pieces, kerf_mm=4, liner_diameter=8, groove_diameter=4)
+        snapshot = _copy(pieces, kerf_mm=4, liner_diameter=6, groove_diameter=4)
         stored = _stored_piece(snapshot)
-        self.assertFalse(any(item.get("kind") == "liner" for item in stored["overlays"]))
+        self.assertEqual(sum(item.get("kind") == "liner" for item in stored["overlays"]), 2)
         self.assertTrue(any(item.get("kind") == "back_groove" for item in stored["overlays"]))
         view = project_board_editor(snapshot)
         liners = _visual_liners(view)
@@ -244,7 +234,7 @@ class LinerDisplaySeparationTests(unittest.TestCase):
             and (element.get("payload") or {}).get("kind") == "back_groove"
         ]
         self.assertEqual(len(liners), 2)
-        self.assertTrue(all(element["payload"]["display_only"] for element in liners))
+        self.assertTrue(all(element["payload"].get("display_only") for element in liners))
         ys = sorted(element["geometry"]["path"][0][1] for element in liners)
         self.assertLess(abs(ys[0] - 103), 0.05)
         self.assertLess(abs(ys[1] - 597), 0.05)

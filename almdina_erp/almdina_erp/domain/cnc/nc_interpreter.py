@@ -156,7 +156,7 @@ def interpret_nc(
                 plane = "G17"
             elif g_code == 54:
                 work_offset = "G54"
-            elif g_code in (0, 1):
+            elif g_code in (0, 1, 2, 3):
                 motion_mode = g_code
         if 53 in g_codes:
             machine_moves.append(
@@ -170,12 +170,14 @@ def interpret_nc(
                 )
             )
             continue
-        if not (has_x or has_y or has_z) or motion_mode not in (0, 1):
+        if not (has_x or has_y or has_z) or motion_mode not in (0, 1, 2, 3):
             continue
         nx = x_word if has_x else x
         ny = y_word if has_y else y
         nz = z_word if has_z else z
-        if motion_mode == 0:
+        if motion_mode in (2, 3):
+            motions.append(NcMotion("arc", nx, ny, nz if has_z else z, feed, False))
+        elif motion_mode == 0:
             moves_xy = has_x or has_y
             end_z = float(nz) if nz is not None else None
             start_safe = z is not None and _at_allowed_height(float(z))
@@ -231,7 +233,7 @@ def _expected_machine_motions(program: Mapping[str, Any]) -> list[tuple[str, flo
                 kind = str(motion.get("kind") or "")
                 if kind == "plunge":
                     rows.append((kind, float(motion["x_mm"]), float(motion["y_mm"]), -float(motion["depth_mm"])))
-                elif kind == "cut":
+                elif kind in {"cut", "arc"}:
                     rows.append((kind, float(motion["x_mm"]), float(motion["y_mm"]), -float(motion["depth_mm"])))
     return rows
 
@@ -272,7 +274,7 @@ def verify_nc_against_program(
             float(motion.z_mm),
         )
         for motion in state.motions
-        if motion.kind in {"cut", "plunge"}
+        if motion.kind in {"cut", "plunge", "arc"}
         and motion.x_mm is not None
         and motion.y_mm is not None
         and motion.z_mm is not None
@@ -283,7 +285,7 @@ def verify_nc_against_program(
     for motion in state.motions:
         if motion.x_mm is not None and motion.y_mm is not None:
             last_xy = (float(motion.x_mm), float(motion.y_mm))
-        if motion.kind not in {"cut", "plunge"} or motion.z_mm is None:
+        if motion.kind not in {"cut", "plunge", "arc"} or motion.z_mm is None:
             continue
         if motion.kind == "plunge":
             if last_xy is None:
@@ -294,7 +296,7 @@ def verify_nc_against_program(
             if motion.x_mm is None or motion.y_mm is None:
                 issues.append("cut_without_xy")
                 continue
-            recovered.append(("cut", float(motion.x_mm), float(motion.y_mm), float(motion.z_mm)))
+            recovered.append((motion.kind, float(motion.x_mm), float(motion.y_mm), float(motion.z_mm)))
     if len(expected) != len(recovered):
         issues.append("motion_count_mismatch")
     matched_cuts = 0

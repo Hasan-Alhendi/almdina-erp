@@ -83,6 +83,9 @@ def compile_manufacturing_geometry(
         "points": checked["points"],
         "exact": True,
     }
+    manufacturing = _manufacturing_cm(path)
+    if manufacturing is not None:
+        geometry["manufacturing"] = manufacturing
     # Full-span polygons stay on the historical contract. An interior contour
     # keeps its offset and reserves the whole blank instead of the contour box.
     if not checked["spans_blank"]:
@@ -111,6 +114,75 @@ def manufacturing_fingerprint(geometry: Mapping[str, Any]) -> str:
 
 def _rejected(code: str, path_id: str) -> dict[str, Any]:
     return {"status": "rejected", "code": code, "path_id": path_id, "geometry": None}
+
+
+def _manufacturing_cm(path: Mapping[str, Any]) -> dict[str, Any] | None:
+    """Door-local centimetre curves. Analysis points stay the flattened polygon."""
+
+    from almdina_erp.almdina_erp.domain.cutting.manufacturing_curves import (
+        arc_segment,
+        line_segment,
+        manufacturing_payload,
+        map_loops,
+    )
+
+    nodes = {str(node["id"]): node for node in path["nodes"]}
+    segments = []
+    for segment in path["segments"]:
+        start = nodes[str(segment["from_node"])]
+        end = nodes[str(segment["to_node"])]
+        start_point = (float(start["x_mm"]), float(start["y_mm"]))
+        end_point = (float(end["x_mm"]), float(end["y_mm"]))
+        if segment["kind"] == SEGMENT_LINE:
+            segments.append(line_segment(start_point, end_point))
+            continue
+        if segment["kind"] == SEGMENT_ARC:
+            frame = _arc_frame(
+                start_point,
+                end_point,
+                float(segment["radius_mm"]),
+                bool(segment["large_arc"]),
+                bool(segment["sweep_clockwise"]),
+            )
+            if frame is None:
+                return None
+            center_x, center_y, _theta, delta = frame
+            segments.append(
+                arc_segment(
+                    start_point,
+                    end_point,
+                    (center_x, center_y),
+                    float(segment["radius_mm"]),
+                    ccw=delta > 0.0,
+                )
+            )
+            continue
+        controls = segment["controls"]
+        control_points = [
+            start_point,
+            (float(controls[0]["x_mm"]), float(controls[0]["y_mm"])),
+            (float(controls[1]["x_mm"]), float(controls[1]["y_mm"])),
+            end_point,
+        ]
+        segments.append(
+            {
+                "kind": "spline",
+                "start": start_point,
+                "end": end_point,
+                "degree": 3,
+                "control_points": control_points,
+                "knots": [0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0],
+                "fit_points": [],
+            }
+        )
+    if not any(str(segment.get("kind")) != "line" for segment in segments):
+        return None
+    loops = map_loops(
+        [{"role": "outer", "closed": True, "segments": segments}],
+        lambda point: (point[0] / 10.0, point[1] / 10.0),
+        scale=0.1,
+    )
+    return manufacturing_payload(loops)
 
 
 def _flatten_path(path: Mapping[str, Any]) -> list[tuple[float, float]] | dict[str, Any]:

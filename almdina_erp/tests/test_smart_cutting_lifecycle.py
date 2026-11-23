@@ -39,6 +39,7 @@ def test_calculation_selects_smart_before_fingerprinting():
                               min_remnant_length_mm=300, min_remnant_area_m2=.09)
     with patch.object(workspace.frappe, "get_cached_doc", return_value=factory, create=True), \
          patch.object(workspace, "optimize_order_plan", side_effect=calculate), \
+         patch.object(workspace, "_reject_or_repair_addon_cutters", side_effect=lambda _plan, result: result), \
          patch.object(workspace, "apply_calculation_outcome"):
         workspace.calculate_system_plan(order, plan)
     assert plan.optimization_mode == captured[0].optimizer.selected_mode == "smart"

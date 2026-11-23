@@ -301,6 +301,69 @@ _LINER_SIDE_AR = {
 }
 
 
+def _addon_kind_label(kind: object) -> str:
+    return {
+        "liner": _("liner"),
+        "back_groove": _("rear groove"),
+        "recessed_handle_cutout": _("plunge handle"),
+    }.get(str(kind or ""), _("add-on"))
+
+
+def _millimetres(value: object) -> str:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return "—"
+    return format_mm(number)
+
+
+def _present_addon_cutter(issue: DxfValidationIssue, target_text: str) -> PresentedDxfError:
+    """Same problem / place / action card used when a door misses the board margin."""
+
+    params = dict(issue.params or {})
+    kind = str(params.get("kind") or params.get("overlay_kind") or "liner")
+    kind_label = _addon_kind_label(kind)
+    door = issue.target.source_piece_no
+    if door is None:
+        door = params.get("source_piece_no") or "—"
+    width = params.get("width_mm")
+    diameter = params.get("diameter_mm")
+    if width in (None, "") or diameter in (None, ""):
+        try:
+            width = float(params.get("expected")) * 10.0
+            diameter = float(params.get("measured")) * 10.0
+        except (TypeError, ValueError):
+            width = width if width not in (None, "") else "—"
+            diameter = diameter if diameter not in (None, "") else "—"
+    reason_code = str(params.get("reason") or params.get("reason_code") or issue.code)
+    neighbor = params.get("neighbor_piece_no")
+    if reason_code == "rear_groove_neighbor_conflict" and neighbor not in (None, ""):
+        problem = _(
+            "Door {0}: the rear groove is {1} mm wide and its cutter is {2} mm. "
+            "The cutter body enters door {3}. The cutting plan cannot be calculated or approved."
+        ).format(door, _millimetres(width), _millimetres(diameter), neighbor)
+        action = _(
+            "Separate the two doors along that edge, or turn the grooved door so the groove faces an open edge, then calculate again. The groove width and the cutter are not changed automatically."
+        )
+    elif reason_code == "rear_groove_oversize_unsafe":
+        problem = _(
+            "Door {0}: the rear groove is {1} mm wide and its cutter is {2} mm. "
+            "A wider cutter is allowed only when the groove starts at the door edge and the cutter covers that width without cutting the rest of the door."
+        ).format(door, _millimetres(width), _millimetres(diameter))
+        action = _(
+            "Run the rear groove along the open door edge, or choose a cutter whose diameter is less than or equal to the groove width, then calculate again."
+        )
+    else:
+        problem = _(
+            "Door {0}: the {1} is {2} mm wide and its cutter is {3} mm. "
+            "The cutter is wider than the add-on, so the cutting plan cannot be calculated or approved."
+        ).format(door, kind_label, _millimetres(width), _millimetres(diameter))
+        action = _(
+            "Choose a cutter whose diameter is less than or equal to the add-on width, or increase the add-on width, then calculate again. Values are not changed automatically."
+        )
+    return PresentedDxfError(problem, target_text, action, issue.code, issue.category)
+
+
 def _liner_side_label(value: object, piece_type: object) -> str:
     side = str(value or "")
     if side == "edge_break" and str(piece_type or "") == "L-Shaped Corner":
@@ -326,6 +389,11 @@ def _present_liner_mismatch(issue: DxfValidationIssue, target_text: str) -> Pres
             f"المطلوب {params.get('expected') or '؟'} سم، "
             f"والمقاس من DXF {params.get('measured') or '؟'} سم."
         )
+    elif code == codes.LINER_WIDTH_MISMATCH and str(params.get("reason_code") or "") in {
+        "liner_narrower_than_cutter",
+        "rear_groove_oversize_unsafe",
+    }:
+        return _present_addon_cutter(issue, target_text)
     elif code == codes.LINER_WIDTH_MISMATCH:
         problem = (
             f"عرض {name} غير مطابق. "
@@ -693,6 +761,8 @@ def present_issue(issue: DxfValidationIssue) -> PresentedDxfError:
             code,
             issue.category,
         )
+    if code == codes.ADDON_CUTTER_REJECTED:
+        return _present_addon_cutter(issue, target_text)
     if code == codes.TOOL_DIAMETER_INVALID:
         kind_name = _OVERLAY_KIND_AR.get(str(params.get("overlay_kind") or ""), "الأداة")
         reason = str(params.get("reason") or "cutter_diameter_invalid")

@@ -1,7 +1,6 @@
 """Board-editor plan copy uses each layer's stored tool diameter.
 
-Copy readiness is separate from machining-path validity. A liner bit wider
-than the liner strip does not reject the copy and does not store a center path.
+A cutter wider than its add-on rejects the copy and does not store a center path.
 """
 
 from __future__ import annotations
@@ -26,6 +25,7 @@ from almdina_erp.almdina_erp.domain.cutting.board_editor_manufacturing import (
     assert_board_editor_manufacturing_ready,
 )
 from almdina_erp.almdina_erp.domain.cutting.board_editor_plan_materialize import (
+    BoardEditorMaterializeError,
     materialize_plan_snapshot,
 )
 from almdina_erp.almdina_erp.domain.cutting.liner_geometry import (
@@ -153,22 +153,20 @@ class BoardEditorCopyToolDiameterTests(unittest.TestCase):
         self.assertTrue(all(item["cutter_diameter_mm"] == 6 for item in paths))
         self.assertEqual(len({round(point[1], 3) for point in paths[0]["path_mm"]}), 1)
 
-    def test_liner_bit_wider_than_the_strip_does_not_block_the_copy(self):
+    def test_liner_bit_wider_than_the_strip_blocks_the_copy(self):
         machining = liner_fields(side="edge_width_top", offset=0, width=0.6, start=0, length=0)
         result, trusted, layout = _review(
             [piece("pi-a", 1, 0, 0, 400, 500, machining=machining)],
             kerf=4,
             diameters={"liner_tool_diameter_mm": 8},
         )
-        self.assertTrue(result["ready"], result["issues"])
-        warnings = [
-            issue for issue in result["issues"] if issue["code"] == "machining_path_unproven"
-        ]
-        self.assertEqual(len(warnings), 1)
-        self.assertEqual(warnings[0]["severity"], "warning")
-        self.assertEqual(warnings[0]["addon_kind"], "liner")
-        self.assertEqual(warnings[0]["reason"], "liner_narrower_than_cutter")
-        self.assertNotIn("geometry_unproven", codes(result))
+        self.assertFalse(result["ready"])
+        unproven = [issue for issue in result["issues"] if issue["code"] == "geometry_unproven"]
+        self.assertTrue(any(
+            issue["addon_kind"] == "liner" and issue["reason"] == "liner_narrower_than_cutter"
+            for issue in unproven
+        ))
+        self.assertNotIn("machining_path_unproven", codes(result))
         self.assertFalse(
             [item for item in _posed_paths(trusted, layout) if item["kind"] == "liner"]
         )
@@ -372,23 +370,8 @@ class BoardEditorCopyToolDiameterTests(unittest.TestCase):
         refused = snapshot_tool_errors(bare, saw_as_liner)
         self.assertEqual(refused[0]["code"], "liner_narrower_than_cutter")
 
-        wider = self._materialized_liner(width_cm=0.6, liner_diameter=8, kerf=4)
-        assert_board_editor_manufacturing_ready(
-            wider,
-            machine_type="CNC Router",
-            kerf_mm=4,
-        )
-        self.assertFalse(any(
-            item.get("kind") == "liner"
-            for item in wider["sheets"][0]["pieces"][0]["overlays"]
-        ))
-        self.assertEqual(wider["sheets"][0]["pieces"][0]["liner_width_cm"], 0.6)
-        wider_errors = snapshot_tool_errors(
-            wider,
-            diameters_for_record({"kerf_mm": 4, "liner_tool_diameter_mm": 8}),
-        )
-        self.assertEqual(wider_errors[0]["code"], "liner_narrower_than_cutter")
-        self.assertEqual(wider_errors[0]["kind"], "liner")
+        with self.assertRaises(BoardEditorMaterializeError):
+            self._materialized_liner(width_cm=0.6, liner_diameter=8, kerf=4)
 
     def test_projection_wiring_preserves_translation_and_lineage_copy(self):
         query = (ROOT / "almdina_erp" / "services" / "board_editor_query_service.py").read_text(

@@ -2,7 +2,7 @@
     "use strict";
 
     const PAGE_ROUTE = "cnc-sheet-settings";
-    const STYLE = "/assets/almdina_erp/css/door_cutting_order_operational_files.css?v=11";
+    const STYLE = "/assets/almdina_erp/css/door_cutting_order_operational_files.css?v=21";
     // frappe.require reads the extension before the query string. A "?v="
     // suffix makes the loader throw before the script request is sent.
     const ASSETS = Object.freeze([
@@ -59,6 +59,49 @@
     function loadAssets() {
         return Promise.all(ASSETS.map(asset => frappe.require(asset)));
     }
+
+    function pageModule() {
+        const page = window.locals && locals.Page && locals.Page[PAGE_ROUTE];
+        return String((page && page.module) || "Almdina ERP").trim() || "Almdina ERP";
+    }
+
+    function deskNavItemCount() {
+        const root = document.querySelector(".body-sidebar-top .sidebar-items");
+        if (!root) return 0;
+        return root.querySelectorAll(
+            ".sidebar-item-container:not(.section-item), .standard-sidebar-item"
+        ).length;
+    }
+
+    // Frappe resolves the workspace sidebar from the route entity. This page's
+    // entity is the order id, which is not a sidebar link, so a cold open keeps
+    // the dark shell and user footer while .sidebar-items stays empty.
+    // Reuse the module sidebar owner. Do not build a second navigation list.
+    function ensureDeskNavigationSidebar() {
+        const sidebar = window.frappe && frappe.app && frappe.app.sidebar;
+        if (!sidebar) return { applied: false, reason: "missing-sidebar" };
+        const moduleName = pageModule();
+        const existing = deskNavItemCount();
+        if (
+            existing > 0
+            && sidebar.sidebar_title
+            && String(sidebar.sidebar_title).toLowerCase() === moduleName.toLowerCase()
+        ) {
+            return { applied: false, reason: "already-populated", count: existing, moduleName };
+        }
+        if (typeof sidebar.show_sidebar_for_module === "function") {
+            sidebar.show_sidebar_for_module(moduleName);
+        } else if (typeof sidebar.setup === "function") {
+            sidebar.setup(moduleName);
+        } else {
+            return { applied: false, reason: "no-api", moduleName };
+        }
+        return { applied: true, reason: "module-sidebar", count: deskNavItemCount(), moduleName };
+    }
+
+    window.AlmdinaCncSheetSettings = window.AlmdinaCncSheetSettings || {};
+    window.AlmdinaCncSheetSettings.ensureDeskNavigationSidebar = ensureDeskNavigationSidebar;
+    window.AlmdinaCncSheetSettings.pageModule = pageModule;
 
     function routeContext() {
         const value = typeof frappe.get_route === "function" ? frappe.get_route() : [];
@@ -117,8 +160,12 @@
     };
 
     frappe.pages[PAGE_ROUTE].on_page_show = function onPageShow(wrapper) {
+        ensureDeskNavigationSidebar();
         bootstrap(wrapper)
-            .then(() => mount(wrapper))
+            .then(() => {
+                ensureDeskNavigationSidebar();
+                mount(wrapper);
+            })
             .catch(error => {
                 console.error("CNC sheet settings open failed", error);
                 bootMessage(wrapper, translate("Sheet settings could not be loaded."), true);

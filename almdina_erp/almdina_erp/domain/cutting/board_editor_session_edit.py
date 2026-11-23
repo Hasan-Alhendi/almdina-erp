@@ -560,6 +560,19 @@ def _reframe_piece_geometry(
         world_dx=world_dx,
         world_dy=world_dy,
     )
+    if isinstance(piece.get("base_manufacturing"), Mapping):
+        from almdina_erp.almdina_erp.domain.cutting.manufacturing_curves import translate_loops
+
+        from_x, from_y = _sheet_origin_mm(boards, from_sheet)
+        to_x, to_y = _sheet_origin_mm(boards, to_sheet)
+        piece["base_manufacturing"] = {
+            "schema_version": 1,
+            "loops": translate_loops(
+                piece["base_manufacturing"].get("loops") or [],
+                from_x + num(world_dx) - to_x,
+                from_y + num(world_dy) - to_y,
+            ),
+        }
     piece["reservation_mm"] = _reframe_points(
         piece.get("reservation_mm"),
         boards,

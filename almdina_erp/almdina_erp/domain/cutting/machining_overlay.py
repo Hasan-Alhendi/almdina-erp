@@ -202,6 +202,7 @@ def generate_toolpath(
         start_sawn=start_sawn,
         end_sawn=end_sawn,
         obstacles=obstacles,
+        addon_kind=kind,
     )
 
 
@@ -258,6 +259,7 @@ def compare_overlay_path(
         start_sawn=start_sawn,
         end_sawn=end_sawn,
         obstacles=obstacles,
+        addon_kind=kind,
     )
 
 

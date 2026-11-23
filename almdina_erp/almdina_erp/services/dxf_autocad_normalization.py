@@ -94,11 +94,14 @@ def _copy_text_entity(target_modelspace: Any, entity: Any) -> None:
         )
 
 
-def _polyline_points(entity: Any) -> list[tuple[float, float]]:
-    points = [(float(point[0]), float(point[1])) for point in entity.get_points("xy")]
+def _polyline_points(entity: Any) -> list[tuple[float, float, float]]:
+    points = [
+        (float(point[0]), float(point[1]), float(point[2]) if len(point) > 2 else 0.0)
+        for point in entity.get_points("xyb")
+    ]
     if len(points) < 2:
         raise ValueError("LWPOLYLINE must contain at least two points.")
-    if any(not math.isfinite(x) or not math.isfinite(y) for x, y in points):
+    if any(not math.isfinite(x) or not math.isfinite(y) or not math.isfinite(bulge) for x, y, bulge in points):
         raise ValueError("LWPOLYLINE contains an invalid point.")
     return points
 
@@ -107,7 +110,7 @@ def _copy_lwpolyline(target_modelspace: Any, entity: Any) -> None:
     target_modelspace.add_lwpolyline(
         _polyline_points(entity),
         close=bool(entity.closed),
-        format="xy",
+        format="xyb",
         dxfattribs={"layer": str(entity.dxf.layer or "0")},
     )
 

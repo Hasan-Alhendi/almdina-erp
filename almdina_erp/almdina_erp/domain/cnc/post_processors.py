@@ -195,6 +195,18 @@ class _ImaEmitter:
         self.mode = "G1"
         self.feed = feed
 
+    def arc_to(self, *, x: float, y: float, i: float, j: float, clockwise: bool, feed: float) -> None:
+        code = "G2" if clockwise else "G3"
+        feed_changed = self.feed is None or abs(self.feed - feed) > 0.05
+        body = f"{code} X{x:.4f} Y{y:.4f} I{i:.4f} J{j:.4f}"
+        if self.mode != code or feed_changed:
+            body = f"{body} F{feed:.1f}"
+        self._consume(body, numbered=True)
+        self.mode = code
+        self.feed = feed
+        self.x = x
+        self.y = y
+
     def rapid_xy_at(self, x: float, y: float, safe_z: float) -> None:
         if self.z is not None and self.z < safe_z - _AXIS_TOLERANCE_MM:
             self.rapid(z=safe_z)
@@ -291,7 +303,7 @@ def emit_ima_wh(
                 }
             )
             for motion in motions:
-                if str(motion.get("kind") or "") == "cut":
+                if str(motion.get("kind") or "") in {"cut", "arc"}:
                     cut_count += 1
                 elif str(motion.get("kind") or "") == "plunge":
                     pass_count += 1
@@ -318,6 +330,15 @@ def emit_ima_wh(
                     x=float(motion["x_mm"]),
                     y=float(motion["y_mm"]),
                     z=-float(motion["depth_mm"]),
+                    feed=float(item["feed"]),
+                )
+            elif kind == "arc":
+                writer.arc_to(
+                    x=float(motion["x_mm"]),
+                    y=float(motion["y_mm"]),
+                    i=float(motion.get("i_mm") or 0.0),
+                    j=float(motion.get("j_mm") or 0.0),
+                    clockwise=bool(motion.get("clockwise")),
                     feed=float(item["feed"]),
                 )
             elif kind == "retract":

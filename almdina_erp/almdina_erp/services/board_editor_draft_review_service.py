@@ -83,6 +83,23 @@ def _issue_message(issue: Mapping[str, Any]) -> str:
         return _(
             "The liner tool is wider than the liner strip, so no machining path was stored with this copy."
         )
+    if code == "geometry_unproven" and reason in {
+        "liner_narrower_than_cutter",
+        "rear_groove_oversize_unsafe",
+        "rear_groove_neighbor_conflict",
+    }:
+        subject = kind or _("add-on")
+        if reason == "rear_groove_neighbor_conflict":
+            return _(
+                "The rear-groove cutter body enters a neighbouring door, so this distribution cannot be saved. Separate those doors or turn the groove toward an open edge."
+            )
+        if reason == "rear_groove_oversize_unsafe":
+            return _(
+                "This rear-groove cutter is wider than the groove and would cut the door outside the requested groove. Run the groove along the open door edge, or choose a narrower cutter."
+            )
+        return _(
+            "The {0} cutter is wider than the add-on, so this distribution cannot be saved. Choose a cutter whose diameter is less than or equal to the add-on width."
+        ).format(subject)
     if code == "geometry_unproven":
         if kind and reason:
             return _(

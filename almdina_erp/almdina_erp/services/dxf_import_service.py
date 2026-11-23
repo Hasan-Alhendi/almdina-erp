@@ -7,6 +7,10 @@ from dataclasses import replace
 from collections import Counter
 from typing import Any, Sequence
 
+from almdina_erp.almdina_erp.domain.cutting.manufacturing_curves import (
+    paths_to_loops as _paths_to_loops,
+)
+
 import frappe
 from frappe import _
 from frappe.utils import cint, flt
@@ -105,6 +109,7 @@ from almdina_erp.almdina_erp.domain.cutting.cutter_center_paths import (
     SAW_CENTER_INVALID as SAW_CENTER_CLASS_INVALID,
     SAW_CENTER_MATCH,
     classify_saw_center_segments,
+    cutter_center_from_manufacturing,
     cutter_center_segments,
     internal_center_ring,
 )
@@ -114,6 +119,7 @@ from almdina_erp.almdina_erp.domain.cutting.dxf_geometry import (
     consistent_directed_rings,
     is_axis_aligned_rectangle,
     point_in_polygon,
+    point_to_polygon_distance,
     polygon_area,
     polygon_distance,
     polygon_inside_rect,
@@ -976,7 +982,7 @@ def _read_legacy_content(file_path: str) -> str:
 
 def _read_normalized_geometry(
     file_path: str,
-) -> tuple[list[dict[str, Any]], dict[str, Any], list[dict[str, Any]]]:
+) -> tuple[list[dict[str, Any]], dict[str, Any], list[dict[str, Any]], list[dict[str, Any]]]:
     content_cache: str | None = None
 
     def legacy_parser() -> list[dict[str, Any]]:
@@ -1048,11 +1054,16 @@ def _read_normalized_geometry(
                 )
             ]
         )
-    return result.get("segments") or [], result.get("diagnostics") or {}, result.get("annotations") or []
+    return (
+        result.get("segments") or [],
+        result.get("diagnostics") or {},
+        result.get("annotations") or [],
+        result.get("curves") or [],
+    )
 
 
 def _normalized_segments(file_path: str) -> list[dict[str, Any]]:
-    rows, _diagnostics, _annotations = _read_normalized_geometry(file_path)
+    rows, _diagnostics, _annotations, _curves = _read_normalized_geometry(file_path)
     return rows
 
 
@@ -3134,9 +3145,16 @@ def _attach_text_labels(
 
 def _public_piece(piece: dict[str, Any]) -> dict[str, Any]:
     public_piece = {key: value for key, value in piece.items() if not key.startswith("_")}
-    public_piece["geometry"] = serialize_geometry_from_cm(
-        _piece_material_geometry(piece, units="cm")
-    )
+    geometry = serialize_geometry_from_cm(_piece_material_geometry(piece, units="cm"))
+    if piece.get("_manufacturing_usable"):
+        from almdina_erp.almdina_erp.domain.cutting.manufacturing_curves import (
+            manufacturing_payload,
+        )
+
+        stored = manufacturing_payload(piece["_manufacturing_usable"])
+        if stored is not None:
+            geometry["manufacturing"] = stored
+    public_piece["geometry"] = geometry
     directed = piece.get("_directed_outline_cm")
     if isinstance(directed, list) and len(directed) >= 3:
         # Import-only orientation evidence. Strict validation removes it before
@@ -3192,6 +3210,116 @@ def _expected_saw_center_segments(
     return expected
 
 
+def _curve_matches_ring(segments: Sequence[dict[str, Any]], ring: Sequence[tuple[float, float]]) -> bool:
+    from almdina_erp.almdina_erp.domain.cutting.manufacturing_curves import sample_loop
+
+    samples = sample_loop(list(segments), closed=True)
+    polygon = [(float(point[0]), float(point[1])) for point in ring]
+    if len(samples) < 3 or len(polygon) < 3:
+        return False
+    limit = GEOMETRY_TOLERANCE_MM + 1e-6
+    if any(point_to_polygon_distance(point, polygon) > limit for point in samples):
+        return False
+    return all(point_to_polygon_distance(tuple(point), samples) <= limit for point in polygon)
+
+
+def _attach_manufacturing_curves(
+    pieces: list[dict[str, Any]],
+    curves: Sequence[dict[str, Any]],
+    sheets: Sequence[dict[str, Any]],
+    *,
+    trim_mm: float,
+) -> None:
+    from almdina_erp.almdina_erp.domain.cutting.manufacturing_curves import (
+        loops_have_curves,
+        map_loops,
+    )
+
+    sheets_by_no = {int(sheet["sheet_no"]): sheet for sheet in sheets}
+    geometry_curves = [
+        curve
+        for curve in curves
+        if str(curve.get("layer") or "").upper() == GEOMETRY_LAYER and curve.get("segments")
+    ]
+    for piece in pieces:
+        sheet = sheets_by_no.get(int(piece.get("_sheet_no") or 0))
+        if sheet is None:
+            continue
+        matched: list[dict[str, Any]] = []
+        file_loops: list[dict[str, Any]] = []
+        rings = [("outer", piece.get("_outline_mm") or ())]
+        rings.extend(("hole", hole) for hole in piece.get("_holes_mm") or ())
+        for curve in geometry_curves:
+            role = next(
+                (
+                    name
+                    for name, ring in rings
+                    if _curve_matches_ring(curve["segments"], ring)
+                ),
+                None,
+            )
+            if role is None:
+                continue
+
+            def mapper(point: tuple[float, float], host: dict[str, Any] = sheet) -> tuple[float, float]:
+                planned = _to_plan_points([point], sheet=host, trim_mm=trim_mm)[0]
+                return (planned[0] * 10.0, planned[1] * 10.0)
+
+            matched.extend(
+                map_loops(
+                    [{"role": role, "closed": True, "segments": list(curve["segments"])}],
+                    mapper,
+                    reflection=True,
+                )
+            )
+            file_loops.append(
+                {"role": role, "closed": True, "segments": list(curve["segments"])}
+            )
+        if matched and loops_have_curves(matched):
+            piece["_manufacturing_usable"] = matched
+            piece["_manufacturing_file"] = file_loops
+
+
+
+
+def _observed_curve_loops(
+    rows: Sequence[dict[str, Any]],
+    curves: Sequence[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    from almdina_erp.almdina_erp.domain.cutting.manufacturing_curves import line_segment
+
+    by_entity = {
+        int(curve["entity_id"]): curve
+        for curve in curves
+        if str(curve.get("layer") or "").upper() == CUT_PATH_LAYER and curve.get("segments")
+    }
+    grouped: dict[int, list[dict[str, Any]]] = {}
+    for row in _overlay_rows_for_layer(list(rows), CUT_PATH_LAYER):
+        grouped.setdefault(int(row["entity_id"]), []).append(row)
+    loops = []
+    for entity_id, segments in grouped.items():
+        curve = by_entity.get(entity_id)
+        if curve is not None:
+            loops.append(
+                {
+                    "closed": bool(curve.get("closed")),
+                    "segments": list(curve["segments"]),
+                    "role": "outer",
+                }
+            )
+            continue
+        points = [tuple(segments[0]["start"])]
+        for segment in segments:
+            points.append(tuple(segment["end"]))
+        closed = bool(segments[0].get("closed"))
+        primitive = [
+            line_segment(points[index], points[index + 1])
+            for index in range(len(points) - 1)
+        ]
+        loops.append({"closed": closed, "segments": primitive, "role": "outer"})
+    return loops
+
+
 def _classify_modern_saw_centers(
     rows: list[dict[str, Any]],
     pieces: Sequence[dict[str, Any]],
@@ -3199,11 +3327,64 @@ def _classify_modern_saw_centers(
     *,
     kerf_mm: float,
     geometry_format: bool,
+    curves: Sequence[dict[str, Any]] | None = None,
 ) -> str:
     """Return snapshot status for modern GEOMETRY files; legacy stays Legacy."""
 
     if not geometry_format:
         return "Legacy"
+    curved = [piece for piece in pieces if piece.get("_manufacturing_file")]
+    if curved:
+        from almdina_erp.almdina_erp.domain.cutting.manufacturing_curves import (
+            SAW_CURVE_ABSENT,
+            SAW_CURVE_INVALID,
+            SAW_CURVE_MATCH,
+            classify_curve_centers,
+        )
+
+        radius = max(0.0, float(kerf_mm or 0.0)) / 2.0
+        shapes = []
+        material = []
+        for piece in pieces:
+            outer = tuple((float(point[0]), float(point[1])) for point in (piece.get("_outline_mm") or ()))
+            holes = tuple(
+                tuple((float(point[0]), float(point[1])) for point in hole)
+                for hole in (piece.get("_holes_mm") or ())
+                if len(hole or ()) >= 3
+            )
+            if len(outer) < 3:
+                continue
+            material.append((outer, holes))
+            file_loops = list(piece.get("_manufacturing_file") or [])
+            outer_loop = next((item["segments"] for item in file_loops if item.get("role") == "outer"), [])
+            hole_loops = [item["segments"] for item in file_loops if item.get("role") == "hole"]
+            while len(hole_loops) < len(holes):
+                hole_loops.append([])
+            shapes.append((outer, holes, [outer_loop, *hole_loops[: len(holes)]]))
+        expected = _paths_to_loops(
+            cutter_center_from_manufacturing(shapes, radius)
+        )
+        observed = _observed_curve_loops(rows, curves or [])
+        classification = classify_curve_centers(observed, expected, material)
+        if classification == SAW_CURVE_INVALID:
+            raise DxfImportError(
+                issues=[
+                    issue(
+                        SAW_CENTER_INVALID,
+                        CATEGORY_LAYOUT,
+                        target=layer_target(CUT_PATH_LAYER),
+                        params={
+                            "observed_count": len(observed),
+                            "expected_count": len(expected),
+                        },
+                    )
+                ]
+            )
+        if classification == SAW_CURVE_MATCH:
+            return "Present"
+        if classification == SAW_CURVE_ABSENT:
+            return "Absent"
+        return "Absent"
     observed = _segments_for_layer(rows, CUT_PATH_LAYER)
     expected = _expected_saw_center_segments(pieces, sheets, kerf_mm=kerf_mm)
     classification = classify_saw_center_segments(observed, expected)
@@ -3457,7 +3638,7 @@ def parse_production_dxf(
     if not os.path.exists(file_path):
         raise DxfImportError(issues=[issue(FILE_MISSING, CATEGORY_FILE, target=file_target())])
 
-    rows, diagnostics, annotations = _read_normalized_geometry(file_path)
+    rows, diagnostics, annotations, curves = _read_normalized_geometry(file_path)
     trim_mm = max(0.0, flt(order.trim_margin_mm))
     full_board_width_cm = flt(order.board_width_cm) or flt(order.full_board_width_mm) / 10
     full_board_length_cm = flt(order.board_length_cm) or flt(order.full_board_length_mm) / 10
@@ -3655,12 +3836,19 @@ def parse_production_dxf(
     saw_center_pieces = [
         piece for piece in labeled if not piece.get("_exclusive_offcut")
     ]
+    _attach_manufacturing_curves(
+        saw_center_pieces,
+        curves,
+        sheets,
+        trim_mm=trim_mm,
+    )
     saw_center_status = _classify_modern_saw_centers(
         rows,
         saw_center_pieces,
         sheets,
         kerf_mm=flt(order.kerf_mm),
         geometry_format=geometry_format,
+        curves=curves,
     )
 
     geometry_by_piece_id = {int(piece["id"]): piece["_outline_cm"] for piece in labeled}

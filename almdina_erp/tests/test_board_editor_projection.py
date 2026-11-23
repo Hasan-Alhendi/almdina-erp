@@ -393,9 +393,10 @@ def test_import_path_still_ignores_new_reader_fields(tmp_path: Path, monkeypatch
     path = tmp_path / "import-smoke.dxf"
     document.saveas(path)
 
-    segments, diagnostics, annotations = dxf_import_service._read_normalized_geometry(
+    segments, diagnostics, annotations, curves = dxf_import_service._read_normalized_geometry(
         str(path)
     )
+    assert isinstance(curves, list)
 
     assert isinstance(segments, list)
     assert "detected_layers" in diagnostics

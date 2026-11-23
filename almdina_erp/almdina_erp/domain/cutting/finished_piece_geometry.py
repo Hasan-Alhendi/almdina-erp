@@ -133,7 +133,10 @@ def resolve_finished_geometry_mm(
 
     if isinstance(stored_geometry, Mapping):
         try:
-            return serialize_geometry_mm(parse_geometry_mm(stored_geometry))
+            return serialize_geometry_mm(
+                parse_geometry_mm(stored_geometry),
+                stored_geometry.get("manufacturing"),
+            )
         except DxfGeometrySnapshotError:
             # Fall through to rebuild from approved placement when possible.
             pass
