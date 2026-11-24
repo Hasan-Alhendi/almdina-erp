@@ -56,6 +56,13 @@ def test_primary_tab_bar_is_fixed_on_scroll_and_labels_are_arabic():
     assert "--alm-primary" in css
     assert "--alm-on-primary" in css
     assert "border-bottom: none !important" in css
+    # Fixed primary tabs keep the same card radius as the resting shell.
+    fixed = css.split(".dco-operator-form .dco-sticky-tabs.dco-tabs-is-fixed {", 1)[1].split("}", 1)[0]
+    assert "border-radius: var(--alm-radius-card, 16px) !important" in fixed
+    assert "border-radius: 0" not in fixed
+    assert "box-shadow: none" not in fixed
+    assert "border: 1px solid var(--alm-card-border, #e4e8ee) !important" in fixed
+    # Outer non-sticky wrapper stays visually transparent around the sticky shell.
     assert "border-radius: 0 !important" in css
     assert "@media (min-width: 721px)" in css
     assert "function reconcileSearchPlacement" in _source(

@@ -101,15 +101,16 @@
     border: 1px solid var(--alm-card-border, #e4e8ee) !important;
     border-bottom: 1px solid var(--alm-card-border, #e4e8ee) !important;
     border-radius: var(--alm-radius-card, 16px) !important;
-    box-shadow: 0 2px 10px rgba(15, 23, 42, .04) !important;
+    box-shadow: var(--alm-shadow-card, 0 8px 24px rgba(15, 23, 42, .045)) !important;
     /* Match .form-page content width: same shell max minus the shared gutter. */
     width: calc(100% - (2 * var(--dco-tab-content-gutter, 20px)));
     max-width: calc(var(--dco-tab-shell-max, 1440px) - (2 * var(--dco-tab-content-gutter, 20px)));
     margin: 0 auto var(--dco-section-stack-gap, 8px) !important;
-    padding-block: 8px 3px !important;
-    padding-inline: 16px 20px !important;
+    padding-block: 10px !important;
+    padding-inline: 14px 16px !important;
     box-sizing: border-box;
-    overflow: hidden;
+    /* Keep rounded card edges without clipping wrapped tab/action rows. */
+    overflow: visible;
 }
 
 .dco-operator-form .dco-sticky-tabs .form-tabs,
@@ -122,23 +123,62 @@
 .dco-operator-form .dco-tab-edit-toolbar-slot {
     display: flex !important;
     align-items: center !important;
-    padding-inline: 10px 4px !important;
+    justify-content: flex-end !important;
+    flex: 1 1 auto !important;
+    min-width: min(100%, 7.5rem) !important;
+    padding-inline: 8px 2px !important;
     margin-inline-start: auto !important;
 }
 
 .dco-operator-form .dco-tab-edit-toolbar {
-    padding: 4px 6px !important;
+    padding: 2px 0 !important;
+    width: 100%;
+    justify-content: flex-end !important;
+}
+
+.dco-operator-form .dco-tab-edit-start {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 6px !important;
+}
+
+.dco-operator-form .dco-tab-edit-start__icon {
+    display: inline-flex !important;
+    flex: 0 0 auto !important;
+    width: 14px !important;
+    height: 14px !important;
+    line-height: 0 !important;
+}
+
+.dco-operator-form .dco-tab-edit-start__icon svg {
+    display: block !important;
+    width: 14px !important;
+    height: 14px !important;
+    fill: none !important;
+    stroke: currentColor !important;
+    stroke-width: 1.8 !important;
+    stroke-linecap: round !important;
+    stroke-linejoin: round !important;
+    pointer-events: none !important;
+}
+
+.dco-operator-form .dco-tab-edit-start__label {
+    display: inline-block !important;
+    line-height: 1.2 !important;
+    white-space: nowrap !important;
 }
 
 .dco-operator-form .dco-sticky-tabs.dco-tabs-is-fixed {
     position: fixed !important;
     /* Below Bootstrap/Frappe modal backdrop (1050) and modal (1055). */
     z-index: 1020 !important;
+    /* Keep card chrome while fixed; left/width/top stay owned by updateFixedTabs. */
     margin: 0 !important;
     background: var(--alm-card, #ffffff) !important;
-    border: 0 !important;
-    border-radius: 0 !important;
-    box-shadow: none !important;
+    border: 1px solid var(--alm-card-border, #e4e8ee) !important;
+    border-radius: var(--alm-radius-card, 16px) !important;
+    box-shadow: var(--alm-shadow-card, 0 8px 24px rgba(15, 23, 42, .045)) !important;
 }
 body.modal-open .dco-operator-form .dco-sticky-tabs.dco-tabs-is-fixed,
 body.modal-open .dco-operator-form .form-tabs-list.dco-sticky-tabs.dco-tabs-is-fixed {
@@ -156,6 +196,13 @@ body.modal-open .dco-operator-form .form-tabs-list.dco-sticky-tabs.dco-tabs-is-f
     margin-bottom: 0 !important;
 }
 
+.dco-operator-form .dco-sticky-tabs .nav-item,
+.dco-operator-form .form-tabs-list .nav-item {
+    margin: 0 !important;
+    flex: 0 1 auto !important;
+    min-width: 0 !important;
+}
+
 .dco-operator-form .dco-sticky-tabs .nav-link,
 .dco-operator-form .dco-sticky-tabs .form-tab,
 .dco-operator-form .form-tabs-list .nav-link,
@@ -168,7 +215,7 @@ body.modal-open .dco-operator-form .form-tabs-list.dco-sticky-tabs.dco-tabs-is-f
     white-space: nowrap !important;
     width: auto !important;
     max-width: none !important;
-    flex: 0 0 auto !important;
+    flex: 0 1 auto !important;
     min-width: 0 !important;
     padding-block: 8px !important;
     padding-inline: 14px !important;
@@ -203,14 +250,14 @@ body.modal-open .dco-operator-form .form-tabs-list.dco-sticky-tabs.dco-tabs-is-f
 .dco-operator-form .dco-sticky-tabs > .form-tabs,
 .dco-operator-form .form-tabs-list.dco-sticky-tabs > .form-tabs {
     display: flex !important;
-    flex-wrap: nowrap !important;
+    flex-wrap: wrap !important;
     align-items: center !important;
-    gap: 4px !important;
+    column-gap: 4px !important;
+    row-gap: 6px !important;
     width: 100% !important;
     max-width: 100% !important;
-    overflow-x: auto !important;
-    overscroll-behavior-inline: contain;
-    scrollbar-width: thin;
+    overflow-x: visible !important;
+    overflow-y: visible !important;
 }
 
 @media (max-width: 1200px) and (min-width: 721px) {
@@ -219,6 +266,15 @@ body.modal-open .dco-operator-form .form-tabs-list.dco-sticky-tabs.dco-tabs-is-f
         overflow-y: auto !important;
         align-content: flex-start !important;
         padding-bottom: 2px !important;
+    }
+
+    /* Keep tabs readable; park the edit action on its own trailing row when the shell narrows. */
+    .dco-operator-form .dco-tab-edit-toolbar-slot {
+        flex: 1 1 100% !important;
+        min-width: 100% !important;
+        margin-inline-start: 0 !important;
+        padding-inline: 0 !important;
+        justify-content: flex-end !important;
     }
 }
 
@@ -441,16 +497,21 @@ body.modal-open .dco-operator-form .form-tabs-list.dco-sticky-tabs.dco-tabs-is-f
         width: calc(100% - (2 * var(--dco-tab-content-gutter, 12px)));
         max-width: calc(var(--dco-tab-shell-max, 1440px) - (2 * var(--dco-tab-content-gutter, 12px)));
         margin: 0 auto var(--dco-section-stack-gap, 6px) !important;
-        padding-block: 6px !important;
+        padding-block: 8px !important;
         padding-inline: 10px !important;
     }
 
     .dco-operator-form .dco-tab-edit-toolbar-slot {
-        padding-inline: 6px 2px !important;
+        flex: 1 1 100% !important;
+        min-width: 100% !important;
+        padding-inline: 0 !important;
+        margin-inline-start: 0 !important;
+        justify-content: flex-end !important;
     }
 
     .dco-operator-form .dco-tab-edit-toolbar {
-        padding: 2px 4px !important;
+        padding: 0 !important;
+        width: 100%;
     }
 
     .dco-operator-form .dco-sticky-tabs .nav-link,
@@ -460,10 +521,15 @@ body.modal-open .dco-operator-form .form-tabs-list.dco-sticky-tabs.dco-tabs-is-f
         min-height: 34px !important;
         min-width: 0 !important;
         width: auto !important;
-        flex: 0 0 auto !important;
+        flex: 0 1 auto !important;
         padding-inline: 10px !important;
         font-size: 12.5px !important;
         font-weight: 750 !important;
+    }
+
+    .dco-operator-form .dco-tab-edit-start {
+        gap: 5px !important;
+        min-height: 34px !important;
     }
 }
 

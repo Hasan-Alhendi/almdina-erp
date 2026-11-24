@@ -121,8 +121,8 @@ def test_static_styles_load_with_manifest_and_are_not_injected_at_refresh():
     toolbar = text(TOOLBAR)
 
     assert assets.count('"/assets/almdina_erp/css/door_cutting_order_form_sidebar.css"') == 1
-    assert assets.count('"/assets/almdina_erp/css/door_cutting_order_form_presentation.css?v=1"') == 1
-    assert '"/assets/almdina_erp/css/door_cutting_order_form_presentation.css?v=1"' in assets
+    assert assets.count('"/assets/almdina_erp/css/door_cutting_order_form_presentation.css?v=3"') == 1
+    assert '"/assets/almdina_erp/css/door_cutting_order_form_presentation.css?v=3"' in assets
     assert ".dco-sticky-tabs .nav-link.active" in css
     assert ".page-head.dco-stable-actions-head .page-actions" in css
     assert ".page-head.dco-responsive-head .page-actions" in css
@@ -212,6 +212,9 @@ def test_sticky_anchor_uses_native_shell_width_without_forcing_frappes_main_colu
         expected = re.search(rf"{property_name}:\s*calc\([^;]+;", shell)
         assert expected and expected.group() in placeholder
     assert "max-width: none !important" not in fixed
+    assert "border-radius: var(--alm-radius-card, 16px) !important" in fixed
+    assert "border-radius: 0" not in fixed
+    assert "box-shadow: none" not in fixed
     assert not re.search(r"\.dco-operator-form \.layout-main-section(?:-wrapper)?\s*\{[^}]*width:\s*100%\s*!important", css)
     assert "const anchorRect = placeholder.getBoundingClientRect()" in header
     assert "new window.ResizeObserver(schedule)" in header

@@ -287,7 +287,18 @@
         return "You do not have permission to edit the cost or the special door prices for this document.";
     }
 
-    function button(label, className, disabled, title) {
+    function pencilIconMarkup() {
+        return (
+            '<span class="dco-tab-edit-start__icon" aria-hidden="true">'
+            + '<svg viewBox="0 0 24 24" focusable="false">'
+            + '<path d="M12 20h9"></path>'
+            + '<path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"></path>'
+            + "</svg>"
+            + "</span>"
+        );
+    }
+
+    function button(label, className, disabled, title, options = {}) {
         const ui = window.AlmdinaUi;
         if (!ui || typeof ui.button !== "function") {
             throw new Error("AlmdinaUi.button is required for DCO tab edit actions");
@@ -304,13 +315,21 @@
             .replace(/\bbtn-success\b/g, "")
             .trim();
         const attrs = title ? { title: translate(title) } : {};
-        return ui.button({
-            label: translate(label),
+        const translatedLabel = translate(label);
+        const withIcon = options && options.icon === "pencil";
+        const markup = ui.button({
+            label: withIcon ? "" : translatedLabel,
             variant,
             className: extraClass,
             disabled: Boolean(disabled),
             attrs,
         });
+        if (!withIcon) return markup;
+        const escapedLabel = frappe.utils.escape_html(translatedLabel);
+        return markup.replace(
+            "</button>",
+            `${pencilIconMarkup()}<span class="dco-tab-edit-start__label">${escapedLabel}</span></button>`
+        );
     }
 
     function flushOrderSurfaces(frm) {
@@ -416,7 +435,7 @@
                 ${editing
                     ? button(CANCEL_LABEL, "btn-default dco-tab-edit-cancel", actionBusy, "Discard the unsaved changes")
                         + button(SAVE_LABEL, "btn-primary dco-tab-edit-save", actionBusy, "Save the changes in this section only")
-                    : button(EDIT_LABEL, "btn-default dco-tab-edit-start", editDisabled, blockMessage)}
+                    : button(EDIT_LABEL, "btn-default dco-tab-edit-start", editDisabled, blockMessage, { icon: "pencil" })}
             </div>
         `;
         return true;

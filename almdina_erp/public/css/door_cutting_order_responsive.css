@@ -1121,21 +1121,20 @@
     .dco-operator-form .form-tabs-list,
     .dco-operator-form .nav-tabs {
         max-width: 100%;
-        overflow-x: auto !important;
-        overflow-y: hidden !important;
-        overscroll-behavior-inline: contain;
-        scrollbar-width: thin;
-        -webkit-overflow-scrolling: touch;
     }
 
-    .dco-operator-form .form-tabs-list,
-    .dco-operator-form .nav-tabs {
-        flex-wrap: nowrap !important;
+    .dco-operator-form .dco-sticky-tabs .form-tabs-list,
+    .dco-operator-form .dco-sticky-tabs .nav-tabs,
+    .dco-operator-form .dco-sticky-tabs > .form-tabs,
+    .dco-operator-form .form-tabs-list.dco-sticky-tabs > .form-tabs {
+        flex-wrap: wrap !important;
+        overflow-x: visible !important;
+        overflow-y: visible !important;
     }
 
     .dco-operator-form .dco-sticky-tabs .nav-link,
     .dco-operator-form .dco-sticky-tabs .form-tab {
-        flex: 0 0 auto;
+        flex: 0 1 auto;
         width: auto;
         min-width: 0;
         max-width: none;
