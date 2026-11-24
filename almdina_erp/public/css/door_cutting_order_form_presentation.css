@@ -109,13 +109,13 @@
     padding-block: 10px !important;
     padding-inline: 14px 16px !important;
     box-sizing: border-box;
-    /* Keep rounded card edges without clipping wrapped tab/action rows. */
+    /* Keep rounded card edges without clipping wrapped tab/action rows.. */
     overflow: visible;
 }
 
 .dco-operator-form .dco-sticky-tabs .form-tabs,
 .dco-operator-form .dco-sticky-tabs .form-tabs-list,
-.dco-operator-form .form-tabs-list.dco-sticky-tabs > .form-tabs {
+.dco-operator-form .form-tabs-list.dco-sticky-tabs>.form-tabs {
     margin-bottom: 0 !important;
     border-bottom: none !important;
 }
@@ -180,6 +180,7 @@
     border-radius: var(--alm-radius-card, 16px) !important;
     box-shadow: var(--alm-shadow-card, 0 8px 24px rgba(15, 23, 42, .045)) !important;
 }
+
 body.modal-open .dco-operator-form .dco-sticky-tabs.dco-tabs-is-fixed,
 body.modal-open .dco-operator-form .form-tabs-list.dco-sticky-tabs.dco-tabs-is-fixed {
     z-index: 1020 !important;
@@ -228,8 +229,8 @@ body.modal-open .dco-operator-form .form-tabs-list.dco-sticky-tabs.dco-tabs-is-f
 
 .dco-operator-form .dco-sticky-tabs .nav-link.active,
 .dco-operator-form .dco-sticky-tabs .form-tab.active,
-.dco-operator-form .dco-sticky-tabs .nav-item.active > .nav-link,
-.dco-operator-form .dco-sticky-tabs .nav-item.active > .form-tab {
+.dco-operator-form .dco-sticky-tabs .nav-item.active>.nav-link,
+.dco-operator-form .dco-sticky-tabs .nav-item.active>.form-tab {
     background: var(--alm-primary, #172033) !important;
     border-color: var(--alm-primary, #172033) !important;
     color: var(--alm-on-primary, #fff) !important;
@@ -238,8 +239,8 @@ body.modal-open .dco-operator-form .form-tabs-list.dco-sticky-tabs.dco-tabs-is-f
 
 .dco-operator-form .dco-sticky-tabs .nav-link.active:hover,
 .dco-operator-form .dco-sticky-tabs .form-tab.active:hover,
-.dco-operator-form .dco-sticky-tabs .nav-item.active > .nav-link:hover,
-.dco-operator-form .dco-sticky-tabs .nav-item.active > .form-tab:hover {
+.dco-operator-form .dco-sticky-tabs .nav-item.active>.nav-link:hover,
+.dco-operator-form .dco-sticky-tabs .nav-item.active>.form-tab:hover {
     background: var(--alm-primary-hover, #0f172a) !important;
     border-color: var(--alm-primary-hover, #0f172a) !important;
     color: var(--alm-on-primary, #fff) !important;
@@ -247,8 +248,8 @@ body.modal-open .dco-operator-form .form-tabs-list.dco-sticky-tabs.dco-tabs-is-f
 
 .dco-operator-form .dco-sticky-tabs .form-tabs-list,
 .dco-operator-form .dco-sticky-tabs .nav-tabs,
-.dco-operator-form .dco-sticky-tabs > .form-tabs,
-.dco-operator-form .form-tabs-list.dco-sticky-tabs > .form-tabs {
+.dco-operator-form .dco-sticky-tabs>.form-tabs,
+.dco-operator-form .form-tabs-list.dco-sticky-tabs>.form-tabs {
     display: flex !important;
     flex-wrap: wrap !important;
     align-items: center !important;
@@ -317,7 +318,7 @@ body.modal-open .dco-operator-form .form-tabs-list.dco-sticky-tabs.dco-tabs-is-f
         min-width: 0 !important;
     }
 
-    .dco-form-presentation-shell .page-head.dco-responsive-head .standard-actions > .search-bar {
+    .dco-form-presentation-shell .page-head.dco-responsive-head .standard-actions>.search-bar {
         flex: 0 0 auto !important;
         width: auto !important;
         max-width: none !important;
@@ -464,10 +465,10 @@ body.modal-open .dco-operator-form .form-tabs-list.dco-sticky-tabs.dco-tabs-is-f
         stroke: var(--icon-stroke, var(--text-muted, #6b7280)) !important;
     }
 
-    .dco-form-presentation-shell .page-head.dco-responsive-head .standard-items-section > :where(.btn, .btn-group, .dropdown),
-    .dco-form-presentation-shell .page-head.dco-responsive-head .page-actions .custom-actions > :where(.btn, .btn-group, .dropdown),
-    .dco-form-presentation-shell .page-head.dco-responsive-head .page-actions .custom-mobile-actions > :where(.btn, .btn-group, .dropdown),
-    .dco-form-presentation-shell .page-head.dco-responsive-head .page-actions .standard-actions > :where(.btn, .btn-group, .dropdown) {
+    .dco-form-presentation-shell .page-head.dco-responsive-head .standard-items-section> :where(.btn, .btn-group, .dropdown),
+    .dco-form-presentation-shell .page-head.dco-responsive-head .page-actions .custom-actions> :where(.btn, .btn-group, .dropdown),
+    .dco-form-presentation-shell .page-head.dco-responsive-head .page-actions .custom-mobile-actions> :where(.btn, .btn-group, .dropdown),
+    .dco-form-presentation-shell .page-head.dco-responsive-head .page-actions .standard-actions> :where(.btn, .btn-group, .dropdown) {
         width: 100% !important;
         min-width: 0 !important;
         max-width: 100% !important;
@@ -488,7 +489,7 @@ body.modal-open .dco-operator-form .form-tabs-list.dco-sticky-tabs.dco-tabs-is-f
         padding-inline: 6px !important;
     }
 
-    .dco-form-presentation-shell .page-head.dco-responsive-head .page-actions .menu-btn-group > .btn {
+    .dco-form-presentation-shell .page-head.dco-responsive-head .page-actions .menu-btn-group>.btn {
         min-width: 0 !important;
     }
 
@@ -538,206 +539,228 @@ body.modal-open .dco-operator-form .form-tabs-list.dco-sticky-tabs.dco-tabs-is-f
 .dco-form-presentation-shell .page-head.dco-stable-actions-head,
 .dco-form-presentation-shell .page-head.dco-stable-actions-head .page-head-content,
 .dco-form-presentation-shell .page-head.dco-stable-actions-head .page-actions {
-    height:auto!important;
-    max-height:none!important;
-    overflow:visible!important;
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
 }
+
 .dco-form-presentation-shell .page-head.dco-stable-actions-head .page-head-content {
-    position:relative!important;
+    position: relative !important;
 }
-@media (min-width:721px){
-.dco-form-presentation-shell .page-head.dco-stable-actions-head .page-actions,
-.dco-form-presentation-shell .page-head.dco-stable-actions-head .custom-actions,
-.dco-form-presentation-shell .page-head.dco-stable-actions-head .standard-actions {
-    display:flex!important;
-    visibility:visible!important;
-    opacity:1!important;
-    flex-wrap:wrap!important;
-    align-items:center!important;
-    gap:6px!important;
-}
-.dco-form-presentation-shell .page-head.dco-stable-actions-head .page-actions {
-    position:static!important;
-    inset:auto!important;
-    transform:none!important;
-    margin:0!important;
-    margin-inline-start:auto!important;
-    justify-content:flex-start!important;
-    flex:1 1 auto!important;
-    width:auto!important;
-    max-width:calc(100%)!important;
-}
-.dco-form-presentation-shell .page-head.dco-stable-actions-head .custom-actions > .btn,
-.dco-form-presentation-shell .page-head.dco-stable-actions-head .custom-actions > .btn-group,
-.dco-form-presentation-shell .page-head.dco-stable-actions-head .custom-actions > .dropdown {
-    display:inline-flex!important;
-    visibility:visible!important;
-    opacity:1!important;
-    flex:0 0 auto!important;
-    margin:0!important;
-}
-.dco-form-presentation-shell .page-head.dco-stable-actions-head .custom-actions .btn {
-    display:inline-flex!important;
-    align-items:center!important;
-    white-space:nowrap!important;
-    visibility:visible!important;
-    opacity:1!important;
-}
+
+@media (min-width:721px) {
+
+    .dco-form-presentation-shell .page-head.dco-stable-actions-head .page-actions,
+    .dco-form-presentation-shell .page-head.dco-stable-actions-head .custom-actions,
+    .dco-form-presentation-shell .page-head.dco-stable-actions-head .standard-actions {
+        display: flex !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+        flex-wrap: wrap !important;
+        align-items: center !important;
+        gap: 6px !important;
+    }
+
+    .dco-form-presentation-shell .page-head.dco-stable-actions-head .page-actions {
+        position: static !important;
+        inset: auto !important;
+        transform: none !important;
+        margin: 0 !important;
+        margin-inline-start: auto !important;
+        justify-content: flex-start !important;
+        flex: 1 1 auto !important;
+        width: auto !important;
+        max-width: calc(100%) !important;
+    }
+
+    .dco-form-presentation-shell .page-head.dco-stable-actions-head .custom-actions>.btn,
+    .dco-form-presentation-shell .page-head.dco-stable-actions-head .custom-actions>.btn-group,
+    .dco-form-presentation-shell .page-head.dco-stable-actions-head .custom-actions>.dropdown {
+        display: inline-flex !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+        flex: 0 0 auto !important;
+        margin: 0 !important;
+    }
+
+    .dco-form-presentation-shell .page-head.dco-stable-actions-head .custom-actions .btn {
+        display: inline-flex !important;
+        align-items: center !important;
+        white-space: nowrap !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+    }
 }
 
 /* Measurement toolbar: one title plus print / expand / help icon actions in normal flow. */
 .dco-operator-form .dco-fast-entry-toolbar {
-    position:relative!important;
-    display:flex!important;
-    flex-wrap:wrap!important;
-    align-items:center!important;
-    justify-content:flex-start!important;
-    column-gap:9px!important;
-    row-gap:6px!important;
-    min-height:42px!important;
-    padding:5px 8px!important;
+    position: relative !important;
+    display: flex !important;
+    flex-wrap: wrap !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+    column-gap: 9px !important;
+    row-gap: 6px !important;
+    min-height: 42px !important;
+    padding: 5px 8px !important;
 }
-.dco-operator-form .dco-fast-entry-toolbar > :not(.dco-fast-help):not(.dco-measurement-table-actions) {
-    display:none!important;
+
+.dco-operator-form .dco-fast-entry-toolbar> :not(.dco-fast-help):not(.dco-measurement-table-actions) {
+    display: none !important;
 }
+
 .dco-operator-form .dco-fast-entry-toolbar .dco-fast-help {
-    flex:1 1 12rem!important;
-    width:auto!important;
-    min-width:0!important;
-    max-width:calc(100%)!important;
-    margin:0!important;
-    padding:0!important;
-    display:flex!important;
-    align-items:center!important;
-    justify-content:flex-start!important;
-    overflow:hidden!important;
-    text-align:start!important;
+    flex: 1 1 12rem !important;
+    width: auto !important;
+    min-width: 0 !important;
+    max-width: calc(100%) !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+    overflow: hidden !important;
+    text-align: start !important;
 }
-.dco-operator-form .dco-fast-entry-toolbar .dco-fast-help > :not(.dco-measurement-title) {
-    display:none!important;
+
+.dco-operator-form .dco-fast-entry-toolbar .dco-fast-help> :not(.dco-measurement-title) {
+    display: none !important;
 }
+
 .dco-operator-form .dco-fast-entry-toolbar .dco-measurement-title {
-    display:block!important;
-    min-width:0!important;
-    max-width:100%!important;
-    font-size:14px!important;
-    font-weight:850!important;
-    line-height:1.25!important;
-    text-align:start!important;
-    white-space:nowrap!important;
-    overflow:hidden!important;
-    text-overflow:ellipsis!important;
+    display: block !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    font-size: 14px !important;
+    font-weight: 850 !important;
+    line-height: 1.25 !important;
+    text-align: start !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
 }
-.dco-operator-form .dco-fast-entry-toolbar > .dco-measurement-table-actions {
-    position:static!important;
-    inset:auto!important;
-    transform:none!important;
-    order:0!important;
-    direction:inherit!important;
-    display:flex!important;
-    flex-wrap:wrap!important;
-    align-items:center!important;
-    gap:5px!important;
-    width:auto!important;
-    max-width:calc(100%)!important;
-    margin:0!important;
-    margin-inline-start:auto!important;
-    flex:0 0 auto!important;
+
+.dco-operator-form .dco-fast-entry-toolbar>.dco-measurement-table-actions {
+    position: static !important;
+    inset: auto !important;
+    transform: none !important;
+    order: 0 !important;
+    direction: inherit !important;
+    display: flex !important;
+    flex-wrap: wrap !important;
+    align-items: center !important;
+    gap: 5px !important;
+    width: auto !important;
+    max-width: calc(100%) !important;
+    margin: 0 !important;
+    margin-inline-start: auto !important;
+    flex: 0 0 auto !important;
 }
+
 .dco-operator-form .dco-fast-entry-toolbar .dco-measurement-table-actions .dco-toolbar-icon-button,
 .dco-operator-form .dco-fast-entry-toolbar .dco-input-help {
-    width:32px!important;
-    min-width:32px!important;
-    height:32px!important;
-    min-height:32px!important;
-    flex:0 0 32px!important;
-    display:inline-flex!important;
-    align-items:center!important;
-    justify-content:center!important;
-    padding:0!important;
-    overflow:hidden!important;
-    border:1px solid var(--alm-card-border,#e4e8ee)!important;
-    border-radius:8px!important;
-    background:var(--alm-card,#ffffff)!important;
-    color:var(--alm-text-strong,#101828)!important;
-    box-shadow:0 1px 2px rgba(15,23,42,.035)!important;
-    white-space:nowrap!important;
+    width: 32px !important;
+    min-width: 32px !important;
+    height: 32px !important;
+    min-height: 32px !important;
+    flex: 0 0 32px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+    border: 1px solid var(--alm-card-border, #e4e8ee) !important;
+    border-radius: 8px !important;
+    background: var(--alm-card, #ffffff) !important;
+    color: var(--alm-text-strong, #101828) !important;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, .035) !important;
+    white-space: nowrap !important;
 }
+
 .dco-operator-form .dco-fast-entry-toolbar .dco-measurement-table-actions .dco-toolbar-icon-button svg {
-    width:16px!important;
-    height:16px!important;
-    display:block!important;
-    fill:none!important;
-    stroke:currentColor!important;
-    stroke-width:1.8!important;
-    stroke-linecap:round!important;
-    stroke-linejoin:round!important;
-    pointer-events:none!important;
+    width: 16px !important;
+    height: 16px !important;
+    display: block !important;
+    fill: none !important;
+    stroke: currentColor !important;
+    stroke-width: 1.8 !important;
+    stroke-linecap: round !important;
+    stroke-linejoin: round !important;
+    pointer-events: none !important;
 }
+
 .dco-operator-form .dco-fast-entry-toolbar .dco-input-help {
-    font-family:Georgia,serif!important;
-    font-size:17px!important;
-    font-weight:700!important;
-    font-style:italic!important;
-    line-height:1!important;
+    font-family: Georgia, serif !important;
+    font-size: 17px !important;
+    font-weight: 700 !important;
+    font-style: italic !important;
+    line-height: 1 !important;
 }
+
 .dco-operator-form .dco-fast-entry-toolbar .dco-measurement-table-actions .dco-toolbar-icon-button:hover,
 .dco-operator-form .dco-fast-entry-toolbar .dco-input-help:hover {
-    border-color:var(--alm-primary,#172033)!important;
-    background:color-mix(in srgb, var(--alm-primary, #172033) 6%, transparent)!important;
-    color:var(--alm-primary,#172033)!important;
+    border-color: var(--alm-primary, #172033) !important;
+    background: color-mix(in srgb, var(--alm-primary, #172033) 6%, transparent) !important;
+    color: var(--alm-primary, #172033) !important;
 }
+
 .dco-operator-form .dco-fast-entry-toolbar .dco-measurement-table-actions .dco-toolbar-icon-button:focus-visible,
 .dco-operator-form .dco-fast-entry-toolbar .dco-input-help:focus-visible {
-    outline:2px solid var(--alm-primary,#172033)!important;
-    outline-offset:2px!important;
+    outline: 2px solid var(--alm-primary, #172033) !important;
+    outline-offset: 2px !important;
 }
 
 .dco-form-presentation-shell .page-head.dco-stable-actions-head .custom-actions {
-    min-height:34px!important;
+    min-height: 34px !important;
 }
 
-@media(max-width:1200px){
+@media(max-width:1200px) {
     .dco-form-presentation-shell .page-head.dco-stable-actions-head .page-actions {
-        max-height:none!important;
-        overflow:visible!important;
-        padding-bottom:4px!important;
+        max-height: none !important;
+        overflow: visible !important;
+        padding-bottom: 4px !important;
     }
 }
-@media(min-width:992px){
+
+@media(min-width:992px) {
     .dco-form-presentation-shell .page-head.dco-stable-actions-head .page-actions {
-        position:static!important;
-        inset:auto!important;
-        transform:none!important;
-        z-index:auto!important;
-        width:auto!important;
-        max-width:calc(100%)!important;
-        margin-inline-start:auto!important;
+        position: static !important;
+        inset: auto !important;
+        transform: none !important;
+        z-index: auto !important;
+        width: auto !important;
+        max-width: calc(100%) !important;
+        margin-inline-start: auto !important;
     }
 }
-@media(max-width:991px){
+
+@media(max-width:991px) {
     .dco-form-presentation-shell .page-head.dco-stable-actions-head .page-actions {
-        position:static!important;
-        inset:auto!important;
-        transform:none!important;
-        margin-inline-start:auto!important;
+        position: static !important;
+        inset: auto !important;
+        transform: none !important;
+        margin-inline-start: auto !important;
     }
 }
-@media(max-width:720px){
+
+@media(max-width:720px) {
     .dco-form-presentation-shell .page-head.dco-stable-actions-head .page-actions {
-        margin-inline-start:0!important;
-        width:100%!important;
-        max-width:calc(100%)!important;
+        margin-inline-start: 0 !important;
+        width: 100% !important;
+        max-width: calc(100%) !important;
     }
 }
-@media(max-width:560px){
+
+@media(max-width:560px) {
     .dco-operator-form .dco-fast-entry-toolbar .dco-fast-help {
-        flex:1 1 100%!important;
+        flex: 1 1 100% !important;
     }
-    .dco-operator-form .dco-fast-entry-toolbar > .dco-measurement-table-actions {
-        margin-inline-start:0!important;
+
+    .dco-operator-form .dco-fast-entry-toolbar>.dco-measurement-table-actions {
+        margin-inline-start: 0 !important;
     }
+
     .dco-operator-form .dco-fast-entry-toolbar .dco-measurement-title {
-        font-size:12px!important;
+        font-size: 12px !important;
     }
 }
