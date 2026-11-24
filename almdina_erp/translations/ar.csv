@@ -3071,8 +3071,8 @@ Sample Example Depth B MM,عمق المثال الثاني
 Machine Profile Approved For Production,اعتماد ملف الماكينة للإنتاج
 Machine Profile Source Note,ملاحظة مصدر ملف الماكينة
 View operational files,عرض الملفات التشغيلية
-Prepare operational files,إعداد الملفات التشغيلية
-Edit CNC defaults,إعدادات التشغيل الافتراضية
+Prepare operational files,تجهيز الملفات التشغيلية
+Edit CNC defaults,تعديل إعدادات CNC الافتراضية
 CNC operational defaults,إعدادات التشغيل الافتراضية
 "Default tool presets for the operational DXF layers, plus the sample machine profile. A sheet that still uses the factory preset inherits a new default. A sheet or path with its own choice keeps that choice. Saved machine files and generation snapshots stay as they were, and a generated file is marked when its effective preset changes. This sample is not approved for production and does not generate an NC file.",إعدادات الريش الافتراضية لطبقات التشغيل، مع عينة ملف الماكينة. اللوح الذي ما زال يستخدم إعداد المصنع يرث الإعداد الجديد. اللوح أو المسار الذي له اختيار خاص يحتفظ به. ملفات الماكينة المحفوظة ولقطات التوليد تبقى كما هي، ويُعلَّم الملف المولَّد عندما يتغير الإعداد الفعلي. هذه العينة غير معتمدة للإنتاج ولا تولّد ملف NC.
 Cut between pieces,القص بين الدرفات
@@ -4416,3 +4416,8 @@ The rear groove cutter would cut {0} outside the requested width,ريشة فرز
 "The rear-groove cutter body enters a neighbouring door, so this distribution cannot be saved. Separate those doors or turn the groove toward an open edge.",جسم ريشة فرزة الظهر يدخل درفة مجاورة، لذلك لا يمكن حفظ هذا التوزيع. أبعد الدرفتين أو وجّه الفرزة نحو حافة فارغة.
 تعذر حساب خطة القص,تعذر حساب خطة القص
 تعذر اعتماد خطة القص,تعذر اعتماد خطة القص
+"View and prepare CNC operational files, download NC cutting files, and edit factory CNC defaults.",عرض وتجهيز الملفات التشغيلية لـ CNC، وتحميل ملفات القص NC، وتعديل إعدادات CNC الافتراضية للمعمل.
+"Open operational files for an order with a current approved cutting plan, and download the NC cutting file from the saved sheet settings.",فتح الملفات التشغيلية لطلب بخطّة قص معتمدة حالية، وتحميل ملف القص NC من إعدادات اللوح المحفوظة.
+"Edit sheet settings, associations, toolpaths, and path direction, then save them. Downloading NC still uses the view permission and the saved settings.",تعديل إعدادات اللوح والارتباطات ومسارات الأدوات واتجاه المسارات ثم حفظها. يبقى تحميل NC بصلاحية العرض والإعدادات المحفوظة.
+Edit factory default tool presets for operational layers and the sample machine profile. Does not change operational files that were already saved.,تعديل إعدادات الريش الافتراضية لطبقات التشغيل ومعاينة الماكينة. لا يغيّر الملفات التشغيلية المحفوظة مسبقًا.
+Save the sheet settings before generating the NC file.,احفظ إعدادات اللوح قبل توليد ملف NC.

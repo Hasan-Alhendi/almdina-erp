@@ -434,11 +434,66 @@
         entry.docfields = (entry.docfields || []).map(df => Object.assign({}, df));
     }
 
+    function canMaintainFactoryCnc() {
+        const permissions = window.AlmdinaPermissions;
+        if (permissions && typeof permissions.can === "function"
+            && permissions.can("edit_factory_cnc_defaults")) {
+            return true;
+        }
+        return !!(window.frappe && frappe.session && frappe.session.user === "Administrator");
+    }
+
+    // Desk Form has the same hide_empty_read_only_fields trap as Quick Entry when
+    // Custom DocPerm write=0. Restore writable controls for maintainers; server
+    // has_permission still gates save.
+    function ensureFormFieldsWritable(frm, options) {
+        if (!frm || !canMaintainFactoryCnc()) return false;
+        const settings = options || {};
+        const keepHidden = new Set(settings.keepHidden || []);
+        const keepReadOnly = new Set(settings.keepReadOnly || []);
+        if (Array.isArray(frm.perm) && frm.perm[0]) {
+            frm.perm[0] = Object.assign({}, frm.perm[0], {
+                read: 1,
+                select: 1,
+                write: 1,
+                create: 1,
+            });
+        }
+        Object.keys(frm.fields_dict || {}).forEach(name => {
+            if (keepHidden.has(name)) return;
+            const field = frm.fields_dict[name];
+            if (!field || !field.df) return;
+            if (Number(field.df.hidden || 0) || Number(field.df.hidden_due_to_dependency || 0)) return;
+            field.df.get_status = function getFormStatus(control) {
+                const df = control && control.df ? control.df : field.df;
+                if (Number(df.hidden || 0) || Number(df.hidden_due_to_dependency || 0)) {
+                    return "None";
+                }
+                if (keepReadOnly.has(name) || Number(df.read_only || 0) || df.fieldtype === "Read Only") {
+                    return "Read";
+                }
+                return "Write";
+            };
+            if (field.df.fieldtype === "Select") field.last_options = null;
+            if (typeof field.refresh === "function") field.refresh();
+            if (field.df.fieldtype === "Select" && typeof field.set_options === "function") {
+                field.last_options = null;
+                const selected = field.doc && name in field.doc ? field.doc[name] : field.value;
+                field.set_options(selected);
+                if (selected != null && field.$input && typeof field.$input.val === "function") {
+                    field.$input.val(selected);
+                }
+            }
+        });
+        return true;
+    }
+
     // Quick Entry attaches doctype/docname then refreshes controls. When the
-    // client-side Custom DocPerm for CNC Machine is read-only (write=0) and
-    // System Settings hide_empty_read_only_fields is on, empty create fields
-    // become disp_status None and disappear. Keep Quick Entry candidates
-    // writable/visible; server has_permission still gates save.
+    // client-side Custom DocPerm for CNC Machine / CNC Tool Preset is
+    // read-only (write=0) and System Settings hide_empty_read_only_fields is
+    // on, empty create fields become disp_status None and disappear. Keep
+    // Quick Entry candidates writable/visible; server has_permission still
+    // gates save.
     function ensureQuickEntryFieldsWritable(dialog) {
         if (!dialog) return;
         const allowed = new Set(
@@ -478,7 +533,10 @@
     function finishQuickEntry(doctype, entry) {
         const dialog = entry || (window.frappe && window.frappe.quick_entry);
         if (!dialog) return;
-        if (doctype === "CNC Tool Preset") applyToolFieldLabels(dialog);
+        if (doctype === "CNC Tool Preset") {
+            applyToolFieldLabels(dialog);
+            ensureQuickEntryFieldsWritable(dialog);
+        }
         if (doctype === "CNC Machine") {
             applyMachineFieldLabels(dialog);
             ensureQuickEntryFieldsWritable(dialog);
@@ -551,6 +609,8 @@
         applyToolFieldLabels,
         applyMachineFieldLabels,
         applyCornerStops,
+        ensureFormFieldsWritable,
+        canMaintainFactoryCnc,
         installQuickEntryForms,
         POST_PROCESSOR_ID,
         POST_PROCESSOR_LABEL,

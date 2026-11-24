@@ -324,6 +324,7 @@ def build_operational_workspace(
     known_presets: Mapping[str, Mapping[str, Any]],
     machine_profile: Mapping[str, Any],
     can_prepare: bool,
+    can_generate_nc: bool = False,
     cnc_machines: Sequence[Mapping[str, Any]] | None = None,
     plan_snapshot: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
@@ -335,6 +336,7 @@ def build_operational_workspace(
             "reason_code": exc.code,
             "order_name": order_name,
             "can_prepare": can_prepare,
+            "can_generate_nc": bool(can_generate_nc),
             "sheets": [],
         }
 
@@ -547,6 +549,7 @@ def build_operational_workspace(
         "plan_revision": plan.revision,
         "plan_source_type": plan.source_type,
         "can_prepare": can_prepare,
+        "can_generate_nc": bool(can_generate_nc),
         "machine_profile_production_approved": profile_payload["production_approved"],
         "machine_profile_source": profile_payload["source_note"],
         "cnc_machines": [public_cnc_machine(row) for row in (cnc_machines or ())],
