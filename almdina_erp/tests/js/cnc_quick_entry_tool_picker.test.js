@@ -567,4 +567,48 @@ select.value = "rough";
 select.dispatch("change", { target: select });
 assert.strictEqual(changedTo, "rough");
 
+english.frappe.session = { user: "Administrator" };
+const profileForm = {
+    perm: [{ read: 1, select: 1, export: 1 }],
+    fields_dict: {
+        profile_name: {
+            df: { fieldname: "profile_name", fieldtype: "Data", hidden: 0, read_only: 0 },
+            disp_status: "None",
+            refresh() { this.disp_status = this.df.get_status(this); },
+            get_status() { return this.df.get_status ? this.df.get_status(this) : this.disp_status; },
+        },
+        profile_id: {
+            df: { fieldname: "profile_id", fieldtype: "Data", hidden: 0, read_only: 1 },
+            disp_status: "None",
+            refresh() { this.disp_status = this.df.get_status(this); },
+            get_status() { return this.df.get_status ? this.df.get_status(this) : this.disp_status; },
+        },
+        tool_values_json: {
+            df: { fieldname: "tool_values_json", fieldtype: "JSON", hidden: 1, read_only: 1 },
+            disp_status: "None",
+            refresh() { this.disp_status = this.df.get_status(this); },
+            get_status() { return this.df.get_status ? this.df.get_status(this) : this.disp_status; },
+        },
+        enabled: {
+            df: { fieldname: "enabled", fieldtype: "Check", hidden: 0, read_only: 0 },
+            disp_status: "Read",
+            refresh() { this.disp_status = this.df.get_status(this); },
+            get_status() { return this.df.get_status ? this.df.get_status(this) : this.disp_status; },
+        },
+    },
+};
+assert.strictEqual(
+    english.AlmdinaCncLabels.ensureFormFieldsWritable(profileForm, {
+        keepHidden: ["tool_values_json"],
+        keepReadOnly: ["profile_id"],
+    }),
+    true
+);
+assert.strictEqual(profileForm.perm[0].write, 1);
+assert.strictEqual(profileForm.perm[0].create, 1);
+assert.strictEqual(profileForm.fields_dict.profile_name.get_status(), "Write");
+assert.strictEqual(profileForm.fields_dict.enabled.get_status(), "Write");
+assert.strictEqual(profileForm.fields_dict.profile_id.get_status(), "Read");
+assert.strictEqual(Number(profileForm.fields_dict.tool_values_json.df.hidden), 1);
+
 console.log("cnc_quick_entry_tool_picker.test.js passed");
