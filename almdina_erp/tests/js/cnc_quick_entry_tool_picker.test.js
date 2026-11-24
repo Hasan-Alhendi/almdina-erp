@@ -293,6 +293,15 @@ toolFields.forEach(df => {
         englishEntry.fields_dict[df.fieldname].labelText,
         englishForm.fields_dict[df.fieldname].labelText
     );
+    assert.strictEqual(
+        typeof englishEntry.fields_dict[df.fieldname].df.get_status,
+        "function",
+        `${df.fieldname} must keep Quick Entry writable`
+    );
+    assert.strictEqual(
+        englishEntry.fields_dict[df.fieldname].df.get_status(englishEntry.fields_dict[df.fieldname]),
+        "Write"
+    );
 });
 
 const arabic = {

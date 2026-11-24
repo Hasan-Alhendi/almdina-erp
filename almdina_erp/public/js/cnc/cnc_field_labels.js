@@ -435,10 +435,11 @@
     }
 
     // Quick Entry attaches doctype/docname then refreshes controls. When the
-    // client-side Custom DocPerm for CNC Machine is read-only (write=0) and
-    // System Settings hide_empty_read_only_fields is on, empty create fields
-    // become disp_status None and disappear. Keep Quick Entry candidates
-    // writable/visible; server has_permission still gates save.
+    // client-side Custom DocPerm for CNC Machine / CNC Tool Preset is
+    // read-only (write=0) and System Settings hide_empty_read_only_fields is
+    // on, empty create fields become disp_status None and disappear. Keep
+    // Quick Entry candidates writable/visible; server has_permission still
+    // gates save.
     function ensureQuickEntryFieldsWritable(dialog) {
         if (!dialog) return;
         const allowed = new Set(
@@ -478,7 +479,10 @@
     function finishQuickEntry(doctype, entry) {
         const dialog = entry || (window.frappe && window.frappe.quick_entry);
         if (!dialog) return;
-        if (doctype === "CNC Tool Preset") applyToolFieldLabels(dialog);
+        if (doctype === "CNC Tool Preset") {
+            applyToolFieldLabels(dialog);
+            ensureQuickEntryFieldsWritable(dialog);
+        }
         if (doctype === "CNC Machine") {
             applyMachineFieldLabels(dialog);
             ensureQuickEntryFieldsWritable(dialog);
