@@ -22,6 +22,13 @@ frappe.ui.form.on("CNC Machining Profile", {
         frm.set_df_property("profile_id", "reqd", 0);
         frm.set_df_property("tool_values_json", "hidden", 1);
         frm.set_df_property("tool_values_json", "reqd", 0);
+        const labelsApi = window.AlmdinaCncLabels;
+        if (labelsApi && typeof labelsApi.ensureFormFieldsWritable === "function") {
+            labelsApi.ensureFormFieldsWritable(frm, {
+                keepHidden: ["tool_values_json"],
+                keepReadOnly: ["profile_id"],
+            });
+        }
         frm._profile_tool_name = frm.doc.tool_preset || "";
         frm._profile_ready = true;
         ensure_profile_tools(frm).then(rows => {
