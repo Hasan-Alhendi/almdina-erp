@@ -4416,3 +4416,8 @@ The rear groove cutter would cut {0} outside the requested width,ريشة فرز
 "The rear-groove cutter body enters a neighbouring door, so this distribution cannot be saved. Separate those doors or turn the groove toward an open edge.",جسم ريشة فرزة الظهر يدخل درفة مجاورة، لذلك لا يمكن حفظ هذا التوزيع. أبعد الدرفتين أو وجّه الفرزة نحو حافة فارغة.
 تعذر حساب خطة القص,تعذر حساب خطة القص
 تعذر اعتماد خطة القص,تعذر اعتماد خطة القص
+Replace,استبدال
+Drawing guide,دليل الرسم
+Door add-ons,إضافات الدرف
+Manufacturing error,خطأ تصنيع
+A cutter is wider than an add-on path, so the cutting plan cannot be calculated or approved.,ريشة القص أعرض من مسار إضافة، لذلك لا يمكن حساب خطة القص ولا اعتمادها.

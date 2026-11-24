@@ -420,6 +420,8 @@
                 if (child.classList.contains("dco-sheet-card")) return;
                 if (child.classList.contains("dco-board-gallery")) return;
                 if (child.classList.contains("dco-plan-meta-strip")) return;
+                if (child.classList.contains("dco-drawing-guide")) return;
+                if (child.classList.contains("dco-plan-workspace-status-slot")) return;
                 if (child.classList.contains("dco-special-raw-coverage")) return;
                 if (child.classList.contains("dco-margin-policy-alert")) return;
                 if (child.classList.contains("dco-unplaced-pieces-warning")) return;
@@ -442,7 +444,34 @@
         root.querySelectorAll(
             ".dco-drawing-plan-panel-host, .dco-drawing-plan-panel"
         ).forEach(el => el.remove());
+        relocateSpecialCoverage(frm);
         presenter.installInteractions(root);
+        return true;
+    }
+
+    function relocateSpecialCoverage(frm) {
+        const field = frm && frm.fields_dict && frm.fields_dict.cutting_plan_html;
+        const root = field && field.$wrapper && field.$wrapper.get(0);
+        if (!root || typeof root.querySelector !== "function") return false;
+        const slot = root.querySelector(".dco-plan-workspace-coverage-slot")
+            || root.querySelector('[data-role="coverage-meta"]');
+        if (!slot) return false;
+
+        const coverage = root.querySelector(".dco-cutting-plan .dco-special-raw-coverage")
+            || root.querySelector(".dco-plan-tab-content .dco-special-raw-coverage")
+            || root.querySelector(".dco-plan-workspace-status-slot .dco-special-raw-coverage");
+        if (!coverage) {
+            if (!slot.querySelector(".dco-special-raw-coverage")) slot.innerHTML = "";
+            return false;
+        }
+        if (coverage.parentNode === slot) return true;
+        slot.innerHTML = "";
+        slot.appendChild(coverage);
+        root.querySelectorAll(".dco-plan-workspace-status-slot").forEach((wrapper) => {
+            if (!wrapper.querySelector(".dco-special-raw-coverage") && !wrapper.childElementCount) {
+                wrapper.remove();
+            }
+        });
         return true;
     }
 
@@ -571,6 +600,7 @@
         cleanRenderedPlan,
         isReady,
         parsePlanSnapshot,
+        relocateSpecialCoverage,
     });
 
     frappe.ui.form.on("Door Cutting Order", {

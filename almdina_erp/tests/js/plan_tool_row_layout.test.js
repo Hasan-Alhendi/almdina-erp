@@ -50,9 +50,23 @@ function element(tag) {
         },
         insertBefore(child) { return node.appendChild(child); },
         querySelector(selector) {
-            const match = String(selector).match(/\[([\w-]+)="([^"]+)"\]/);
+            const raw = String(selector || "");
+            const attrMatch = raw.match(/\[([\w-]+)="([^"]+)"\]/);
+            const classMatch = raw.match(/^\.([A-Za-z0-9_-]+)$/);
             const visit = (current) => {
-                if (match && current.getAttribute && current.getAttribute(match[1]) === match[2]) return current;
+                if (attrMatch && current.getAttribute) {
+                    const attrOk = current.getAttribute(attrMatch[1]) === attrMatch[2];
+                    const classPart = raw.match(/^\.([A-Za-z0-9_-]+)\[/);
+                    const classOk = !classPart
+                        || String(current.className || "").split(/\s+/).includes(classPart[1]);
+                    if (attrOk && classOk) return current;
+                }
+                if (
+                    classMatch
+                    && String(current.className || "").split(/\s+/).includes(classMatch[1])
+                ) {
+                    return current;
+                }
                 for (const child of current.children || []) {
                     const found = visit(child);
                     if (found) return found;
@@ -126,8 +140,13 @@ function load(layers) {
 function splitGroups(html) {
     const planAt = html.indexOf('data-settings-group="plan"');
     const toolsAt = html.indexOf('data-settings-group="tools"');
+    const checksAt = html.indexOf('data-settings-group="checks"');
     assert.ok(planAt >= 0 && toolsAt > planAt);
-    return { plan: html.slice(planAt, toolsAt), tools: html.slice(toolsAt) };
+    return {
+        plan: html.slice(planAt, toolsAt),
+        tools: checksAt > toolsAt ? html.slice(toolsAt, checksAt) : html.slice(toolsAt),
+        checks: checksAt >= 0 ? html.slice(checksAt) : "",
+    };
 }
 
 const settings = {
@@ -142,9 +161,10 @@ const settings = {
 };
 
 function renderSummary(env) {
-    const anchor = element("div");
     const form = element("div");
-    form.appendChild(anchor);
+    const settingsSlot = element("div");
+    settingsSlot.className = "dco-plan-workspace-settings-slot";
+    form.appendChild(settingsSlot);
     env.window.AlmdinaPlanWorkspaceState = {
         snapshot() { return { status: "ready", editing: false, data: { approved_plan: "" } }; },
         displayedPlan() { return { settings, layers: {} }; },
@@ -156,21 +176,20 @@ function renderSummary(env) {
         doctype: "Door Cutting Order",
         doc: { name: "DCO-1", status: "Draft", docstatus: 0 },
         wrapper: form,
-        fields_dict: { plan_actions_section: { wrapper: anchor } },
+        fields_dict: {},
     };
     assert.equal(env.window.AlmdinaPlanSettingsSummaryUX.render(frm), true);
     return form.querySelector('[data-almdina-plan-settings-summary-owner="stable"]').innerHTML;
 }
 
 const hidden = load({ readable: true });
-const hiddenGroups = splitGroups(renderSummary(hidden));
-assert.match(hiddenGroups.plan, /trim_margin_mm/);
-assert.match(hiddenGroups.plan, /deduct_edge_thickness/);
-assert.doesNotMatch(hiddenGroups.plan, /kerf_mm/);
-assert.match(hiddenGroups.tools, /data-fieldname="kerf_mm"/);
-assert.doesNotMatch(hiddenGroups.tools, /liner_tool_diameter_mm/);
-assert.doesNotMatch(hiddenGroups.tools, /handle_recess_tool_diameter_mm/);
-assert.doesNotMatch(hiddenGroups.tools, /rear_groove_tool_diameter_mm/);
+const hiddenSummary = renderSummary(hidden);
+assert.match(hiddenSummary, /dco-plan-settings-readonly__chips/);
+assert.match(hiddenSummary, /dco-plan-settings-readonly__chip/);
+assert.match(hiddenSummary, /Margin|Blade|Cutting machine|Deduct/);
+assert.doesNotMatch(hiddenSummary, /<details/);
+assert.doesNotMatch(hiddenSummary, /pointer-events:\s*auto/);
+assert.match(hiddenSummary, /Blade[\s\S]*3\.2|3\.2/);
 
 const visible = load({
     readable: true,
@@ -178,14 +197,9 @@ const visible = load({
     recessed_handle_cutout: true,
     back_groove: true,
 });
-const view = splitGroups(renderSummary(visible));
-assert.match(view.tools, /kerf_mm/);
-assert.match(view.tools, /liner_tool_diameter_mm/);
-assert.match(view.tools, /handle_recess_tool_diameter_mm/);
-assert.match(view.tools, /rear_groove_tool_diameter_mm/);
-assert.match(view.tools, /data-tool-diameter="1"/);
-assert.doesNotMatch(view.plan, /kerf_mm|liner_tool_diameter_mm|handle_recess_tool_diameter_mm|rear_groove_tool_diameter_mm/);
-assert.match(view.plan, /trim_margin_mm[\s\S]*cutting_machine_type[\s\S]*optimization_time_limit_sec[\s\S]*deduct_edge_thickness/);
+const viewSummary = renderSummary(visible);
+assert.match(viewSummary, /Liner|Handle recess|Rear groove|Blade/);
+assert.doesNotMatch(viewSummary, /<details/);
 
 const editor = visible.window.AlmdinaPlanEditSessionUX;
 const grouped = editor.groupPlanSettingSpecs(editor.planSettingSpecs({}, settings));
@@ -235,15 +249,16 @@ editEnv.window.AlmdinaPlanEditSessionUX.startEditing(editForm).then((started) =>
     assert.equal(started, true);
     const edit = splitGroups(editEnv.captured.at(-1));
     assert.match(edit.plan, /trim_margin_mm/);
-    assert.match(edit.plan, /deduct_edge_thickness/);
+    assert.doesNotMatch(edit.plan, /deduct_edge_thickness/);
     assert.doesNotMatch(edit.plan, /data-fieldname="kerf_mm"/);
     assert.match(edit.tools, /data-fieldname="kerf_mm"/);
     assert.match(edit.tools, /liner_tool_diameter_mm/);
     assert.match(edit.tools, /handle_recess_tool_diameter_mm/);
     assert.match(edit.tools, /rear_groove_tool_diameter_mm/);
     assert.match(edit.tools, /data-tool-diameter="1"/);
-    assert.match(editSource, /flex-direction:\s*column/);
-    assert.match(summarySource, /flex-direction:\s*column/);
+    assert.match(edit.checks, /deduct_edge_thickness/);
+    assert.match(editSource, /dco-plan-settings-editor__check-row/);
+    assert.match(summarySource, /pointer-events:none/);
     console.log("plan tool row layout ok");
 }).catch((error) => {
     console.error(error);

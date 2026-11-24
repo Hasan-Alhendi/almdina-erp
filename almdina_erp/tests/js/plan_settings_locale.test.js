@@ -82,13 +82,23 @@ function element(tag) {
         },
         insertBefore(child) { return node.appendChild(child); },
         querySelector(selector) {
-            const match = String(selector).match(/\[([\w-]+)="([^"]+)"\]/);
+            const raw = String(selector || "");
+            const attrMatch = raw.match(/\[([\w-]+)="([^"]+)"\]/);
+            const classMatch = raw.match(/^\.([A-Za-z0-9_-]+)$/);
             const visit = (current) => {
+                if (attrMatch && current.getAttribute) {
+                    const attrOk = current.getAttribute(attrMatch[1]) === attrMatch[2];
+                    const classPart = raw.match(/^\.([A-Za-z0-9_-]+)\[/);
+                    const classOk = !classPart
+                        || String(current.className || "").split(/\s+/).includes(classPart[1]);
+                    if (attrOk && classOk) return current;
+                }
                 if (
-                    match
-                    && current.getAttribute
-                    && current.getAttribute(match[1]) === match[2]
-                ) return current;
+                    classMatch
+                    && String(current.className || "").split(/\s+/).includes(classMatch[1])
+                ) {
+                    return current;
+                }
                 for (const child of current.children || []) {
                     const found = visit(child);
                     if (found) return found;
@@ -172,30 +182,21 @@ const workspace = {
 loaded.window.AlmdinaPlanWorkspaceState = workspace;
 
 const editor = loaded.window.AlmdinaPlanEditSessionUX;
-const specs = editor.planSettingSpecs({}, { packing_mode: "auto_pro", cutting_machine_type: "Panel Saw" });
-const packing = specs.find((spec) => spec.fieldname === "packing_mode");
+const specs = editor.planSettingSpecs({}, { cutting_machine_type: "Panel Saw" });
+assert.equal(specs.some((spec) => spec.fieldname === "packing_mode"), false);
 const machine = specs.find((spec) => spec.fieldname === "cutting_machine_type");
-const autoPro = packing.options.find((option) => option.value === "auto_pro");
-const genetic = packing.options.find((option) => option.value === "genetic");
-const unknown = packing.options.find((option) => option.value === "legacy-custom");
+assert.ok(machine);
 const panelSaw = machine.options.find((option) => option.value === "Panel Saw");
-assert.equal(autoPro.label, "Auto Pro (recommended)");
-assert.equal(autoPro.canonical, true);
-assert.equal(autoPro.value, "auto_pro");
-assert.equal(genetic.available, false);
-assert.equal(genetic.label, "Genetic algorithm");
-assert.equal(unknown.canonical, false);
-assert.equal(unknown.label, "بيانات عشوائية");
+const cnc = machine.options.find((option) => option.value === "CNC Router");
 assert.equal(panelSaw.value, "Panel Saw");
 assert.equal(panelSaw.label, "Panel Saw");
-assert.equal(calls.includes("بيانات عشوائية"), false);
-assert.equal(calls.includes("تلقائي متقدم (موصى به)"), false);
+assert.equal(panelSaw.canonical, true);
+assert.equal(cnc.value, "CNC Router");
 assert.equal(calls.includes("منشار ألواح"), false);
 
 assert.equal(editor.validateDraft({
     kerf_mm: 0,
     trim_margin_mm: 0,
-    packing_mode: "auto_pro",
     cutting_machine_type: "Panel Saw",
     optimization_time_limit_sec: 0,
 }, {}), "");
@@ -203,22 +204,21 @@ assert.equal(
     editor.validateDraft({
         kerf_mm: 0,
         trim_margin_mm: 0,
-        packing_mode: "genetic",
-        cutting_machine_type: "Panel Saw",
+        cutting_machine_type: "",
         optimization_time_limit_sec: 0,
     }, {}),
-    "Valeur requise pour FR:Piece packing algorithm."
+    "Valeur requise pour FR:Cutting machine type."
 );
 
-const anchor = element("div");
 const form = element("div");
-form.appendChild(anchor);
+const settingsSlot = element("div");
+settingsSlot.className = "dco-plan-workspace-settings-slot";
+form.appendChild(settingsSlot);
 loaded.window.AlmdinaPlanWorkspacePresenterAdapter = {
     activeSettings() {
         return {
             kerf_mm: 0,
             trim_margin_mm: 4,
-            packing_mode: "legacy-custom",
             cutting_machine_type: "Panel Saw",
             optimization_time_limit_sec: 12,
         };
@@ -228,17 +228,18 @@ const summaryForm = {
     doctype: "Door Cutting Order",
     doc: { name: "26-00089" },
     wrapper: form,
-    fields_dict: { plan_actions_section: { wrapper: anchor } },
+    fields_dict: {},
 };
 direction = "rtl";
 assert.equal(loaded.window.AlmdinaPlanSettingsSummaryUX.render(summaryForm), true);
 const summary = form.querySelector('[data-almdina-plan-settings-summary-owner="stable"]');
 assert.equal(summary.getAttribute("dir"), "rtl");
-assert.match(summary.innerHTML, /value="0"/);
-assert.match(summary.innerHTML, /بيانات عشوائية/);
+assert.match(summary.innerHTML, /dco-plan-settings-readonly__chips/);
+assert.match(summary.innerHTML, /0 mm/);
 assert.match(summary.innerHTML, /Scie à panneaux/);
-assert.match(summary.innerHTML, /Réglages du plan/);
-assert.equal(calls.includes("بيانات عشوائية"), false);
+assert.match(summary.innerHTML, /dco-plan-settings-readonly__chip/);
+assert.doesNotMatch(summary.innerHTML, /<details/);
+assert.equal(calls.includes("منشار ألواح"), false);
 direction = "ltr";
 loaded.window.AlmdinaPlanSettingsSummaryUX.render(summaryForm);
 assert.equal(summary.getAttribute("dir"), "ltr");
@@ -276,12 +277,10 @@ async function exerciseSave() {
     const recorded = [];
     loaded.window.calls = recorded;
     await loaded.window.AlmdinaPlanWorkspaceAPI.saveSettings("26-00089", {
-        packing_mode: "auto_pro",
         cutting_machine_type: "Panel Saw",
         kerf_mm: 0,
     });
     assert.equal(recorded[0].freeze_message, "Enregistrement des réglages...");
-    assert.equal(recorded[0].args.packing_mode, "auto_pro");
     assert.equal(recorded[0].args.cutting_machine_type, "Panel Saw");
     assert.equal(recorded[0].args.kerf_mm, 0);
     assert.equal(recorded[0].method.includes("save_plan_settings"), true);

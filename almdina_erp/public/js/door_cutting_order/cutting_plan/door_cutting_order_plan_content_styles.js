@@ -3,7 +3,7 @@
 
     if (window.AlmdinaPlanContentStyles) return;
 
-    const STYLE_ID = "dco-plan-content-layout-css-v17";
+    const STYLE_ID = "dco-plan-content-layout-css-v19";
     const LEGACY_STYLE_IDS = [
         "dco-plan-content-layout-css-v8",
         "dco-plan-content-layout-css-v9",
@@ -14,6 +14,8 @@
         "dco-plan-content-layout-css-v14",
         "dco-plan-content-layout-css-v15",
         "dco-plan-content-layout-css-v16",
+        "dco-plan-content-layout-css-v17",
+        "dco-plan-content-layout-css-v18",
     ];
     const CSS_TEXT = `
         .dco-operator-form .dco-plan-settings-readonly[data-almdina-plan-settings-summary-owner="stable"],
@@ -64,26 +66,20 @@
             overflow:hidden !important;
         }
         .dco-operator-form .dco-plan-settings-readonly[data-almdina-plan-settings-summary-owner="stable"] {
-            display:block !important;
-            width:100% !important;
-            max-width:none !important;
-            box-sizing:border-box !important;
-            margin:0 0 var(--dco-section-stack-gap, 8px) !important;
-            margin-inline:0 !important;
-            padding:6px 12px !important;
-            border:1px solid var(--alm-card-border, #e4e8ee) !important;
-            border-radius:var(--alm-radius-sm, 10px) !important;
-            background:var(--alm-card, #fff) !important;
-            box-shadow:none !important;
+            display:none !important;
         }
-        .dco-operator-form .dco-plan-settings-readonly[data-almdina-plan-settings-summary-owner="stable"] .dco-plan-settings-readonly__strip {
-            display:flex !important;
-            flex-wrap:nowrap !important;
-            align-items:center !important;
-            gap:6px !important;
-            width:100% !important;
-            min-width:0 !important;
-            overflow-x:auto !important;
+        .dco-operator-form .dco-plan-workspace-settings-slot > .dco-plan-settings-readonly[data-almdina-plan-settings-summary-owner="stable"] {
+            display:inline-flex !important;
+            width:auto !important;
+            max-width:100% !important;
+            box-sizing:border-box !important;
+            margin:0 !important;
+            padding:0 !important;
+            border:0 !important;
+            border-radius:0 !important;
+            background:transparent !important;
+            box-shadow:none !important;
+            overflow:visible !important;
         }
         .dco-operator-form .dco-plan-section-card.dco-layout-card.dco-ui-card,
         .dco-operator-form .dco-plan-layout-section.dco-ui-card,
@@ -93,18 +89,21 @@
             max-width:none !important;
             width:100% !important;
         }
+        /* Workspace chrome owns the section title; hide the Frappe section head duplicate. */
         .dco-operator-form .dco-plan-section-card.dco-layout-card > .section-head,
         .dco-operator-form .dco-plan-layout-section > .section-head,
         .dco-operator-form .form-section:has([data-fieldname="cutting_plan_html"]) > .section-head {
-            border-bottom:none !important;
-            padding:8px var(--dco-tab-card-inset-inline, 44px) 4px !important;
-            margin-bottom:0 !important;
-            max-width:none !important;
+            display:none !important;
+            height:0 !important;
+            margin:0 !important;
+            padding:0 !important;
+            border:0 !important;
+            overflow:hidden !important;
         }
         .dco-operator-form .dco-plan-section-card.dco-layout-card > .section-body,
         .dco-operator-form .dco-plan-layout-section > .section-body,
         .dco-operator-form .form-section:has([data-fieldname="cutting_plan_html"]) > .section-body {
-            padding:0 var(--dco-tab-card-inset-inline, 44px) 8px !important;
+            padding:4px var(--dco-tab-card-inset-inline, 44px) 8px !important;
             max-width:none !important;
         }
         .dco-plan-actions-section {
@@ -136,21 +135,108 @@
             padding-block:8px !important;
             padding-inline:var(--dco-tab-card-inset-inline, 44px) !important;
         }
+        [data-fieldname="cutting_plan_html"] .dco-plan-workspace-chrome {
+            width:100% !important;
+            max-width:none !important;
+            box-sizing:border-box !important;
+            gap:6px !important;
+            margin:0 0 6px !important;
+        }
+        [data-fieldname="cutting_plan_html"] .dco-plan-workspace-title-row {
+            gap:0 !important;
+            margin:0 !important;
+        }
+        [data-fieldname="cutting_plan_html"] .dco-plan-workspace-title {
+            margin:8px 0 0 !important;
+        }
+        [data-fieldname="cutting_plan_html"] .dco-plan-workspace-title-meta {
+            display:flex !important;
+            flex-wrap:wrap !important;
+            align-items:center !important;
+            gap:6px 8px !important;
+            width:100% !important;
+            margin:0 !important;
+        }
+        [data-fieldname="cutting_plan_html"] .dco-plan-workspace-settings-slot {
+            display:inline-flex !important;
+            flex-wrap:wrap !important;
+            align-items:center !important;
+            gap:6px !important;
+            flex:1 1 auto !important;
+            min-width:0 !important;
+        }
+        [data-fieldname="cutting_plan_html"] .dco-plan-workspace-meta-end {
+            display:inline-flex !important;
+            flex-wrap:wrap !important;
+            align-items:center !important;
+            justify-content:flex-end !important;
+            gap:6px !important;
+            margin-inline-start:auto !important;
+            min-width:0 !important;
+        }
+        [data-fieldname="cutting_plan_html"] .dco-plan-workspace-coverage-slot,
+        [data-fieldname="cutting_plan_html"] .dco-plan-workspace-boards-slot,
+        [data-fieldname="cutting_plan_html"] .dco-plan-workspace-status-meta {
+            display:inline-flex !important;
+            flex-wrap:wrap !important;
+            align-items:center !important;
+            gap:6px !important;
+            min-width:0 !important;
+        }
+        [data-fieldname="cutting_plan_html"] .dco-plan-workspace-control-row {
+            display:flex !important;
+            flex-wrap:nowrap !important;
+            align-items:center !important;
+            gap:8px 12px !important;
+            width:100% !important;
+        }
+        [data-fieldname="cutting_plan_html"] .dco-plan-workspace-control-row > .dco-plan-tabs {
+            flex:1 1 auto !important;
+            min-width:0 !important;
+        }
+        [data-fieldname="cutting_plan_html"] .dco-plan-workspace-control-row > .dco-plan-context-actions-host {
+            flex:0 0 auto !important;
+            width:auto !important;
+            margin:0 !important;
+        }
         [data-fieldname="cutting_plan_html"] .dco-plan-tabs,
         [data-fieldname="cutting_plan_html"] .dco-plan-tabs.dco-plan-tabs--underline {
-            width:100% !important;
+            width:auto !important;
             max-width:100%;
             display:flex !important;
             align-items:stretch !important;
             gap:2px !important;
             padding:0 !important;
-            margin:0 0 var(--dco-section-stack-gap, 8px) 0 !important;
-            border:0;
-            border-bottom:1px solid var(--alm-border, var(--border-color,#e4e8ee));
+            margin:0 !important;
+            border:0 !important;
+            border-bottom:0 !important;
             border-radius:0;
             background:transparent;
             box-shadow:none;
             box-sizing:border-box !important;
+        }
+        @media (max-width:900px) {
+            [data-fieldname="cutting_plan_html"] .dco-plan-workspace-control-row {
+                flex-wrap:wrap !important;
+            }
+            [data-fieldname="cutting_plan_html"] .dco-plan-workspace-control-row > .dco-plan-tabs,
+            [data-fieldname="cutting_plan_html"] .dco-plan-workspace-control-row > .dco-plan-context-actions-host {
+                flex:1 1 100% !important;
+                width:100% !important;
+            }
+            [data-fieldname="cutting_plan_html"] .dco-plan-workspace-meta-end {
+                margin-inline-start:0 !important;
+                width:100% !important;
+                justify-content:flex-start !important;
+            }
+        }
+        /* Workspace chrome owns the screen title; keep renderer title for print. */
+        [data-fieldname="cutting_plan_html"] .dco-cutting-plan > h2,
+        [data-fieldname="cutting_plan_html"] .dco-cutting-plan > .dco-plan-header-cards,
+        [data-fieldname="cutting_plan_html"] .dco-cutting-plan > .dco-summary-grid,
+        [data-fieldname="cutting_plan_html"] .dco-cutting-plan > .dco-piece-groups,
+        [data-fieldname="cutting_plan_html"] .dco-cutting-plan > .dco-plan-method-line {
+            display:none !important;
         }
         [data-fieldname="cutting_plan_html"] .dco-plan-meta-strip,
         [data-fieldname="cutting_plan_html"] .dco-plan-context-actions-host,
@@ -164,40 +250,101 @@
             max-width:none !important;
             box-sizing:border-box !important;
         }
-        [data-fieldname="cutting_plan_html"] .dco-plan-meta-strip {
-            display:flex !important;
-            flex-wrap:wrap !important;
-            align-items:stretch !important;
-            gap:8px !important;
+        [data-fieldname="cutting_plan_html"] .dco-plan-meta-strip,
+        [data-fieldname="cutting_plan_html"] .dco-drawing-guide {
+            display:grid !important;
+            grid-template-columns:repeat(2, minmax(0, 1fr)) !important;
+            gap:6px !important;
             direction:inherit !important;
             margin:0 0 6px !important;
+            padding:0 !important;
+            border:0 !important;
+            background:transparent !important;
+            box-shadow:none !important;
+            box-sizing:border-box !important;
         }
-        [data-fieldname="cutting_plan_html"] .dco-plan-meta-strip .dco-special-raw-coverage {
-            flex:0 1 auto !important;
-            margin:0 !important;
-            min-width:min(100%, 260px) !important;
+        [data-fieldname="cutting_plan_html"] .dco-drawing-guide__card {
             display:flex !important;
+            flex-direction:column !important;
+            gap:6px !important;
+            min-width:0 !important;
+            margin:0 !important;
+            padding:7px 9px !important;
+            border:1px solid var(--alm-card-border,#e4e8ee) !important;
+            border-radius:var(--alm-radius-sm, 10px) !important;
+            background:var(--alm-card, #fff) !important;
+            box-shadow:0 1px 2px rgba(15,23,42,.03) !important;
+        }
+        [data-fieldname="cutting_plan_html"] .dco-drawing-guide__title {
+            margin:0 !important;
+            font-size:11px !important;
+            font-weight:850 !important;
+            color:var(--alm-text-strong,#101828) !important;
+        }
+        [data-fieldname="cutting_plan_html"] .dco-drawing-guide__body {
+            display:flex !important;
+            flex-wrap:wrap !important;
             align-items:center !important;
+            gap:6px 12px !important;
         }
-        [data-fieldname="cutting_plan_html"] .dco-plan-meta-strip .dco-edge-band-legend {
-            flex:0 1 auto !important;
+        [data-fieldname="cutting_plan_html"] .dco-plan-workspace-status-slot {
+            display:flex !important;
+            flex-wrap:wrap !important;
+            align-items:center !important;
+            gap:6px !important;
+            margin:0 0 6px !important;
+        }
+        [data-fieldname="cutting_plan_html"] .dco-special-raw-coverage {
+            display:inline-flex !important;
+            align-items:center !important;
+            gap:6px !important;
+            max-width:100% !important;
+            margin:0 !important;
+            padding:4px 9px !important;
+            border:1px solid var(--alm-card-border,#e4e8ee) !important;
+            border-radius:999px !important;
+            background:var(--alm-surface-muted,#f4f6f8) !important;
+            color:var(--alm-text-strong,#101828) !important;
+            font-size:11px !important;
+            font-weight:750 !important;
+            line-height:1.3 !important;
+        }
+        [data-fieldname="cutting_plan_html"] .dco-special-raw-coverage.is-complete {
+            border-color:color-mix(in srgb, #c9a66b 55%, transparent) !important;
+            background:linear-gradient(135deg,#fff8e8,#fffdf8) !important;
+            color:#684117 !important;
+        }
+        [data-fieldname="cutting_plan_html"] .dco-special-raw-coverage.is-incomplete {
+            border-color:color-mix(in srgb, #dc7b72 55%, transparent) !important;
+            background:#fff4f2 !important;
+            color:#9b2f26 !important;
+        }
+        [data-fieldname="cutting_plan_html"] .dco-special-raw-coverage__mark {
+            font-size:14px !important;
+            line-height:1 !important;
+        }
+        [data-fieldname="cutting_plan_html"] .dco-plan-meta-strip .dco-edge-band-legend,
+        [data-fieldname="cutting_plan_html"] .dco-drawing-guide .dco-edge-band-legend,
+        [data-fieldname="cutting_plan_html"] .dco-plan-meta-strip .dco-extra-addon-legend,
+        [data-fieldname="cutting_plan_html"] .dco-drawing-guide .dco-extra-addon-legend {
+            flex:1 1 auto !important;
             margin:0 !important;
             min-width:0 !important;
+            padding:0 !important;
+            border:0 !important;
+            background:transparent !important;
         }
-        [data-fieldname="cutting_plan_html"] .dco-plan-meta-strip .dco-extra-addon-legend {
-            flex:1 1 220px !important;
-            margin:0 !important;
-            min-width:0 !important;
+        @media (max-width:720px) {
+            [data-fieldname="cutting_plan_html"] .dco-plan-meta-strip,
+            [data-fieldname="cutting_plan_html"] .dco-drawing-guide {
+                grid-template-columns:minmax(0, 1fr) !important;
+            }
         }
         [data-fieldname="cutting_plan_html"] .dco-edge-band-legend {
             display:flex !important;
             flex-wrap:wrap !important;
             align-items:center !important;
             gap:8px 14px !important;
-            padding:7px 10px !important;
-            border:1px solid var(--alm-card-border,#e4e8ee) !important;
-            border-radius:8px !important;
-            background:var(--alm-surface-muted,#f4f6f8) !important;
             color:var(--alm-text-strong,#101828) !important;
             font-size:11px !important;
             font-weight:700 !important;
@@ -213,10 +360,6 @@
             flex-wrap:wrap !important;
             align-items:center !important;
             gap:8px 14px !important;
-            padding:7px 10px !important;
-            border:1px solid var(--alm-card-border,#e4e8ee) !important;
-            border-radius:8px !important;
-            background:var(--alm-surface-muted,#f4f6f8) !important;
             color:var(--alm-text-strong,#101828) !important;
             font-size:11px !important;
             font-weight:700 !important;
@@ -226,6 +369,18 @@
             color:var(--alm-text-strong,#101828) !important;
             font-weight:900 !important;
             white-space:nowrap !important;
+        }
+        [data-fieldname="cutting_plan_html"] .dco-addon-cutter-warning__title {
+            display:block !important;
+            margin:0 0 4px !important;
+            font-size:13px !important;
+            font-weight:850 !important;
+        }
+        [data-fieldname="cutting_plan_html"] .dco-addon-cutter-warning__summary {
+            margin:0 0 6px !important;
+            font-size:12px !important;
+            font-weight:650 !important;
+            line-height:1.45 !important;
         }
         /* Legend copy only — never retarget in-board .dco-extra-addon-text marks. */
         [data-fieldname="cutting_plan_html"] .dco-extra-addon-legend-item > span:not(.dco-extra-addon-text):not(.dco-extra-addon-legend-swatch) {
@@ -238,37 +393,65 @@
             color:var(--alm-accent-success,#10b981) !important;
         }
         [data-fieldname="cutting_plan_html"] .dco-plan-tabs .btn,
-        [data-fieldname="cutting_plan_html"] .dco-plan-tabs--underline .btn {
+        [data-fieldname="cutting_plan_html"] .dco-plan-tabs--underline .btn,
+        [data-fieldname="cutting_plan_html"] .dco-plan-tabs .btn:hover,
+        [data-fieldname="cutting_plan_html"] .dco-plan-tabs--underline .btn:hover,
+        [data-fieldname="cutting_plan_html"] .dco-plan-tabs .btn:focus,
+        [data-fieldname="cutting_plan_html"] .dco-plan-tabs--underline .btn:focus,
+        [data-fieldname="cutting_plan_html"] .dco-plan-tabs .btn:active,
+        [data-fieldname="cutting_plan_html"] .dco-plan-tabs--underline .btn:active,
+        [data-fieldname="cutting_plan_html"] .dco-plan-tabs .btn.is-active,
+        [data-fieldname="cutting_plan_html"] .dco-plan-tabs--underline .btn.is-active,
+        [data-fieldname="cutting_plan_html"] .dco-plan-tabs .btn[aria-selected="true"],
+        [data-fieldname="cutting_plan_html"] .dco-plan-tabs--underline .btn[aria-selected="true"] {
             position:relative;
             min-height:36px !important;
             margin:0 !important;
             padding:8px 12px 10px !important;
             border:0 !important;
+            border-top:0 !important;
+            border-right:0 !important;
+            border-bottom:0 !important;
+            border-left:0 !important;
             border-radius:0 !important;
             background:transparent !important;
+            background-image:none !important;
             box-shadow:none !important;
+            text-decoration:none !important;
+            outline:none;
             color:var(--alm-text-subtle, #667085) !important;
             font-weight:650 !important;
             line-height:1.3;
             transition:color .16s ease, font-weight .16s ease;
         }
+        /* Kill any second underline/indicator; Content Styles owns one ::after only. */
+        [data-fieldname="cutting_plan_html"] .dco-plan-tabs .btn::before,
+        [data-fieldname="cutting_plan_html"] .dco-plan-tabs--underline .btn::before {
+            content:none !important;
+            display:none !important;
+        }
         [data-fieldname="cutting_plan_html"] .dco-plan-tabs .btn::after,
         [data-fieldname="cutting_plan_html"] .dco-plan-tabs--underline .btn::after {
-            content:"";
-            position:absolute;
-            inset-inline:10px;
-            bottom:0;
-            height:2.5px;
-            border-radius:999px;
-            background:transparent;
+            content:"" !important;
+            position:absolute !important;
+            inset-inline:10px !important;
+            bottom:0 !important;
+            height:2.5px !important;
+            border:0 !important;
+            border-radius:999px !important;
+            background:transparent !important;
+            box-shadow:none !important;
             transition:background-color .16s ease, transform .16s ease;
             transform:scaleX(.55);
             transform-origin:center;
+            pointer-events:none !important;
         }
         [data-fieldname="cutting_plan_html"] .dco-plan-tabs .btn:hover:not(:disabled):not(.is-active),
         [data-fieldname="cutting_plan_html"] .dco-plan-tabs--underline .btn:hover:not(:disabled):not(.is-active) {
             color:var(--alm-text-secondary, #344054) !important;
             background:transparent !important;
+            border-bottom:0 !important;
+            text-decoration:none !important;
         }
         [data-fieldname="cutting_plan_html"] .dco-plan-tabs .btn.is-active,
         [data-fieldname="cutting_plan_html"] .dco-plan-tabs--underline .btn.is-active,
@@ -277,13 +460,16 @@
             /* brand-soft-fg stays navy in Light and becomes readable blue in Dark */
             color:var(--alm-brand-soft-fg, #172033) !important;
             background:transparent !important;
+            border-bottom:0 !important;
+            box-shadow:none !important;
+            text-decoration:none !important;
             font-weight:850 !important;
         }
         [data-fieldname="cutting_plan_html"] .dco-plan-tabs .btn.is-active::after,
         [data-fieldname="cutting_plan_html"] .dco-plan-tabs--underline .btn.is-active::after,
         [data-fieldname="cutting_plan_html"] .dco-plan-tabs .btn[aria-selected="true"]::after,
         [data-fieldname="cutting_plan_html"] .dco-plan-tabs--underline .btn[aria-selected="true"]::after {
-            background:var(--alm-brand-soft-fg, #172033);
+            background:var(--alm-brand-soft-fg, #172033) !important;
             transform:scaleX(1);
         }
         [data-fieldname="cutting_plan_html"] .dco-plan-tabs .btn:focus-visible,
@@ -316,12 +502,14 @@
             display:block !important;
             width:100% !important;
             box-sizing:border-box !important;
-            margin:0 0 12px !important;
-            padding:8px !important;
-            border:1px solid #d9534f !important;
-            border-radius:8px !important;
-            background:#fff5f5 !important;
-            color:#a94442 !important;
+            margin:0 0 8px !important;
+            padding:10px 12px !important;
+            border:1px solid color-mix(in srgb, var(--alm-status-danger-fg, #b91c1c) 35%, transparent) !important;
+            border-radius:var(--alm-radius-sm, 10px) !important;
+            background:var(--alm-danger-soft, #fff1f2) !important;
+            color:var(--alm-status-danger-fg, #b91c1c) !important;
+            font-size:12px !important;
+            line-height:1.45 !important;
         }
         [data-theme="light"] [data-fieldname="cutting_plan_html"] .dco-addon-cutter-warning {
             border-color:#d9534f !important;
@@ -334,15 +522,17 @@
             color:var(--alm-status-danger-fg, #f87171) !important;
         }
         [data-fieldname="cutting_plan_html"] .dco-addon-cutter-warning__items {
-            margin:6px 0 0 !important;
-            padding-inline-start:18px !important;
+            margin:0 !important;
+            padding-inline-start:1.2em !important;
+            font-size:12px !important;
+            line-height:1.5 !important;
         }
         [data-fieldname="cutting_plan_html"] .dco-margin-policy-alert {
             display:flex !important;
             align-items:flex-start !important;
             gap:8px !important;
             direction:inherit !important;
-            margin:0 0 10px !important;
+            margin:0 0 6px !important;
             padding:8px 10px !important;
             border:1px solid var(--alm-status-warning-border, rgba(180, 83, 9, 0.24)) !important;
             border-radius:10px !important;
@@ -536,8 +726,8 @@
             max-width:100% !important;
             margin:0 !important;
             padding:5px !important;
-            border:1px solid var(--border-color,#e2e6ea) !important;
-            border-radius:10px !important;
+            border:1px solid var(--alm-card-border,#e4e8ee) !important;
+            border-radius:var(--alm-radius-card, 12px) !important;
             background:var(--alm-card,#ffffff) !important;
             box-shadow:none !important;
             page-break-inside:avoid;
@@ -546,7 +736,7 @@
             transition:border-color .16s ease,box-shadow .16s ease,transform .16s ease;
         }
         [data-fieldname="cutting_plan_html"] .dco-board-gallery > .dco-sheet-card:hover {
-            border-color:#b9c3cd !important;
+            border-color:color-mix(in srgb, var(--alm-primary, #172033) 22%, var(--alm-card-border, #e4e8ee)) !important;
             box-shadow:0 3px 10px rgba(24,36,48,.055) !important;
             transform:translateY(-1px);
         }
@@ -582,9 +772,11 @@
             display:inline-flex;
             align-items:center;
             justify-content:center;
-            min-width:27px;
-            min-height:25px;
-            padding:3px 6px;
+            width:28px;
+            min-width:28px;
+            height:28px;
+            min-height:28px;
+            padding:0;
             border:1px solid var(--alm-card-border,#e4e8ee);
             border-radius:7px;
             background:var(--alm-surface-muted,#f4f6f8);
@@ -593,6 +785,23 @@
             font-weight:850;
             line-height:1;
             cursor:pointer;
+        }
+        [data-fieldname="cutting_plan_html"] .dco-board-gallery .dco-board-focus-trigger__icon {
+            display:inline-flex;
+            width:14px;
+            height:14px;
+            line-height:0;
+        }
+        [data-fieldname="cutting_plan_html"] .dco-board-gallery .dco-board-focus-trigger__icon svg {
+            display:block;
+            width:14px;
+            height:14px;
+            fill:none;
+            stroke:currentColor;
+            stroke-width:1.8;
+            stroke-linecap:round;
+            stroke-linejoin:round;
+            pointer-events:none;
         }
         [data-fieldname="cutting_plan_html"] .dco-board-gallery .dco-board-focus-trigger:hover,
         [data-fieldname="cutting_plan_html"] .dco-board-gallery .dco-board-focus-trigger:focus-visible {

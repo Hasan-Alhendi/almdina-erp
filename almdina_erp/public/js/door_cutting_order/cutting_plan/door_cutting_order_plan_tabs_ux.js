@@ -325,7 +325,7 @@
 			})
 			.join("");
 		return `
-			<div class="almdina-ui dco-plan-tabs dco-plan-tabs--underline" role="tablist" dir="${frappe.utils.escape_html(uiDirection())}" aria-label="${frappe.utils.escape_html(translate("Cutting plan source"))}" style="display:flex;gap:8px;flex-wrap:wrap;width:100%;box-sizing:border-box;margin:0 0 10px 0;">
+			<div class="almdina-ui dco-plan-tabs dco-plan-tabs--underline" role="tablist" dir="${frappe.utils.escape_html(uiDirection())}" aria-label="${frappe.utils.escape_html(translate("Cutting plan source"))}">
 				${buttons}
 			</div>
 		`;
@@ -577,8 +577,23 @@
 			.attr("data-almdina-order", orderName)
 			.attr("data-almdina-plan-paint-key", paintKey)
 			.html(`
-				${buildTabBar(frm, selectedTab, tabs)}
-				<div class="dco-plan-context-actions-host" data-almdina-order="${escapedOrderName}"></div>
+				<div class="almdina-ui dco-plan-workspace-chrome" dir="${frappe.utils.escape_html(uiDirection())}">
+					<div class="dco-plan-workspace-title-row">
+						<h2 class="dco-plan-workspace-title">${frappe.utils.escape_html(translate("Piece layout on the boards"))}</h2>
+					</div>
+					<div class="dco-plan-workspace-title-meta" data-role="workspace-meta">
+						<div class="dco-plan-workspace-settings-slot" data-role="settings-slot"></div>
+						<div class="dco-plan-workspace-meta-end" data-role="meta-end">
+							<div class="dco-plan-workspace-coverage-slot" data-role="coverage-meta"></div>
+							<div class="dco-plan-workspace-boards-slot" data-role="boards-meta"></div>
+							<div class="dco-plan-workspace-status-meta" data-role="status-meta"></div>
+						</div>
+					</div>
+					<div class="dco-plan-workspace-control-row">
+						${buildTabBar(frm, selectedTab, tabs)}
+						<div class="dco-plan-context-actions-host" data-almdina-order="${escapedOrderName}"></div>
+					</div>
+				</div>
 				<div class="dco-plan-tab-content" data-almdina-order="${escapedOrderName}" data-almdina-plan-paint-key="${escapedPaintKey}">${content}</div>
 			`);
 		renderContextActions(frm, wrapper);

@@ -44,7 +44,7 @@ class TestCuttingPlanBoardGalleryUX(unittest.TestCase):
         self.assertIn("BOARD_GAP_PX = 8", presenter)
         self.assertIn("BOARD_CARD_CHROME_PX = 12", presenter)
         self.assertIn("padding:5px !important", styles)
-        self.assertIn("border-radius:10px !important", styles)
+        self.assertIn("border-radius:var(--alm-radius-card, 12px) !important", styles)
         self.assertIn("box-shadow:none !important", styles)
         self.assertIn("min-height:27px", styles)
         self.assertIn("- BOARD_CARD_CHROME_PX", presenter)

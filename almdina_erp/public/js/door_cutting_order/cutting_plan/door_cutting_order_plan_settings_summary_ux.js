@@ -5,11 +5,13 @@
 
     const SUMMARY_CLASS = "dco-plan-settings-readonly";
     const OWNER_ATTR = "data-almdina-plan-settings-summary-owner";
-    const STYLE_ID = "dco-plan-settings-summary-owner-css-v4";
+    const STYLE_ID = "dco-plan-settings-summary-owner-css-v6";
     const LEGACY_STYLE_IDS = [
         "dco-plan-settings-summary-owner-css",
         "dco-plan-settings-summary-owner-css-v2",
         "dco-plan-settings-summary-owner-css-v3",
+        "dco-plan-settings-summary-owner-css-v4",
+        "dco-plan-settings-summary-owner-css-v5",
     ];
     const TOOL_SETTING_FIELDS = Object.freeze([
         "kerf_mm",
@@ -182,25 +184,57 @@
                 vertical-align:middle;
             }
             .${SUMMARY_CLASS}[${OWNER_ATTR}="stable"] {
-                display:block !important;
-                width:100% !important;
-                max-width:none !important;
-                box-sizing:border-box !important;
-                margin:0 0 var(--dco-section-stack-gap, 8px) !important;
-                margin-inline:0 !important;
-                padding:6px 12px !important;
-                border:1px solid var(--alm-card-border,#e4e8ee) !important;
-                border-radius:var(--alm-radius-sm,10px) !important;
-                background:var(--alm-card,#fff) !important;
-                box-shadow:none !important;
+                display:none !important;
             }
-            .${SUMMARY_CLASS} .dco-plan-settings-readonly__groups {
-                display:flex !important;
-                flex-direction:column !important;
-                align-items:stretch !important;
+            .dco-plan-workspace-settings-slot > .${SUMMARY_CLASS}[${OWNER_ATTR}="stable"] {
+                display:inline-flex !important;
+                flex-wrap:wrap !important;
+                align-items:center !important;
                 gap:6px !important;
-                width:100% !important;
-                min-width:0 !important;
+                width:auto !important;
+                max-width:100% !important;
+                box-sizing:border-box !important;
+                margin:0 !important;
+                padding:0 !important;
+                border:0 !important;
+                border-radius:0 !important;
+                background:transparent !important;
+                box-shadow:none !important;
+                overflow:visible !important;
+            }
+            .${SUMMARY_CLASS} .dco-plan-settings-readonly__chips {
+                display:inline-flex !important;
+                flex-wrap:wrap !important;
+                align-items:center !important;
+                gap:6px !important;
+                margin:0 !important;
+                padding:0 !important;
+                border:0 !important;
+                background:transparent !important;
+                pointer-events:none !important;
+                cursor:default !important;
+            }
+            .${SUMMARY_CLASS} .dco-plan-settings-readonly__chip {
+                display:inline-flex !important;
+                align-items:center !important;
+                gap:5px !important;
+                min-height:26px !important;
+                padding:3px 9px !important;
+                border:1px solid var(--alm-card-border, var(--border-color,#e2e8f0)) !important;
+                border-radius:999px !important;
+                background:var(--alm-surface-muted,#f4f6f8) !important;
+                color:var(--alm-text-muted, var(--text-muted,#5f6b78)) !important;
+                font-size:11px !important;
+                font-weight:750 !important;
+                white-space:nowrap !important;
+                pointer-events:none !important;
+                cursor:default !important;
+                user-select:none !important;
+            }
+            .${SUMMARY_CLASS} .dco-plan-settings-readonly__chip b {
+                color:var(--alm-text-strong,#101828) !important;
+                font-weight:850 !important;
+                direction:ltr !important;
             }
             .${SUMMARY_CLASS} .dco-plan-settings-readonly__strip {
                 display:flex !important;
@@ -309,6 +343,13 @@
             : null;
     }
 
+    function settingsSlot(frm) {
+        const root = formRoot(frm);
+        return root && root.querySelector
+            ? root.querySelector(".dco-plan-workspace-settings-slot")
+            : null;
+    }
+
     function restorePlanToolbar(frm) {
         return true;
     }
@@ -321,6 +362,14 @@
         restorePlanToolbar(frm);
         const summary = ownedSummary(frm);
         if (summary) summary.remove();
+    }
+
+    function hasVisibleSettingValue(spec, settings) {
+        if (!spec) return false;
+        if (spec.fieldtype === "Check") return true;
+        const raw = settings ? settings[spec.fieldname] : null;
+        if (raw === null || raw === undefined) return false;
+        return String(raw).trim() !== "";
     }
 
     function groupSettingSpecs(specs) {
@@ -373,16 +422,43 @@
         }).join("");
     }
 
+    function compactChip(spec, settings) {
+        const label = frappe.utils.escape_html(translate(spec.shortLabel || spec.label));
+        const value = frappe.utils.escape_html(displayValue(spec, settings));
+        const suffix = spec.suffix ? ` ${frappe.utils.escape_html(translate(spec.suffix))}` : "";
+        return `<span class="dco-plan-settings-readonly__chip"><span>${label}</span><b>${value}${suffix}</b></span>`;
+    }
+
     function summaryMarkup(frm, settings) {
         const groups = groupSettingSpecs(settingSpecs(frm, settings));
+        const allSpecs = [...(groups.plan || []), ...(groups.tools || [])];
+        const compactFields = [];
+        const preferred = [
+            "trim_margin_mm",
+            "kerf_mm",
+            "cutting_machine_type",
+            "deduct_edge_thickness",
+            "liner_tool_diameter_mm",
+            "rear_groove_tool_diameter_mm",
+            "handle_recess_tool_diameter_mm",
+        ];
+        preferred.forEach((fieldname) => {
+            const match = allSpecs.find((spec) => spec.fieldname === fieldname);
+            if (match && hasVisibleSettingValue(match, settings) && !compactFields.includes(match)) {
+                compactFields.push(match);
+            }
+        });
+        allSpecs.forEach((spec) => {
+            if (!compactFields.includes(spec) && hasVisibleSettingValue(spec, settings)) {
+                compactFields.push(spec);
+            }
+        });
+        if (!compactFields.length) {
+            compactFields.push(...(groups.plan || []).slice(0, 3));
+        }
         return `
-            <div class="dco-plan-settings-readonly__groups">
-                <div class="dco-plan-settings-readonly__strip" data-settings-group="plan" role="group" aria-label="${frappe.utils.escape_html(translate("Plan settings"))}">
-                    ${summaryFields(groups.plan, settings)}
-                </div>
-                <div class="dco-plan-settings-readonly__strip dco-plan-settings-readonly__tool-row" data-settings-group="tools" role="group" aria-label="${frappe.utils.escape_html(translate("Tool diameters"))}">
-                    ${summaryFields(groups.tools, settings)}
-                </div>
+            <div class="dco-plan-settings-readonly__chips" role="group" aria-label="${frappe.utils.escape_html(translate("Cutting settings"))}">
+                ${compactFields.map((spec) => compactChip(spec, settings)).join("")}
             </div>
         `;
     }
@@ -396,8 +472,8 @@
         }
 
         const settings = displayedSettings(frm);
-        const anchor = anchorNode(frm);
-        if (!settings || !anchor || !anchor.parentNode) {
+        const slot = settingsSlot(frm);
+        if (!settings || !slot) {
             removeOwnedSummary(frm);
             return false;
         }
@@ -407,7 +483,9 @@
             summary = document.createElement("section");
             summary.className = SUMMARY_CLASS;
             summary.setAttribute(OWNER_ATTR, "stable");
-            anchor.parentNode.insertBefore(summary, anchor);
+            slot.appendChild(summary);
+        } else if (summary.parentNode !== slot) {
+            slot.appendChild(summary);
         }
         summary.setAttribute("data-almdina-order", String(frm.doc.name || ""));
         summary.setAttribute("dir", uiDirection());

@@ -3,7 +3,8 @@
 
     if (window.AlmdinaPlanPreviewPresenter) return;
 
-    const STYLE_ID = "almdina-plan-preview-style";
+    const STYLE_ID = "almdina-plan-preview-style-v2";
+    const LEGACY_STYLE_IDS = Object.freeze(["almdina-plan-preview-style"]);
     const TRIM_REASON_LABELS = Object.freeze({
         preferred_retained: "The requested trim margin was kept",
         improved_feasibility: "Trim was reduced so every piece could be placed",
@@ -59,13 +60,17 @@
     });
 
     function installStyles() {
+        LEGACY_STYLE_IDS.forEach((id) => {
+            const legacy = document.getElementById(id);
+            if (legacy) legacy.remove();
+        });
         if (document.getElementById(STYLE_ID)) return;
         $("head").append(`
             <style id="${STYLE_ID}">
                 .dco-plan-preview-banner {
-                    display:flex;align-items:flex-start;justify-content:space-between;gap:12px;
-                    margin:0 0 12px;padding:11px 13px;border:1px solid color-mix(in srgb, var(--alm-primary, #172033) 28%, transparent);
-                    border-radius:11px;background:color-mix(in srgb, var(--alm-primary, #172033) 6%, transparent);
+                    display:flex;align-items:center;justify-content:space-between;gap:10px;
+                    margin:0 0 8px;padding:7px 10px;border:1px solid color-mix(in srgb, var(--alm-primary, #172033) 28%, transparent);
+                    border-radius:var(--alm-radius-sm, 10px);background:color-mix(in srgb, var(--alm-primary, #172033) 6%, transparent);
                 }
                 .dco-plan-preview-banner.is-stale {
                     border-color:rgba(217,119,6,.30);background:rgba(245,158,11,.075);
@@ -73,13 +78,13 @@
                 .dco-plan-preview-banner.is-error {
                     border-color:rgba(220,38,38,.26);background:rgba(239,68,68,.065);
                 }
-                .dco-plan-preview-banner strong { font-size:12px; }
+                .dco-plan-preview-banner strong { font-size:11.5px; font-weight:850; }
                 .dco-plan-preview-banner span {
-                    display:block;margin-top:3px;color:var(--text-muted,#687481);
-                    font-size:10.5px;line-height:1.55;
+                    display:block;margin-top:2px;color:var(--text-muted,#687481);
+                    font-size:10px;line-height:1.4;
                 }
                 .dco-plan-preview-badge {
-                    flex:0 0 auto;padding:4px 8px;border-radius:999px;background:var(--alm-primary,#172033);
+                    flex:0 0 auto;padding:3px 8px;border-radius:999px;background:var(--alm-primary,#172033);
                     color:#fff !important;font-size:10px;font-weight:800;white-space:nowrap;
                 }
                 .dco-plan-preview-banner .dco-plan-preview-badge {
@@ -88,11 +93,12 @@
                 .dco-plan-preview-banner.is-stale .dco-plan-preview-badge { background:#b45309; }
                 .dco-plan-preview-banner.is-error .dco-plan-preview-badge { background:#b91c1c; }
                 .dco-plan-preview-summary {
-                    display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:9px;
+                    display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:6px;
+                    margin:0 0 8px;
                 }
                 .dco-plan-preview-summary__item {
-                    padding:10px 12px;border:1px solid color-mix(in srgb, var(--alm-primary, #172033) 18%, transparent);
-                    border-radius:11px;background:color-mix(in srgb, var(--alm-primary, #172033) 4%, transparent);
+                    padding:7px 9px;border:1px solid color-mix(in srgb, var(--alm-primary, #172033) 18%, transparent);
+                    border-radius:var(--alm-radius-sm, 10px);background:color-mix(in srgb, var(--alm-primary, #172033) 4%, transparent);
                 }
                 .dco-plan-preview-summary__item.is-cost {
                     border-color:rgba(31,130,82,.24);background:rgba(31,130,82,.055);
@@ -112,13 +118,27 @@
                 .dco-plan-preview-summary__item.is-cost strong { color:#14653d;direction:ltr;text-align:start; }
                 .dco-plan-preview-summary__item.is-adaptive strong { color:#8a4b08; }
                 .dco-plan-preview-status {
-                    padding:12px 14px;border:1px dashed var(--border-color,#ccd3da);
-                    border-radius:11px;background:var(--subtle-fg,#fafafa);
+                    padding:8px 10px;border:1px dashed var(--border-color,#ccd3da);
+                    border-radius:var(--alm-radius-sm, 10px);background:var(--alm-surface-muted,#f4f6f8);
                 }
-                .dco-plan-preview-status strong { display:block;font-size:12px;font-weight:850; }
+                .dco-plan-preview-status strong { display:block;font-size:11.5px;font-weight:850; }
                 .dco-plan-preview-status span {
-                    display:block;margin-top:4px;color:var(--text-muted,#687481);
-                    font-size:10.5px;line-height:1.6;
+                    display:block;margin-top:3px;color:var(--text-muted,#687481);
+                    font-size:10px;line-height:1.45;
+                }
+                .dco-plan-preview-status.is-compact-idle {
+                    display:none !important;
+                    margin:0 !important;
+                    padding:0 !important;
+                    border:0 !important;
+                    background:transparent !important;
+                    min-height:0 !important;
+                }
+                [data-fieldname="plan_controls_intro"]:has(.dco-plan-preview-status.is-compact-idle) {
+                    display:none !important;
+                    margin:0 !important;
+                    padding:0 !important;
+                    min-height:0 !important;
                 }
                 @media (max-width:480px) {
                     .dco-plan-preview-banner { display:block; }
@@ -127,6 +147,21 @@
                 }
             </style>
         `);
+    }
+
+    function syncTrialChip(frm, status, title, description) {
+        const wrapper = actionWrapper(frm);
+        const chip = wrapper && wrapper.find('[data-role="trial"]').first();
+        if (!chip || !chip.length) return;
+        if (status === "idle") {
+            chip
+                .text(translate(title))
+                .attr("title", translate(description))
+                .attr("aria-label", translate(description))
+                .prop("hidden", false);
+            return;
+        }
+        chip.text("").removeAttr("title").removeAttr("aria-label").prop("hidden", true);
     }
 
     function translate(message, replacements) {
@@ -345,6 +380,25 @@
         const wrapper = planWrapper(frm);
         const content = wrapper && wrapper.find(".dco-plan-tab-content").first();
         const [title, description, badge] = statusCopy(status);
+        syncTrialChip(frm, status, title, description);
+
+        if (status === "idle") {
+            if (content && content.length) {
+                content.find(".dco-plan-preview-banner").remove();
+            }
+            const summary = summaryWrapper(frm);
+            if (summary) {
+                summary.html(`
+                    <div class="dco-plan-preview-status is-compact-idle" dir="${escapeHtml(uiDirection())}" hidden>
+                        <strong>${htmlMessage(title)}</strong>
+                        <span>${htmlMessage(description)}</span>
+                    </div>
+                `);
+            }
+            syncAddonCutterBanner(frm);
+            return true;
+        }
+
         if (content && content.length) {
             const stateClass = status === "stale"
                 ? " is-stale"
@@ -428,6 +482,7 @@
             </div>
         `);
         lockSourceTabs(frm);
+        syncTrialChip(frm, previewState.status, "", "");
         const decorations = window.AlmdinaPlanContentUX;
         if (decorations && typeof decorations.apply === "function") decorations.apply(frm);
         renderPreviewSummary(frm, payload.summary || {}, plan);
@@ -442,6 +497,7 @@
         note.attr("dir", uiDirection());
         if (!editing) {
             note.text(translate("Press “Edit” to try other settings. The saved plan will not change while you are trying them."));
+            syncTrialChip(frm, "", "", "");
             return;
         }
         const hasCost = previewCostVisible(frm);
@@ -455,6 +511,7 @@
             error: "The preview failed. Adjust the settings if needed, then recalculate.",
         };
         if (status === "ready") {
+            syncTrialChip(frm, "", "", "");
             note.text(translate(committable
                 ? hasCost
                     ? "The current preview is ready to save. The cost shown is an estimate for this plan and becomes official when you save."
@@ -462,6 +519,8 @@
                 : "The preview was shown but cannot be saved. Try other settings, then recalculate."));
             return;
         }
+        const [title, description] = statusCopy(status);
+        syncTrialChip(frm, status, title, description);
         note.text(translate(messages[status] || messages.idle));
     }
 

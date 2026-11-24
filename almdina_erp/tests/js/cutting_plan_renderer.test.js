@@ -240,11 +240,13 @@ assert.doesNotMatch(html, /data-overlay-kind="liner"[^>]* Z"/);
 assert.match(html, /<rect class="dco-extra-overlay-path dco-extra-overlay-handle"/);
 assert.match(html, /data-overlay-kind="recessed_handle_cutout"[^>]*stroke-width="0.65"/);
 assert.doesNotMatch(html, /stroke-width="1.75"/);
+assert.match(html, /dco-drawing-guide__card/);
 assert.match(html, /dco-extra-addon-legend/);
 assert.match(html, /dco-edge-band-legend/);
 assert.match(html, /Default edge banding/);
 assert.match(html, /Non-default edge banding/);
-assert.match(html, /Door add-on symbols/);
+assert.match(html, /Door add-ons/);
+assert.match(html, /Cut lines/);
 assert.match(html, /Double Edge/);
 assert.match(html, /Full door double/);
 assert.doesNotMatch(html, /dco-extra-addon-marks/);
@@ -1416,6 +1418,8 @@ fakeWindow.AlmdinaLocale = {
     translate(message, values) {
         const arabic = {
             "Warning:": "تنبيه:",
+            "Manufacturing error": "خطأ تصنيع",
+            "A cutter is wider than an add-on path, so the cutting plan cannot be calculated or approved.": "ريشة القص أعرض من مسار إضافة، لذلك لا يمكن حساب خطة القص ولا اعتمادها.",
             "liner": "لاينر",
             "plunge handle": "مسكة الغطس",
             "Door {0}: the {1} is {2} mm wide and its cutter is {3} mm. The cutter is wider than the add-on, so the cutting plan cannot be calculated or approved.": "الدرفة {0}: عرض {1} {2} مم وقطر ريشتها {3} مم.",
@@ -1430,7 +1434,7 @@ fakeWindow.AlmdinaLocale = {
 };
 const arabicBanner = renderer.build(frm, addonPlan([wideLiner]));
 assert.match(arabicBanner, /dir="rtl"/);
-assert.match(arabicBanner, /تنبيه:/);
+assert.match(arabicBanner, /خطأ تصنيع/);
 assert.match(arabicBanner, /الدرفة 4: عرض لاينر 5 مم/);
 delete fakeWindow.AlmdinaLocale;
 const styles = fs.readFileSync(

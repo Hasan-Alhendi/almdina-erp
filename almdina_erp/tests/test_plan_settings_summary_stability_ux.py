@@ -34,9 +34,14 @@ def test_readonly_summary_is_anchored_outside_plan_command_surface() -> None:
     summary = source(
         "public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_settings_summary_ux.js"
     )
+    tabs = source(
+        "public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_tabs_ux.js"
+    )
 
-    assert "plan_actions_section" in summary
-    assert "anchor.parentNode.insertBefore(summary, anchor)" in summary
+    assert "dco-plan-workspace-settings-slot" in summary
+    assert "settingsSlot(frm)" in summary
+    assert "slot.appendChild(summary)" in summary
+    assert "dco-plan-workspace-settings-slot" in tabs
     assert 'frm.fields_dict.plan_control_actions' not in summary
     assert 'data-almdina-plan-settings-summary-owner' in summary
     assert '[data-fieldname=\"plan_control_actions\"] > .${SUMMARY_CLASS}' in summary
@@ -52,12 +57,12 @@ def test_summary_reads_canonical_plan_workspace_settings_and_identity() -> None:
     assert "AlmdinaPlanWorkspaceState" in summary
     assert 'state.status === "ready"' in summary
     assert 'data-almdina-order' in summary
-    assert "dco-plan-settings-readonly__strip" in summary
-    assert "dco-plan-settings-readonly__field" in summary
-    assert 'class="form-control"' in summary
-    assert "readonly" in summary
+    assert "dco-plan-settings-readonly__chips" in summary
+    assert "dco-plan-settings-readonly__chip" in summary
+    assert "pointer-events:none" in summary
+    assert "<details" not in summary
     assert "dco-plan-settings-editor__recalc" not in summary
-    assert 'translate("Plan settings")' in summary
+    assert 'translate("Cutting settings")' in summary
     assert 'shortLabel: "Margin"' in summary
     assert 'shortLabel: "Trim"' not in summary
 

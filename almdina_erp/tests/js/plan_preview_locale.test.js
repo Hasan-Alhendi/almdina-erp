@@ -137,8 +137,10 @@ const content = node("dco-plan-tab-content");
 const summary = node("plan-summary");
 const note = node("dco-plan-note");
 const recalc = node("dco-recalculate-plan");
+const trial = node('data-role="trial"');
+trial.attrs = { "data-role": "trial", hidden: true };
 const shell = node("dco-plan-actions-shell");
-shell.children.push(note, recalc);
+shell.children.push(note, recalc, trial);
 const actionHost = node("plan-actions-host");
 actionHost.children.push(shell);
 const planHost = node("plan-host");
@@ -275,14 +277,33 @@ const statusText = {
 };
 for (const status of Object.keys(statusText)) {
     content.html = "";
+    summary.html = "";
+    trial.text = "";
+    trial.attrs.hidden = true;
     direction = "rtl";
     presenter.renderPersistedEditingState(order, status);
-    assert.match(content.html, /dir="rtl"/, status);
-    assert.match(content.html, new RegExp(statusText[status]), status);
+    if (status === "idle") {
+        assert.equal(content.html, "", status);
+        assert.match(summary.html, /is-compact-idle/, status);
+        assert.equal(trial.text, statusText.idle, status);
+        assert.equal(trial.attrs.hidden, false, status);
+        assert.match(String(trial.attrs.title || ""), /plan enregistré|saved plan|FR:/i, status);
+    } else {
+        assert.match(content.html, /dir="rtl"/, status);
+        assert.match(content.html, new RegExp(statusText[status]), status);
+        assert.equal(trial.attrs.hidden, true, status);
+    }
     content.html = "";
+    summary.html = "";
     direction = "ltr";
     presenter.renderPersistedEditingState(order, status);
-    assert.match(content.html, /dir="ltr"/, status);
+    if (status === "idle") {
+        assert.equal(content.html, "", status);
+        assert.match(summary.html, /is-compact-idle/, status);
+        assert.equal(trial.text, statusText.idle, status);
+    } else {
+        assert.match(content.html, /dir="ltr"/, status);
+    }
     assert.equal(status, status);
 }
 

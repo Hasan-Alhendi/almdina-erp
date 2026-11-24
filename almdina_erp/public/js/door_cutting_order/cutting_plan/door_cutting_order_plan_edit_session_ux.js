@@ -143,7 +143,7 @@
     const ORIGINAL_DISABLED_ATTR = "data-almdina-plan-edit-original-disabled";
     const PHASE_DISABLED_ATTR = "data-almdina-plan-phase-original-disabled";
     const EDITOR_SELECTOR = ".dco-plan-settings-editor";
-    const STYLE_ID = "almdina-plan-settings-editor-style-v5";
+    const STYLE_ID = "almdina-plan-settings-editor-style-v6";
 
     function documentContext() {
         return window.AlmdinaDocumentContext || null;
@@ -465,7 +465,7 @@
     }
 
     function installEditorStyles() {
-        ["almdina-plan-settings-editor-style", "almdina-plan-settings-editor-style-v4", STYLE_ID].forEach((id) => {
+        ["almdina-plan-settings-editor-style", "almdina-plan-settings-editor-style-v4", "almdina-plan-settings-editor-style-v5", STYLE_ID].forEach((id) => {
             if (id === STYLE_ID) return;
             const legacy = document.getElementById(id);
             if (legacy) legacy.remove();
@@ -522,19 +522,20 @@
             }
             .dco-plan-settings-editor__groups {
                 display: flex;
-                flex-direction: column;
-                align-items: stretch;
-                gap: 6px;
+                flex-direction: row;
+                flex-wrap: wrap;
+                align-items: center;
+                gap: 6px 10px;
                 flex: 1 1 auto;
                 min-width: 0;
-                width: 100%;
+                width: auto;
             }
             .dco-plan-settings-editor__grid {
                 display: flex;
                 flex-wrap: wrap;
                 align-items: center;
                 gap: 6px;
-                flex: 1 1 auto;
+                flex: 0 1 auto;
                 min-width: 0;
                 padding: 0;
             }
@@ -543,7 +544,17 @@
                 flex-wrap: wrap;
                 align-items: center;
                 gap: 6px;
-                width: 100%;
+                width: auto;
+                flex: 0 1 auto;
+            }
+            .dco-plan-settings-editor__check-row {
+                display: flex;
+                flex-wrap: wrap;
+                align-items: center;
+                gap: 6px;
+                width: auto;
+                flex: 0 0 auto;
+                margin-inline-start: 0;
             }
                 .dco-plan-settings-editor__field--check label {
                     display: inline-flex;
@@ -666,7 +677,27 @@
                 font-size: 12px;
                 font-weight: 800;
                 line-height: 1.4;
-                white-space: nowrap;
+                white-space: normal;
+                max-width: min(100%, 28rem);
+            }
+            .dco-plan-settings-editor__trial-chip {
+                display: inline-flex;
+                align-items: center;
+                gap: 6px;
+                min-height: 28px;
+                margin: 0;
+                padding: 3px 10px;
+                border: 1px dashed var(--alm-card-border, #ccd3da);
+                border-radius: 999px;
+                background: var(--alm-surface-muted, #f4f6f8);
+                color: var(--alm-text-strong, #101828);
+                font-size: 11px;
+                font-weight: 800;
+                line-height: 1.2;
+                cursor: help;
+            }
+            .dco-plan-settings-editor__trial-chip[hidden] {
+                display: none !important;
             }
             .dco-plan-settings-editor__stale-copy[hidden] {
                 display: none !important;
@@ -826,7 +857,7 @@
                 .join(",");
             return `${spec.fieldname}:${spec.fieldtype}:${options}`;
         }).join("|");
-        return `${frm && frm.doc && frm.doc.name || ""}::${uiDirection()}::${fields}`;
+        return `${frm && frm.doc && frm.doc.name || ""}::${uiDirection()}::check-end-v1::${fields}`;
     }
 
     function rememberEditorFocus() {
@@ -875,9 +906,14 @@
         const groups = groupPlanSettingSpecs(specs);
         const draft = state.draft || {};
         const planFields = groups.plan
+            .filter((spec) => spec.fieldtype !== "Check")
             .map((spec) => fieldMarkup(spec, draft[spec.fieldname]))
             .join("");
         const toolFields = groups.tools
+            .map((spec) => fieldMarkup(spec, draft[spec.fieldname]))
+            .join("");
+        const checkFields = groups.plan
+            .filter((spec) => spec.fieldtype === "Check")
             .map((spec) => fieldMarkup(spec, draft[spec.fieldname]))
             .join("");
         host.prepend(`
@@ -891,11 +927,13 @@
                         <div class="dco-plan-settings-editor__groups">
                             <div class="dco-plan-settings-editor__grid" data-settings-group="plan">${planFields}</div>
                             <div class="dco-plan-settings-editor__grid dco-plan-settings-editor__tool-row" data-settings-group="tools">${toolFields}</div>
+                            <div class="dco-plan-settings-editor__grid dco-plan-settings-editor__check-row" data-settings-group="checks">${checkFields}</div>
                         </div>
                     </div>
                     <div class="dco-plan-settings-editor__footer">
                         <div class="dco-plan-settings-editor__action-bar is-edit-layout">
                             <div class="dco-plan-settings-editor__recalc-slot" data-role="recalc"></div>
+                            <span class="dco-plan-settings-editor__trial-chip" data-role="trial" hidden></span>
                             <p class="dco-plan-settings-editor__stale-copy" data-role="stale" hidden></p>
                         </div>
                     </div>

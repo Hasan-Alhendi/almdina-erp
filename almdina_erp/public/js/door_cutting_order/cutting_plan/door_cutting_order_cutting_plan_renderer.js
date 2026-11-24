@@ -1019,7 +1019,8 @@
         </div>`;
     }
 
-    function render_extra_addon_legend() {
+    function render_extra_addon_legend(options) {
+        const includeTitle = !(options && options.omitTitle);
         const items = EXTRA_ADDON_LEGEND_ITEMS.map(item => {
             const label = extraAddonLegendLabel(item);
             if (item.addonKind) {
@@ -1035,8 +1036,11 @@
                 <span>${escape_html(label)}</span>
             </span>`;
         }).join("");
+        const title = includeTitle
+            ? `<span class="dco-extra-addon-legend-title">${htmlText("Door add-on symbols")}</span>`
+            : "";
         return `<div class="dco-extra-addon-legend" dir="${escape_html(uiDirection())}">
-            <span class="dco-extra-addon-legend-title">${htmlText("Door add-on symbols")}</span>
+            ${title}
             ${items}
         </div>`;
     }
@@ -1109,7 +1113,7 @@
         if (!rows.length) return "";
         const items = rows.map(finding => `<li>${escape_html(addonCutterLine(finding))}</li>`).join("");
         const origin = source ? ` data-addon-cutter-source="${escape_html(source)}"` : "";
-        return `<div class="dco-addon-cutter-warning" role="alert"${origin} dir="${escape_html(uiDirection())}"><b>${htmlText("Warning:")}</b><ul class="dco-addon-cutter-warning__items">${items}</ul></div>`;
+        return `<div class="dco-addon-cutter-warning" role="alert"${origin} dir="${escape_html(uiDirection())}"><strong class="dco-addon-cutter-warning__title">${htmlText("Manufacturing error")}</strong><p class="dco-addon-cutter-warning__summary">${htmlText("A cutter is wider than an add-on path, so the cutting plan cannot be calculated or approved.")}</p><ul class="dco-addon-cutter-warning__items">${items}</ul></div>`;
     }
 
     let addonGuardCache = null;
@@ -1242,9 +1246,31 @@
     function render_plan_meta_strip(frm, plan) {
         const coverage = render_special_raw_coverage(frm, plan);
         const edgeLegend = render_edge_band_legend();
-        const legend = render_extra_addon_legend();
-        if (!coverage && !edgeLegend && !legend) return "";
-        return `<div class="dco-plan-meta-strip" dir="${escape_html(uiDirection())}">${coverage}${edgeLegend}${legend}</div>`;
+        const legend = render_extra_addon_legend({ omitTitle: true });
+        const cards = [];
+        if (edgeLegend) {
+            cards.push(`
+                <div class="dco-drawing-guide__card" data-guide="cut-lines">
+                    <h3 class="dco-drawing-guide__title">${htmlText("Cut lines")}</h3>
+                    <div class="dco-drawing-guide__body">${edgeLegend}</div>
+                </div>
+            `);
+        }
+        if (legend) {
+            cards.push(`
+                <div class="dco-drawing-guide__card" data-guide="door-addons">
+                    <h3 class="dco-drawing-guide__title">${htmlText("Door add-ons")}</h3>
+                    <div class="dco-drawing-guide__body">${legend}</div>
+                </div>
+            `);
+        }
+        // Coverage stays in the plan paint so Content UX can relocate the badge
+        // into the workspace meta row without changing calculation ownership.
+        const guideHtml = cards.length
+            ? `<section class="dco-plan-meta-strip dco-drawing-guide" dir="${escape_html(uiDirection())}" aria-label="${escape_html(translate("Drawing guide"))}">${cards.join("")}</section>`
+            : "";
+        if (!coverage && !guideHtml) return "";
+        return `${coverage || ""}${guideHtml}`;
     }
 
     function extraAddonMarkPlate(slot, kind, innerHtml) {
@@ -1812,17 +1838,16 @@
         if (!requested) return "";
 
         const complete = Boolean(snapshot.complete ?? (placed === requested));
-        const tone = complete
-            ? "border-color:#c9a66b;background:linear-gradient(135deg,#fff8e8,#fffdf8);color:#684117"
-            : "border-color:#dc7b72;background:#fff4f2;color:#9b2f26";
         const counts = `<b>${escape_html(translate("{0} of {1}", [placed, requested]))}</b>`;
         const message = complete
             ? `${htmlText("All special doors were placed in the cutting plan:")} ${counts}`
             : `${htmlText("Warning: only")} ${counts} ${htmlText("special doors were placed in the cutting plan. Review the measurements and the unplaced pieces.")}`;
+        const stateClass = complete ? "is-complete" : "is-incomplete";
 
         return `
-            <div class="dco-special-raw-coverage" style="direction:${escape_html(uiDirection())};border:1px solid;border-radius:10px;padding:7px 10px;font-size:12px;font-weight:700;${tone}">
-                <span style="font-size:16px;margin-left:6px">✦</span>${message}
+            <div class="dco-special-raw-coverage ${stateClass}" dir="${escape_html(uiDirection())}" role="status">
+                <span class="dco-special-raw-coverage__mark" aria-hidden="true">✦</span>
+                <span class="dco-special-raw-coverage__text">${message}</span>
             </div>
         `;
     }
