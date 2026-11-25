@@ -1314,6 +1314,10 @@
             state._artcamSheetNo = Number(sheet && sheet.sheet_no);
         }
         if (!state.sections) state.sections = { placement: false, perimeter: false, associations: true, order: true };
+        const associationEditor = window.AlmdinaArtcamMachining
+            ? window.AlmdinaArtcamMachining.markup(workspace, sheet, state) : "";
+        const associationBody = canPrepare ? associationEditor
+            : `<fieldset class="dco-artcam-readonly" disabled>${associationEditor}</fieldset>`;
         const exportBar = options && options.exportBar ? exportControlsMarkup(workspace, sheet) : "";
         const pageChrome = Boolean(exportBar);
         const previewToolbar = pageChrome
@@ -1345,7 +1349,7 @@
                     ${pageChrome ? sheetIdentityMarkup(workspace, sheet) : ""}
                     ${section("placement", "Machine placement", placementControlsMarkup(workspace, state, canPrepare))}
                     ${section("perimeter", "Sheet Perimeter", perimeterJoinControlsMarkup(state, canPrepare))}
-                    ${section("associations", "Vector Associations", window.AlmdinaArtcamMachining ? window.AlmdinaArtcamMachining.markup(workspace, sheet, state) : "")}
+                    ${section("associations", "Vector Associations", associationBody)}
                     ${section("order", "Operation order", `<ol class="dco-operational-order">${orderItems || `<li class="dco-artcam-note">${escapeHtml(translate("Associations appear here after they are saved."))}</li>`}</ol>${warning}`)}
                     ${exportBar}
                 </div>
@@ -1827,7 +1831,7 @@
                     return;
                 }
                 if (zone !== "board") return;
-                if (applyBoardVectorClick(event, body, live.state)) return;
+                if (live.workspace.can_prepare && applyBoardVectorClick(event, body, live.state)) return;
                 const preview = body.querySelector("[data-sheet-preview]");
                 const pointed = resolveBoardPointer(preview, event);
                 if (pointed && pointed.ambiguous) {

@@ -350,6 +350,12 @@ assert.ok(readOnlyEditor.includes('<fieldset class="dco-artcam-readonly" disable
 assert.ok(readOnlyEditor.includes('value="Saved cut"'));
 assert.ok(readOnlyEditor.includes('data-field="final_depth_mm" value="8"'));
 assert.ok(readOnlyEditor.includes("data-artcam-calculate"));
+for (const field of ["name", "source", "profile_id", "final_depth_mm", "safe_z_mm", "home_x_mm", "home_y_mm", "home_z_mm"]) {
+    const control = readOnlyEditor.match(new RegExp(`<\\b(?:input|select)[^>]*data-field="${field}"[^>]*>`));
+    assert.ok(control, `${field} must render for the viewer`);
+    assert.match(control[0], /\sdisabled(?:\s|>)/, `${field} must be disabled for view-only permission`);
+}
+assert.match(readOnlyEditor, /data-artcam-calculate disabled>/);
 const readOnlyHost = { dataset: {}, addEventListener() { throw new Error("read-only editor was bound"); } };
 artcam.bind({ querySelector() { return readOnlyHost; } }, {
     workspace: { can_prepare: false }, state: readOnlyState,
@@ -417,6 +423,9 @@ const chosenEditor = artcam.markup({
 }, state);
 assert.ok(chosenEditor.includes('data-field="final_depth_mm"'));
 assert.ok(!chosenEditor.includes('dco-artcam-readonly'));
+assert.match(chosenEditor, /data-field="name"[^>]*value="[^"]*">/);
+assert.match(chosenEditor, /data-field="source">/);
+assert.match(chosenEditor, /data-field="profile_id">/);
 assert.ok(chosenEditor.includes("data-artcam-tool-summary"));
 assert.ok(chosenEditor.includes('data-field="tool_preset"'));
 assert.ok(chosenEditor.includes('value="Finish"'));

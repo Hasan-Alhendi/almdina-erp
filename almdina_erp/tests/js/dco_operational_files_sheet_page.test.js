@@ -403,6 +403,16 @@ assert.equal(ux.finishSheetMutation(mutationState, firstMutation), true);
 const secondMutation = ux.beginSheetMutation(mutationState);
 assert.equal(secondMutation, 2);
 assert.equal(ux.sheetMutationIsCurrent(mutationState, firstMutation), false);
+windowObject.AlmdinaArtcamMachining = {
+    markup() { return '<form data-artcam-editor><input data-field="name"><select data-field="source"></select><select data-field="profile_id"></select></form>'; },
+};
+const viewOnlyMarkup = ux.dialogMarkup(
+    { can_prepare: false, cutting_plan: "PLAN", plan_revision: 3, cnc_machines: [] },
+    { sheet_no: 1, status: "Settings Saved", machining: { associations: [], profiles: [] } },
+    {},
+    { exportBar: true }
+);
+assert.match(viewOnlyMarkup, /data-sheet-section="associations"[^]*?<fieldset class="dco-artcam-readonly" disabled><form data-artcam-editor>[^]*?<\/form><\/fieldset>/);
 const pageMarkup = ux.dialogMarkup(
     {
         can_prepare: true,
@@ -415,6 +425,7 @@ const pageMarkup = ux.dialogMarkup(
     unset,
     { exportBar: true }
 );
+assert.ok(!pageMarkup.includes('class="dco-artcam-readonly"'));
 const settingsMarkup = pageMarkup.slice(pageMarkup.indexOf("dco-operational-sheet__settings"));
 assert.ok(settingsMarkup.includes("dco-cnc-sheet-page__identity"));
 assert.ok(settingsMarkup.indexOf("dco-cnc-sheet-page__identity") < settingsMarkup.indexOf('data-sheet-section="placement"'));
