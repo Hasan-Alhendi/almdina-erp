@@ -5,10 +5,20 @@ import pytest
 
 ezdxf = pytest.importorskip("ezdxf")
 
+from almdina_erp.tests.frappe_test_stub import install_if_unavailable
+
+install_if_unavailable()
+
+from almdina_erp.almdina_erp.services.dxf_export_service import _normalized_dxf_filename
 from almdina_erp.almdina_erp.services.dxf_autocad_normalization import (
     assert_single_dxf_document,
     rebuild_autocad_dxf,
 )
+
+
+def test_normalized_dxf_uses_order_number_as_filename():
+    assert _normalized_dxf_filename("26-00001") == "26-00001.dxf"
+    assert _normalized_dxf_filename("DCO-2026-00018") == "DCO-2026-00018.dxf"
 
 
 ROOT = Path(__file__).resolve().parents[1]
