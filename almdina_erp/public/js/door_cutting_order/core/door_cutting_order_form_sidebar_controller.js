@@ -168,8 +168,17 @@
         ensureNativePreference() {
             if (isMobile()) return;
             const actual = nativeSidebarExpanded(this.frm);
-            if (actual === null || actual === this.preferredExpanded) return;
-            this.toggleNativeSidebar();
+            // No native form sidebar on this page (or not mounted yet). Treat as
+            // satisfied so presentation settle cannot spin on a missing rail.
+            if (actual === null) return;
+            if (actual === this.preferredExpanded) return;
+            this.setNativeSidebarExpanded(this.preferredExpanded);
+        }
+
+        setNativeSidebarExpanded(expanded) {
+            const actual = nativeSidebarExpanded(this.frm);
+            if (actual === null || actual === Boolean(expanded)) return false;
+            return this.toggleNativeSidebar();
         }
 
         toggleNativeSidebar() {
@@ -259,7 +268,12 @@
         const root = pageRoot(frm);
         if (!root || !root.isConnected || !root.classList.contains(HOST_CLASS)) return false;
         if (isMobile()) return !root.classList.contains(FULL_WIDTH_CLASS);
-        return nativeSidebarExpanded(frm) === controller.preferredExpanded;
+        const actual = nativeSidebarExpanded(frm);
+        // Missing native sidebar must not block the presentation settle loop.
+        // Frappe 16.60 can rebuild the form chrome without a side section for a
+        // tick; spinning on that absence previously froze new/edit DCO loads.
+        if (actual === null) return true;
+        return actual === controller.preferredExpanded;
     }
 
     window.AlmdinaDcoFormSidebarController = Object.freeze({ mount, isPreferenceApplied });
