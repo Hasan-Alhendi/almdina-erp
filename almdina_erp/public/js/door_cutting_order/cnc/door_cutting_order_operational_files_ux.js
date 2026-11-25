@@ -1,7 +1,8 @@
 (() => {
     "use strict";
 
-    if (window.AlmdinaOperationalFilesUX) return;
+    const ASSET_REVISION = 1;
+    if (window.AlmdinaOperationalFilesUX?.assetRevision === ASSET_REVISION) return;
 
     const METHOD = "almdina_erp.almdina_erp.services.cnc_operational_file_service";
     const SHEET_PAGE_ROUTE = "cnc-sheet-settings";
@@ -4875,6 +4876,7 @@
     }
 
     window.AlmdinaOperationalFilesUX = Object.freeze({
+        assetRevision: ASSET_REVISION,
         render,
         cutPathIsEarly,
         effectivePreset,

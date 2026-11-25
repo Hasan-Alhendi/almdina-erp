@@ -3,12 +3,10 @@
 
     const PAGE_ROUTE = "cnc-sheet-settings";
     const STYLE = "/assets/almdina_erp/css/door_cutting_order_operational_files.css?v=23";
-    // frappe.require reads the extension before the query string. A "?v="
-    // suffix makes the loader throw before the script request is sent.
     const ASSETS = Object.freeze([
         "/assets/almdina_erp/js/almdina_ui.js",
-        "/assets/almdina_erp/js/cnc/artcam_machining_ux.js",
-        "/assets/almdina_erp/js/door_cutting_order/cnc/door_cutting_order_operational_files_ux.js",
+        "/assets/almdina_erp/js/cnc/artcam_machining_ux.js?v=1",
+        "/assets/almdina_erp/js/door_cutting_order/cnc/door_cutting_order_operational_files_ux.js?v=1",
     ]);
 
     function translate(message, replacements) {
@@ -56,8 +54,17 @@
         return frappe.require(STYLE);
     }
 
+    function requireAsset(asset) {
+        const splitAt = asset.indexOf("?");
+        if (splitAt === -1) return frappe.require(asset);
+        // Frappe detects the extension from the first argument; pass the
+        // versioned URL separately so it fetches the current script.
+        const path = asset.slice(0, splitAt);
+        return frappe.assets.load_asset(path, new URL(asset, window.location.origin).toString());
+    }
+
     function loadAssets() {
-        return Promise.all(ASSETS.map(asset => frappe.require(asset)));
+        return Promise.all(ASSETS.map(requireAsset));
     }
 
     function pageModule() {

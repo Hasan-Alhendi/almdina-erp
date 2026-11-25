@@ -1,7 +1,8 @@
 (() => {
     "use strict";
 
-    if (window.AlmdinaArtcamMachining) return;
+    const ASSET_REVISION = 1;
+    if (window.AlmdinaArtcamMachining?.assetRevision === ASSET_REVISION) return;
 
     const METHOD = "almdina_erp.almdina_erp.services.cnc_operational_file_service";
     const PROFILE_FIELDS = Object.freeze([
@@ -776,6 +777,7 @@
     }
 
     window.AlmdinaArtcamMachining = Object.freeze({
+        assetRevision: ASSET_REVISION,
         markup,
         bind,
         ensureForm,
