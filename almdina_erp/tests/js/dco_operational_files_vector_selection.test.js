@@ -334,9 +334,27 @@ assert.equal(state.artcamForm.tool.tool_number, "9", "legacy NC tokens are numer
 
 const blankEditor = artcam.markup({ presets: [] }, { machining: { profiles: [], associations: [] } }, {});
 assert.ok(blankEditor.includes('data-field="profile_id"'));
+assert.ok(blankEditor.includes('<fieldset class="dco-artcam-readonly" disabled>'));
 assert.ok(!blankEditor.includes('data-field="final_depth_mm"'));
 assert.ok(!blankEditor.includes('data-field="replacement_tool"'));
 assert.ok(!blankEditor.includes("data-artcam-tool"));
+
+const readOnlyState = { artcamForm: {
+    association_id: "saved", name: "Saved cut", source: "selected_vectors",
+    profile_id: "profile-1", tool_preset: "", fields: { final_depth_mm: 8 }, tool: {},
+} };
+const readOnlyEditor = artcam.markup({ can_prepare: false }, {
+    machining: { profiles: [{ profile_id: "profile-1", name: "Profile 1" }], associations: [] },
+}, readOnlyState);
+assert.ok(readOnlyEditor.includes('<fieldset class="dco-artcam-readonly" disabled>'));
+assert.ok(readOnlyEditor.includes('value="Saved cut"'));
+assert.ok(readOnlyEditor.includes('data-field="final_depth_mm" value="8"'));
+assert.ok(readOnlyEditor.includes("data-artcam-calculate"));
+const readOnlyHost = { dataset: {}, addEventListener() { throw new Error("read-only editor was bound"); } };
+artcam.bind({ querySelector() { return readOnlyHost; } }, {
+    workspace: { can_prepare: false }, state: readOnlyState,
+});
+assert.equal(readOnlyHost.dataset.artcamBound, undefined);
 
 const unavailableSources = artcam.markup({}, {
     machining: {
@@ -389,6 +407,7 @@ assert.deepEqual(retainedForm.fields, { final_depth_mm: 12, safe_z_mm: 4, home_x
 assert.deepEqual(retainedForm.tool, { tool_number: 9, diameter_mm: 5 });
 
 const chosenEditor = artcam.markup({
+    can_prepare: true,
     presets: [{ name: "Finish", tool_number: 9, tool_diameter_mm: 5 }],
 }, {
     machining: {
@@ -397,6 +416,7 @@ const chosenEditor = artcam.markup({
     },
 }, state);
 assert.ok(chosenEditor.includes('data-field="final_depth_mm"'));
+assert.ok(!chosenEditor.includes('dco-artcam-readonly'));
 assert.ok(chosenEditor.includes("data-artcam-tool-summary"));
 assert.ok(chosenEditor.includes('data-field="tool_preset"'));
 assert.ok(chosenEditor.includes('value="Finish"'));
@@ -407,6 +427,7 @@ state.artcamForm.tool_preset = "Finish";
 state.artcamForm.tool = { tool_number: 9, diameter_mm: 5 };
 state.artcamForm.toolOpen = true;
 const toolEditor = artcam.markup({
+    can_prepare: true,
     presets: [{ name: "Finish", tool_number: 9, tool_diameter_mm: 5 }],
 }, {
     machining: {

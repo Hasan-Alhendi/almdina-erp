@@ -306,6 +306,7 @@
 
     function editorMarkup(context) {
         const form = ensureForm(context.state);
+        const canPrepare = Boolean(context.workspace && context.workspace.can_prepare);
         const profileChosen = Boolean(form.profile_id);
         const count = (context.state.vectorSelection || []).length;
         const selected = form.source === "selected_vectors";
@@ -318,6 +319,7 @@
             && (editingRow.vector_ids || []).some(id => String(id) === "cut_path:sheet_perimeter")
         );
         return `<form class="dco-artcam-editor" data-artcam-editor>
+            ${canPrepare ? "" : '<fieldset class="dco-artcam-readonly" disabled>'}
             ${editing ? `<p class="dco-artcam-note" data-artcam-editing>${escapeHtml(translate("Editing"))}: ${escapeHtml(form.name || form.association_id)}
                 <button type="button" class="btn btn-default btn-xs" data-artcam-cancel>${escapeHtml(translate("New association"))}</button>
             </p>` : ""}
@@ -356,6 +358,7 @@
                 <button type="submit" class="btn alm-btn-primary btn-sm" data-artcam-calculate>${escapeHtml(translate("Calculate Now"))}</button>
             </div>
             <p class="dco-artcam-status" data-artcam-status role="status"></p>
+            ${canPrepare ? "" : "</fieldset>"}
         </form>`;
     }
 
@@ -522,6 +525,7 @@
     function bind(root, context) {
         if (!root || !context || !context.state) return;
         const host = root.querySelector("[data-artcam-root]");
+        if (!context.workspace || !context.workspace.can_prepare) return;
         if (!host || host.dataset.artcamBound === "1") return;
         host.dataset.artcamBound = "1";
         ensureForm(context.state);
@@ -622,6 +626,7 @@
     }
 
     function calculate(host, context) {
+        if (!context.workspace || !context.workspace.can_prepare) return;
         const state = context.state;
         if (state.artcamBusy) return;
         const form = readEditor(host, state);
