@@ -99,3 +99,36 @@ body.almdina-shared-shell .body-sidebar .standard-sidebar-item .item-anchor:hove
     color: var(--alm-on-primary, #fff) !important;
     --icon-stroke: var(--alm-on-primary, #fff);
 }
+
+/* Frappe 16.60 uses light gray fills for hover/active rows even on a navy rail. */
+body.almdina-shared-shell .body-sidebar .standard-sidebar-item:not(.active-sidebar):has(a:not(.section-break)):hover {
+    background-color: var(--sidebar-hover-color);
+}
+
+body.almdina-shared-shell .body-sidebar .active-sidebar,
+body.almdina-shared-shell .body-sidebar-container:not(.expanded) .sidebar-item-container:has(> .nested-container.hidden .active-sidebar) > .standard-sidebar-item {
+    background-color: var(--sidebar-active-color);
+}
+
+body.almdina-shared-shell .body-sidebar .standard-sidebar-item .item-anchor:not(.section-break),
+body.almdina-shared-shell .body-sidebar .standard-sidebar-item .item-anchor:not(.section-break):hover,
+body.almdina-shared-shell .body-sidebar .standard-sidebar-item .item-anchor:not(.section-break):focus-visible {
+    color: var(--alm-on-primary, #fff);
+}
+
+body.almdina-shared-shell .dock .dock-utilities .dock-item {
+    color: var(--dock-ink);
+    --icon-stroke: currentColor;
+}
+
+body.almdina-shared-shell .dock .dock-item:hover,
+body.almdina-shared-shell .dock .dock-utilities .dock-item:hover {
+    background-color: var(--sidebar-hover-color);
+    color: var(--dock-ink-hover);
+}
+
+body.almdina-shared-shell .dock .dock-item.active,
+body.almdina-shared-shell .dock .dock-utilities .dock-item[aria-expanded="true"] {
+    background-color: var(--sidebar-active-color);
+    color: var(--dock-ink-active);
+}

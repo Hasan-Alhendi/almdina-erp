@@ -37,7 +37,6 @@
      * token or the module sidebar looks blank.
      */
     --desk-sidebar-bg: var(--alm-primary);
-    --dock-bg: var(--alm-primary);
     --dock-ink: color-mix(in srgb, var(--alm-on-primary, #fff) 72%, transparent);
     --dock-ink-hover: var(--alm-on-primary, #fff);
     --dock-ink-active: var(--alm-on-primary, #fff);
@@ -70,7 +69,6 @@
 
     --surface-menu-bar: var(--alm-primary);
     --desk-sidebar-bg: var(--alm-primary);
-    --dock-bg: var(--alm-primary);
     --dock-ink: color-mix(in srgb, var(--alm-on-primary, #fff) 72%, transparent);
     --dock-ink-hover: var(--alm-on-primary, #fff);
     --dock-ink-active: var(--alm-on-primary, #fff);

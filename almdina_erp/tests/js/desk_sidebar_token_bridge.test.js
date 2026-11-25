@@ -47,8 +47,10 @@ const dark = blockFor("[data-theme=\"dark\"]");
 
 for (const [name, block] of [["light", light], ["dark", dark]]) {
     assert.match(block, /--desk-sidebar-bg:\s*var\(--alm-primary\)/, `${name} maps desk sidebar bg`);
-    assert.match(block, /--dock-bg:\s*var\(--alm-primary\)/, `${name} maps dock bg`);
+    assert.doesNotMatch(block, /--dock-bg:/, `${name} uses Frappe's dock-to-sidebar bridge`);
     assert.match(block, /--dock-ink-active:\s*var\(--alm-on-primary/, `${name} maps dock active ink`);
+    assert.match(block, /--sidebar-hover-color:\s*color-mix\(in srgb, var\(--alm-on-primary\) 12%, var\(--alm-primary\)\)/);
+    assert.match(block, /--sidebar-active-color:\s*var\(--alm-accent/);
 }
 
 assert.match(
@@ -61,14 +63,27 @@ assert.match(
     /\.shell-header/,
     "collapsed polish covers Frappe 16.60 shell-header"
 );
+assert.match(SIDEBAR, /\.standard-sidebar-item:not\(\.active-sidebar\):has\(a:not\(\.section-break\)\):hover\s*\{\s*background-color:\s*var\(--sidebar-hover-color\)/);
+assert.match(SIDEBAR, /\.body-sidebar \.active-sidebar,[\s\S]*background-color:\s*var\(--sidebar-active-color\)/);
+assert.match(SIDEBAR, /\.dock \.dock-item:hover,[\s\S]*background-color:\s*var\(--sidebar-hover-color\)/);
+assert.match(SIDEBAR, /\.dock \.dock-item.active,[\s\S]*background-color:\s*var\(--sidebar-active-color\)/);
+assert.match(SIDEBAR, /\.item-anchor:not\(\.section-break\):hover,[\s\S]*color:\s*var\(--alm-on-primary/);
+
+function contrastOnWhite(hex) {
+    const channels = hex.match(/[\da-f]{2}/gi).map(value => parseInt(value, 16) / 255);
+    const linear = channels.map(value => value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4);
+    const luminance = linear[0] * 0.2126 + linear[1] * 0.7152 + linear[2] * 0.0722;
+    return 1.05 / (luminance + 0.05);
+}
+assert.ok(contrastOnWhite("2563eb") >= 4.5, "active blue remains legible with white labels");
 assert.match(
     ASSETS,
-    /almdina_desk_theme\.css\?v=3/,
+    /almdina_desk_theme\.css\?v=4/,
     "theme cache-buster bumped so browsers load the bridge"
 );
 assert.match(
     ASSETS,
-    /almdina_desk_sidebar\.css\?v=3/,
+    /almdina_desk_sidebar\.css\?v=4/,
     "sidebar CSS cache-buster bumped"
 );
 
