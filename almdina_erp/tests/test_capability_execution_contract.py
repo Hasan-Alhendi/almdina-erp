@@ -219,6 +219,8 @@ class TestCapabilityExecutionContract(unittest.TestCase):
         self.assertIn("protectPlanPrintApis", source)
         self.assertIn("requestAnimationFrame", source)
         self.assertIn("MutationObserver(scheduleObserverApply)", source)
+        self.assertIn("observeFormRoot(frm)", source)
+        self.assertNotIn("document.documentElement", source)
 
     def test_plan_approval_locks_and_rejects_stale_system_plan(self) -> None:
         boundary = APPROVAL_SERVICE.read_text(encoding="utf-8")

@@ -1,7 +1,8 @@
 (() => {
     "use strict";
 
-    if (window.AlmdinaOperationalFilesUX) return;
+    const ASSET_REVISION = 1;
+    if (window.AlmdinaOperationalFilesUX?.assetRevision === ASSET_REVISION) return;
 
     const METHOD = "almdina_erp.almdina_erp.services.cnc_operational_file_service";
     const SHEET_PAGE_ROUTE = "cnc-sheet-settings";
@@ -1314,6 +1315,10 @@
             state._artcamSheetNo = Number(sheet && sheet.sheet_no);
         }
         if (!state.sections) state.sections = { placement: false, perimeter: false, associations: true, order: true };
+        const associationEditor = window.AlmdinaArtcamMachining
+            ? window.AlmdinaArtcamMachining.markup(workspace, sheet, state) : "";
+        const associationBody = canPrepare ? associationEditor
+            : `<fieldset class="dco-artcam-readonly" disabled>${associationEditor}</fieldset>`;
         const exportBar = options && options.exportBar ? exportControlsMarkup(workspace, sheet) : "";
         const pageChrome = Boolean(exportBar);
         const previewToolbar = pageChrome
@@ -1345,7 +1350,7 @@
                     ${pageChrome ? sheetIdentityMarkup(workspace, sheet) : ""}
                     ${section("placement", "Machine placement", placementControlsMarkup(workspace, state, canPrepare))}
                     ${section("perimeter", "Sheet Perimeter", perimeterJoinControlsMarkup(state, canPrepare))}
-                    ${section("associations", "Vector Associations", window.AlmdinaArtcamMachining ? window.AlmdinaArtcamMachining.markup(workspace, sheet, state) : "")}
+                    ${section("associations", "Vector Associations", associationBody)}
                     ${section("order", "Operation order", `<ol class="dco-operational-order">${orderItems || `<li class="dco-artcam-note">${escapeHtml(translate("Associations appear here after they are saved."))}</li>`}</ol>${warning}`)}
                     ${exportBar}
                 </div>
@@ -1827,7 +1832,7 @@
                     return;
                 }
                 if (zone !== "board") return;
-                if (applyBoardVectorClick(event, body, live.state)) return;
+                if (live.workspace.can_prepare && applyBoardVectorClick(event, body, live.state)) return;
                 const preview = body.querySelector("[data-sheet-preview]");
                 const pointed = resolveBoardPointer(preview, event);
                 if (pointed && pointed.ambiguous) {
@@ -4851,9 +4856,12 @@
                     }));
                     if (!canPrepare) {
                         if (window.frappe && typeof frappe.msgprint === "function") {
-                            const message = (err && (err.message || err.exc || err._server_messages))
-                                || translate("The NC file could not be prepared.");
-                            frappe.msgprint(typeof message === "string" ? message : translate("The NC file could not be prepared."));
+                            const fallback = translate("The NC file could not be prepared.");
+                            const frontend = window.AlmdinaFrontend;
+                            const message = frontend && typeof frontend.normalizeError === "function"
+                                ? frontend.normalizeError(err, { fallback }).message
+                                : fallback;
+                            frappe.msgprint(message);
                         }
                         return;
                     }
@@ -4868,6 +4876,7 @@
     }
 
     window.AlmdinaOperationalFilesUX = Object.freeze({
+        assetRevision: ASSET_REVISION,
         render,
         cutPathIsEarly,
         effectivePreset,

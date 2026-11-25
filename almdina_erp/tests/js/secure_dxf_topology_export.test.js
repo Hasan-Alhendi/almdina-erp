@@ -109,9 +109,13 @@ const fakeFrappe = {
             ) {
                 fs.writeFileSync(process.env.KERF3_DXF_OUT, clientDxf);
             }
+            if (process.env.BOARD_LAYOUT_DXF_OUT && opts.args?.order_name === "DCO-SEVEN"
+                && fakeDocument.documentElement.dir === "rtl") {
+                fs.writeFileSync(process.env.BOARD_LAYOUT_DXF_OUT, clientDxf);
+            }
             return Promise.resolve({
                 message: {
-                    filename: "cutting_plan_DCO-TOPOLOGY_AutoCAD2011_2026.dxf",
+                    filename: `${opts.args.order_name}.dxf`,
                     content_b64: Buffer.from(
                         clientDxf.replace("AC1009", "AC1024").replace("AC1015", "AC1024"),
                         "utf8"
@@ -318,7 +322,54 @@ async function run() {
     assert.match(downloadedDxf, /10\r\n5\r\n20\r\n995\r\n/);
     // Hole geometry must survive into the emitted DXF rather than rectangle fallback.
     assert.match(downloadedDxf, /10\r\n25\r\n20\r\n975\r\n/);
-    assert.match(downloadedName, /_AutoCAD2011_2026\.dxf$/);
+    assert.equal(downloadedName, "DCO-TOPOLOGY.dxf");
+
+    // Print shows seven boards as four on the first row and three on the
+    // second. DXF Y points up, so the first row must have the larger Y.
+    nextPlan = {
+        full_board_width_cm: 100,
+        full_board_length_cm: 100,
+        trim_cm: 0,
+        sheets: Array.from({ length: 7 }, (_, index) => ({
+            sheet_no: index + 1,
+            full_width_cm: 100,
+            full_length_cm: 100,
+            pieces: [{ id: index + 1, label: `${index + 1}.1`, x: 1, y: 1, w: 10, h: 10 }],
+        })),
+    };
+    fakeDocument.documentElement.dir = "rtl";
+    await fakeFrappe.almdina.export_order_dxf("DCO-SEVEN", "system");
+    const boardLabels = [...downloadedDxf.matchAll(
+        /0\r\nTEXT\r\n8\r\nTEXT\r\n10\r\n([\d.]+)\r\n20\r\n([\d.]+)\r\n30\r\n0\r\n40\r\n25\r\n1\r\n(\d+)\r\n/g
+    )].map(match => ({ x: Number(match[1]), y: Number(match[2]), number: Number(match[3]) }));
+    assert.deepEqual(boardLabels, [
+        { x: 4100, y: 2240, number: 1 },
+        { x: 2900, y: 2240, number: 2 },
+        { x: 1700, y: 2240, number: 3 },
+        { x: 500, y: 2240, number: 4 },
+        { x: 3500, y: 1040, number: 5 },
+        { x: 2300, y: 1040, number: 6 },
+        { x: 1100, y: 1040, number: 7 },
+    ]);
+    assert.equal(downloadedName, "DCO-SEVEN.dxf");
+    fakeDocument.documentElement.dir = "ltr";
+    await fakeFrappe.almdina.export_order_dxf("DCO-SEVEN", "system");
+    const ltrLabels = [...downloadedDxf.matchAll(
+        /0\r\nTEXT\r\n8\r\nTEXT\r\n10\r\n([\d.]+)\r\n20\r\n([\d.]+)\r\n30\r\n0\r\n40\r\n25\r\n1\r\n(\d+)\r\n/g
+    )].map(match => ({ x: Number(match[1]), y: Number(match[2]), number: Number(match[3]) }));
+    assert.deepEqual(ltrLabels.slice(0, 4).map(label => label.x), [500, 1700, 2900, 4100]);
+    nextPlan.sheets = Array.from({ length: 11 }, (_, index) => ({
+        sheet_no: index + 1,
+        full_width_cm: 100,
+        full_length_cm: 100,
+        pieces: [{ id: index + 1, label: `${index + 1}.1`, x: 1, y: 1, w: 10, h: 10 }],
+    }));
+    await fakeFrappe.almdina.export_order_dxf("DCO-ELEVEN", "system");
+    const multiPageLabels = [...downloadedDxf.matchAll(
+        /0\r\nTEXT\r\n8\r\nTEXT\r\n10\r\n([\d.]+)\r\n20\r\n([\d.]+)\r\n30\r\n0\r\n40\r\n25\r\n1\r\n(\d+)\r\n/g
+    )].map(match => ({ y: Number(match[2]), number: Number(match[3]) }));
+    assert.deepEqual(multiPageLabels.map(label => label.number), Array.from({ length: 11 }, (_, index) => index + 1));
+    assert.deepEqual([multiPageLabels[0].y, multiPageLabels[5].y, multiPageLabels[10].y], [3440, 2240, 1040]);
 
     nextPlan = {
         full_board_width_cm: 100,
@@ -725,7 +776,7 @@ async function run() {
     assert.match(downloadedDxf, /2\r\nGEOMETRY\r\n/);
     assert.match(downloadedDxf, /0\r\nTEXT\r\n/);
     assert.match(downloadedDxf, /1\r\n1\r\n/);
-    assert.equal((downloadedDxf.match(/0\r\nTEXT\r\n/g) || []).length, 3);
+    assert.equal((downloadedDxf.match(/0\r\nTEXT\r\n/g) || []).length, 4);
     assert.match(
         downloadedDxf,
         /1\r\n\\U\+062F\\U\+0628\\U\+0644 \\U\+0627\\U\+0644\\U\+0642\\U\+0634\\U\+0627\\U\+0637\r\n/
@@ -758,7 +809,7 @@ async function run() {
     };
     downloadedDxf = "";
     await fakeFrappe.almdina.export_order_dxf("DCO-TEXT-NUMBERS", "system");
-    assert.equal((downloadedDxf.match(/0\r\nTEXT\r\n/g) || []).length, 4);
+    assert.equal((downloadedDxf.match(/0\r\nTEXT\r\n/g) || []).length, 5);
     assert.match(downloadedDxf, /8\r\nTEXT\r\n/);
     assert.match(downloadedDxf, /1\r\n1\r\n/);
     assert.match(downloadedDxf, /1\r\n2\r\n/);

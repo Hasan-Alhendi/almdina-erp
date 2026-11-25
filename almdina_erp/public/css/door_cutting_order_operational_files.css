@@ -1134,6 +1134,14 @@ body.dco-cnc-sheet-settings-active .layout-main-section {
     display: grid;
     gap: 8px;
 }
+.dco-operational-sheet .dco-artcam-readonly {
+    display: grid;
+    gap: 8px;
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+}
 .dco-operational-sheet .dco-artcam-row {
     display: grid;
     gap: 8px 12px;

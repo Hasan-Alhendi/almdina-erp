@@ -30,6 +30,16 @@
     --text-on-light-blue: var(--alm-primary-hover);
 
     --surface-menu-bar: var(--alm-primary);
+    /*
+     * Frappe 16.60 paints `.body-sidebar` / dock with `--desk-sidebar-bg`
+     * (defaults to light `--surface-sidebar` / gray-50). Almdina forces
+     * on-primary (white) ink on the rail, so the brand navy must own that
+     * token or the module sidebar looks blank.
+     */
+    --desk-sidebar-bg: var(--alm-primary);
+    --dock-ink: color-mix(in srgb, var(--alm-on-primary, #fff) 72%, transparent);
+    --dock-ink-hover: var(--alm-on-primary, #fff);
+    --dock-ink-active: var(--alm-on-primary, #fff);
     --sidebar-hover-color: color-mix(in srgb, var(--alm-on-primary) 12%, var(--alm-primary));
     --sidebar-active-color: var(--alm-accent, #2563eb);
     --sidebar-border-color: transparent;
@@ -58,6 +68,10 @@
     --text-on-light-blue: var(--alm-brand-soft-fg);
 
     --surface-menu-bar: var(--alm-primary);
+    --desk-sidebar-bg: var(--alm-primary);
+    --dock-ink: color-mix(in srgb, var(--alm-on-primary, #fff) 72%, transparent);
+    --dock-ink-hover: var(--alm-on-primary, #fff);
+    --dock-ink-active: var(--alm-on-primary, #fff);
     --sidebar-hover-color: color-mix(in srgb, var(--alm-on-primary) 12%, var(--alm-primary));
     --sidebar-active-color: var(--alm-accent, #2563eb);
     --sidebar-border-color: transparent;

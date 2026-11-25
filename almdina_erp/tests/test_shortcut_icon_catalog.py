@@ -18,6 +18,14 @@ class TestShortcutIconCatalog(unittest.TestCase):
 
     def test_apply_sidebar_icon_catalog_mutates_boot_items(self) -> None:
         bootinfo = {
+            "module_sidebars": {
+                "Almdina ERP": {
+                    "items": [
+                        {"label": "الزبائن", "type": "Link", "icon": "list"},
+                        {"label": "Section", "type": "Section Break"},
+                    ]
+                }
+            },
             "workspace_sidebar_item": {
                 "almdina erp": {
                     "items": [
@@ -25,12 +33,15 @@ class TestShortcutIconCatalog(unittest.TestCase):
                         {"label": "Section", "type": "Section Break"},
                     ]
                 }
-            }
+            },
         }
         apply_sidebar_icon_catalog(bootinfo)
-        items = bootinfo["workspace_sidebar_item"]["almdina erp"]["items"]
-        self.assertEqual(items[0]["icon"], "users")
-        self.assertNotIn("icon", items[1])
+        modern = bootinfo["module_sidebars"]["Almdina ERP"]["items"]
+        legacy = bootinfo["workspace_sidebar_item"]["almdina erp"]["items"]
+        self.assertEqual(modern[0]["icon"], "users")
+        self.assertNotIn("icon", modern[1])
+        self.assertEqual(legacy[0]["icon"], "users")
+        self.assertNotIn("icon", legacy[1])
 
     def test_catalog_covers_workspace_shortcut_labels(self) -> None:
         expected = {

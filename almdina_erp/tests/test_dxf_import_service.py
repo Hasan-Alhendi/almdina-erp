@@ -144,6 +144,45 @@ def test_sheet_outline_accepts_canonical_exact_board_dimensions():
     assert len(sheets) == 1
 
 
+def test_generated_sheet_labels_preserve_print_order_and_unlabeled_files_keep_legacy_order():
+    def placed(x: float, y: float) -> dict:
+        contour = _board_contour(1220, 2440)
+        contour["points"] = [(px + x, py + y) for px, py in contour["points"]]
+        return contour
+
+    contours = [placed(0, 0), placed(0, 2700), placed(1500, 2700)]
+    labels = [
+        {"layer": "TEXT", "text": "1", "x": 2110, "y": 5180},
+        {"layer": "TEXT", "text": "2", "x": 610, "y": 5180},
+        {"layer": "TEXT", "text": "3", "x": 610, "y": 2480},
+        {"layer": "TEXT", "text": "999", "x": 10, "y": 100},  # Door text inside a board.
+    ]
+    sheets = _validate_sheet_contours(
+        contours, expected_width_mm=1220, expected_height_mm=2440, annotations=labels,
+    )
+    assert [(sheet["offset_x_mm"], sheet["offset_y_mm"], sheet["sheet_no"]) for sheet in sheets] == [
+        (1500, 2700, 1), (0, 2700, 2), (0, 0, 3),
+    ]
+
+    old = _validate_sheet_contours(contours, expected_width_mm=1220, expected_height_mm=2440)
+    incomplete = _validate_sheet_contours(
+        contours, expected_width_mm=1220, expected_height_mm=2440, annotations=labels[:2],
+    )
+    conflicting = _validate_sheet_contours(
+        contours, expected_width_mm=1220, expected_height_mm=2440,
+        annotations=[*labels, {"layer": "TEXT", "text": "2", "x": 2110, "y": 5180}],
+    )
+    assert [(sheet["offset_x_mm"], sheet["offset_y_mm"]) for sheet in old] == [
+        (0, 0), (0, 2700), (1500, 2700),
+    ]
+    assert [(sheet["offset_x_mm"], sheet["offset_y_mm"]) for sheet in incomplete] == [
+        (0, 0), (0, 2700), (1500, 2700),
+    ]
+    assert [(sheet["offset_x_mm"], sheet["offset_y_mm"]) for sheet in conflicting] == [
+        (0, 0), (0, 2700), (1500, 2700),
+    ]
+
+
 @pytest.mark.parametrize(
     "actual_width,actual_height",
     [(1219, 2440), (1219.9, 2440), (2440, 1220)],

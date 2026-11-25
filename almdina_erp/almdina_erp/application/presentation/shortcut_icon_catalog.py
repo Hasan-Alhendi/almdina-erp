@@ -85,27 +85,37 @@ def icon_for_sidebar_item(item: Mapping[str, Any]) -> str | None:
     return None
 
 
+def _apply_icons_to_items(items: Any) -> None:
+    if not isinstance(items, list):
+        return
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        if str(item.get("type") or "").strip() in {"Section Break", "Spacer"}:
+            continue
+        icon = icon_for_sidebar_item(item)
+        if icon:
+            item["icon"] = icon
+
+
 def apply_sidebar_icon_catalog(bootinfo: dict[str, Any]) -> None:
-    """Align v16 sidebar item icons with the Almdina workspace home catalog."""
+    """Align desk sidebar item icons with the Almdina workspace home catalog.
+
+    Frappe 16.60 stores the persistent rail in ``module_sidebars``. Older boots
+    still expose ``workspace_sidebar_item``; both are projected when present.
+    """
+
+    module_sidebars = bootinfo.get("module_sidebars")
+    if isinstance(module_sidebars, dict):
+        for sidebar in module_sidebars.values():
+            if isinstance(sidebar, dict):
+                _apply_icons_to_items(sidebar.get("items"))
 
     container = bootinfo.get("workspace_sidebar_item")
-    if not isinstance(container, dict):
-        return
-
-    for sidebar in container.values():
-        if not isinstance(sidebar, dict):
-            continue
-        items = sidebar.get("items")
-        if not isinstance(items, list):
-            continue
-        for item in items:
-            if not isinstance(item, dict):
-                continue
-            if str(item.get("type") or "").strip() in {"Section Break", "Spacer"}:
-                continue
-            icon = icon_for_sidebar_item(item)
-            if icon:
-                item["icon"] = icon
+    if isinstance(container, dict):
+        for sidebar in container.values():
+            if isinstance(sidebar, dict):
+                _apply_icons_to_items(sidebar.get("items"))
 
 
 __all__ = [

@@ -120,6 +120,120 @@ def _filter_workspace_container(
             bootinfo["allowed_workspaces"] = projected
 
 
+def _sidebar_item_allowed(
+    item: Any,
+    *,
+    allowed: set[str],
+    surfaces: dict[str, bool],
+) -> bool:
+    """Authorize one Frappe 16.60 ``module_sidebars`` row."""
+
+    if not isinstance(item, dict):
+        return False
+    item_type = str(item.get("type") or "").strip()
+    if item_type in {"Section Break", "Spacer"}:
+        return True
+
+    link_type = str(item.get("link_type") or "").strip()
+    link_to = str(item.get("link_to") or "").strip()
+    if link_type == "Workspace" or item_type == "Workspace":
+        return link_to in allowed or _workspace_name(item) in allowed
+
+    decision = workspace_item_allowed(item, surfaces)
+    if decision is not None:
+        return decision
+    # Unknown Almdina destinations fail closed; non-Almdina shells are dropped
+    # before item filtering, so remaining unknowns stay hidden.
+    return False
+
+
+def _project_module_sidebar(
+    sidebar: Any,
+    *,
+    allowed: set[str],
+    surfaces: dict[str, bool],
+) -> dict[str, Any] | None:
+    if not isinstance(sidebar, dict):
+        return None
+    projected = dict(sidebar)
+    items = projected.get("items")
+    if isinstance(items, list):
+        projected["items"] = [
+            item
+            for item in items
+            if _sidebar_item_allowed(item, allowed=allowed, surfaces=surfaces)
+        ]
+    return projected
+
+
+def _filter_module_sidebars(
+    bootinfo: dict[str, Any],
+    *,
+    allowed: set[str],
+    surfaces: dict[str, bool],
+) -> None:
+    """Project Frappe 16.60 ``module_sidebars`` / dock shells for app-only users.
+
+    Frappe replaced ``workspace_sidebar_item`` / ``module_wise_workspaces`` with
+    ``module_sidebars`` keyed by shell identity and ``app_data[].dock``. Filtering
+    only the legacy keys leaves foreign ERPNext/Frappe shells in the rail and can
+    leave ``home_shell`` pointing at Build/Accounts for factory users.
+    """
+
+    container = bootinfo.get("module_sidebars")
+    if not isinstance(container, dict):
+        return
+
+    filtered: dict[str, Any] = {}
+    for shell, sidebar in container.items():
+        if not isinstance(sidebar, dict):
+            continue
+        if str(sidebar.get("app") or "") != ALMDINA_APP:
+            continue
+        projected = _project_module_sidebar(
+            sidebar,
+            allowed=allowed,
+            surfaces=surfaces,
+        )
+        if projected is not None:
+            filtered[str(shell)] = projected
+    bootinfo["module_sidebars"] = filtered
+
+    dock = bootinfo.get("dock")
+    if isinstance(dock, dict):
+        bootinfo["dock"] = {
+            app: rows
+            for app, rows in dock.items()
+            if app == ALMDINA_APP and isinstance(rows, list)
+        }
+
+    kept_shells = set(filtered)
+    entity_module = bootinfo.get("entity_module")
+    if isinstance(entity_module, dict):
+        bootinfo["entity_module"] = {
+            entity: shell
+            for entity, shell in entity_module.items()
+            if shell in kept_shells
+        }
+
+    canonical = bootinfo.get("canonical_shell")
+    if isinstance(canonical, dict):
+        bootinfo["canonical_shell"] = {
+            kind: {
+                name: shell
+                for name, shell in mapping.items()
+                if shell in kept_shells
+            }
+            for kind, mapping in canonical.items()
+            if isinstance(mapping, dict)
+        }
+
+    if ALMDINA_MODULE in kept_shells:
+        bootinfo["home_shell"] = ALMDINA_MODULE
+    elif kept_shells:
+        bootinfo["home_shell"] = next(iter(kept_shells))
+
+
 def _filter_workspaces(
     bootinfo: dict[str, Any],
     allowed: set[str],
@@ -128,7 +242,10 @@ def _filter_workspaces(
     if not allowed:
         return
 
-    # v16 persistent sidebar + compatibility workspace registry.
+    # v16.60 module sidebars + dock shells (authoritative desk rail).
+    _filter_module_sidebars(bootinfo, allowed=allowed, surfaces=surfaces)
+
+    # Legacy/compatibility workspace registries still present on some paths.
     _filter_workspace_container(
         bootinfo,
         "sidebar_pages",

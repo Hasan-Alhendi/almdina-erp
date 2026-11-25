@@ -120,6 +120,8 @@ class TestPermissionVisibilityAndArabicUX(unittest.TestCase):
         endpoint = (ROOT / "workspace_api.py").read_text(encoding="utf-8")
 
         self.assertIn('"sidebar_pages"', boot)
+        self.assertIn("_filter_module_sidebars", boot)
+        self.assertIn("module_sidebars", boot)
         self.assertIn("workspace_item_allowed", boot)
         self.assertIn("project_workspace_page", boot)
         self.assertIn("Link/URL rows are business destinations", boot)

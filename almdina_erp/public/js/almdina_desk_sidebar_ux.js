@@ -17,13 +17,16 @@
         return document.body.classList.contains("almdina-shared-shell");
     }
 
+    function sidebarBootContainer() {
+        // Frappe 16.60 replaced workspace_sidebar_item with module_sidebars.
+        // Keep the legacy key as a fallback for older desk boots.
+        if (!window.frappe || !frappe.boot) return null;
+        if (frappe.boot.module_sidebars) return frappe.boot.module_sidebars;
+        return frappe.boot.workspace_sidebar_item || null;
+    }
+
     function deskReady() {
-        return Boolean(
-            window.frappe
-            && frappe.boot
-            && frappe.boot.workspace_sidebar_item
-            && presentation()
-        );
+        return Boolean(window.frappe && frappe.boot && sidebarBootContainer() && presentation());
     }
 
     function iconIsRendered(iconNode) {
@@ -49,7 +52,7 @@
 
     function patchBootSidebarIcons() {
         const api = presentation();
-        const container = frappe.boot && frappe.boot.workspace_sidebar_item;
+        const container = sidebarBootContainer();
         if (!api || !container) return;
 
         Object.values(container).forEach((sidebar) => {
