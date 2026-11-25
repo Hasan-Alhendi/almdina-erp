@@ -4851,9 +4851,12 @@
                     }));
                     if (!canPrepare) {
                         if (window.frappe && typeof frappe.msgprint === "function") {
-                            const message = (err && (err.message || err.exc || err._server_messages))
-                                || translate("The NC file could not be prepared.");
-                            frappe.msgprint(typeof message === "string" ? message : translate("The NC file could not be prepared."));
+                            const fallback = translate("The NC file could not be prepared.");
+                            const frontend = window.AlmdinaFrontend;
+                            const message = frontend && typeof frontend.normalizeError === "function"
+                                ? frontend.normalizeError(err, { fallback }).message
+                                : fallback;
+                            frappe.msgprint(message);
                         }
                         return;
                     }

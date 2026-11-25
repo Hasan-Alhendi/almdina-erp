@@ -470,6 +470,11 @@ assert.ok(css.includes("100dvh - var(--navbar-height, 48px) - 0.85rem"));
 assert.ok(css.includes(".dco-cnc-sheet-page .dco-cnc-cut-preview__viewport > .dco-cnc-cut-preview__zoom"));
 assert.ok(css.includes(".dco-cnc-sheet-page .dco-cnc-cut-preview__piece"));
 assert.ok(translations.includes("Download cutting file,تحميل ملف القص"));
+const ncErrorHandler = panel.split("method: `${METHOD}.generate_cnc_sheet_nc`", 2)[1]
+    .split("silent: true", 1)[0];
+assert.ok(ncErrorHandler.includes("frontend.normalizeError(err, { fallback }).message"));
+assert.ok(!ncErrorHandler.includes("err.exc"));
+assert.ok(!ncErrorHandler.includes("err._server_messages"));
 assert.ok(panel.includes("relocatePageZoomControls"));
 assert.ok(translations.includes("Machine placement,تموضع اللوح على الماكينة"));
 assert.ok(translations.includes("Vector Associations,ربط المتجهات"));
