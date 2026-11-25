@@ -133,6 +133,17 @@
         enabled: "Enabled",
     });
 
+    const PROFILE_FIELDS = Object.freeze({
+        profile_name: "Profile Name",
+        tool_preset: "Tool",
+        final_depth_mm: "Final Depth (mm)",
+        safe_z_mm: "Safe Z (mm)",
+        home_x_mm: "Home X (mm)",
+        home_y_mm: "Home Y (mm)",
+        home_z_mm: "Home Z (mm)",
+        enabled: "Enabled",
+    });
+
     const POST_PROCESSOR_ID = "ima_wh_ncstudio";
     const POST_PROCESSOR_LABEL = "IMA-WH (*.nc)";
     const STOP_FIELD_NAMES = ["left_stop_cm", "right_stop_cm", "bottom_stop_cm", "top_stop_cm"];
@@ -259,6 +270,95 @@
         });
         applyDescribedFields(target, MACHINE_DESCRIPTIONS);
         applyPostProcessorChoice(target);
+    }
+
+    function applyProfileFieldLabels(target) {
+        Object.keys(PROFILE_FIELDS).forEach(fieldname => {
+            setFieldLabel(target, fieldname, profileLabel(PROFILE_FIELDS[fieldname]));
+        });
+    }
+
+    function loadProfileToolChoices() {
+        const db = window.frappe && frappe.db;
+        if (!db || typeof db.get_list !== "function") return Promise.resolve([]);
+        return db.get_list("CNC Tool Preset", {
+            fields: ["name", "tool_name"],
+            filters: { enabled: 1 },
+            limit: 500,
+        }).then(rows => rows || []).catch(() => []);
+    }
+
+    function profileToolRuntime(target) {
+        if (!target._profile_tool_runtime) {
+            const binding = window.AlmdinaCncProfileToolBinding;
+            target._profile_tool_runtime = binding
+                ? binding.createRuntimeState()
+                : {
+                    ready: false,
+                    documentKey: "",
+                    toolName: "",
+                    tool: null,
+                    toolChoices: null,
+                    loadGeneration: 0,
+                };
+        }
+        return target._profile_tool_runtime;
+    }
+
+    function writeProfileToolValue(target, field, value) {
+        const next = String(value || "");
+        if (target && target.doc) target.doc.tool_preset = next || null;
+        if (field && typeof field.set_value === "function") field.set_value(next || null);
+        else if (field && field.$input && typeof field.$input.val === "function") {
+            field.$input.val(next || "");
+        }
+    }
+
+    function remountProfileToolPicker(target, force) {
+        const binding = window.AlmdinaCncProfileToolBinding;
+        if (!binding || !target || !target.doc) return null;
+        const field = fieldOf(target, "tool_preset");
+        const host = binding.toolHost(field);
+        if (!host) return null;
+        const state = profileToolRuntime(target);
+        state.ready = true;
+        return binding.sync(host, state, target.doc, {
+            docname: binding.documentKey(target.doc, target.doc.name),
+            force: Boolean(force),
+            loadTools: loadProfileToolChoices,
+            handlers: {
+                onToolChange(value) {
+                    const next = String(value || "");
+                    if (next === String(target.doc.tool_preset || "")) return;
+                    writeProfileToolValue(target, field, next);
+                    if (!next) {
+                        state.tool = null;
+                        state.toolName = "";
+                        remountProfileToolPicker(target, true);
+                        return;
+                    }
+                    const generation = binding.beginToolLoad(state);
+                    if (!window.frappe || typeof frappe.db.get_doc !== "function") return;
+                    frappe.db.get_doc("CNC Tool Preset", next).then(doc => {
+                        if (!binding.isCurrentToolLoad(state, generation, target.doc, next)) return;
+                        state.tool = binding.toolPayloadFromPreset(doc);
+                        state.toolName = next;
+                        remountProfileToolPicker(target, true);
+                    });
+                },
+            },
+        });
+    }
+
+    function bindProfileToolPicker(target) {
+        return remountProfileToolPicker(target, false);
+    }
+
+    function captureProfileToolOverrides(target) {
+        const binding = window.AlmdinaCncProfileToolBinding;
+        if (!binding || !target) return {};
+        const host = binding.toolHost(fieldOf(target, "tool_preset"));
+        return binding.collectOverrides(host);
     }
 
     function knownWorkZero(value) {
@@ -544,6 +644,11 @@
             bindMachineWorkZero(dialog);
             applyPostProcessorChoice(dialog);
         }
+        if (doctype === "CNC Machining Profile") {
+            applyProfileFieldLabels(dialog);
+            ensureQuickEntryFieldsWritable(dialog);
+            bindProfileToolPicker(dialog);
+        }
     }
 
     function scheduleQuickEntry(doctype, entry) {
@@ -595,6 +700,35 @@
                 }
             };
         }
+        if (!form.CNCMachiningProfileQuickEntryForm) {
+            form.CNCMachiningProfileQuickEntryForm = class CNCMachiningProfileQuickEntryForm extends form.QuickEntryForm {
+                render_dialog() {
+                    // Fresh runtime per modal so cancel/save never leaks tool state.
+                    this._profile_tool_runtime = null;
+                    copyQuickEntryFields(this);
+                    const rendered = super.render_dialog();
+                    scheduleQuickEntry(this.doctype, this);
+                    return rendered;
+                }
+
+                update_doc(data) {
+                    const values = typeof data === "undefined" ? this.get_values(true) : data;
+                    const result = super.update_doc(values);
+                    this.doc.tool_values_json = captureProfileToolOverrides(this);
+                    if (!this.doc.tool_preset) {
+                        const field = fieldOf(this, "tool_preset");
+                        const host = window.AlmdinaCncProfileToolBinding
+                            && window.AlmdinaCncProfileToolBinding.toolHost(field);
+                        const picker = host && typeof host.data === "function" ? host.data("picker") : null;
+                        if (picker && typeof picker.getValues === "function") {
+                            const selected = picker.getValues();
+                            if (selected && selected.tool) this.doc.tool_preset = selected.tool;
+                        }
+                    }
+                    return result;
+                }
+            };
+        }
         wrapMakeQuickEntry(form);
         return true;
     }
@@ -608,10 +742,13 @@
         escapeHtml,
         applyToolFieldLabels,
         applyMachineFieldLabels,
+        applyProfileFieldLabels,
         applyCornerStops,
         ensureFormFieldsWritable,
         canMaintainFactoryCnc,
         installQuickEntryForms,
+        bindProfileToolPicker,
+        captureProfileToolOverrides,
         POST_PROCESSOR_ID,
         POST_PROCESSOR_LABEL,
     });

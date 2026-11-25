@@ -84,7 +84,11 @@ def test_tool_machine_and_profile_fields_are_required_english_labels():
             continue
         assert field.get("reqd") == 1, field["fieldname"]
     generated = {"profile_id", "tool_values_json"}
+    layout_fieldtypes = {"Column Break", "Section Break", "Tab Break", "Fold"}
     for field in profile["fields"]:
+        if field.get("fieldtype") in layout_fieldtypes:
+            assert field.get("allow_in_quick_entry") == 1, field["fieldname"]
+            continue
         label = str(field.get("label") or "")
         assert label
         assert not any(_ARABIC.start <= ord(character) <= _ARABIC.stop - 1 for character in label)
@@ -92,8 +96,13 @@ def test_tool_machine_and_profile_fields_are_required_english_labels():
         assert field.get("reqd", 0) == expected, field["fieldname"]
         if field["fieldname"] in generated:
             assert "default" not in field
+        if field["fieldname"] not in generated:
+            assert field.get("allow_in_quick_entry") == 1, field["fieldname"]
+    assert profile.get("quick_entry") == 1
     assert all(field.get("fieldname") != "final_depth_mm" for field in tool["fields"])
     assert any(field.get("fieldname") == "final_depth_mm" and field.get("reqd") == 1 for field in profile["fields"])
+    assert "column_break_home_y" in profile["field_order"]
+    assert "column_break_home_z" in profile["field_order"]
 
 
 def test_profile_editor_lives_on_the_operational_files_page_not_the_sheet_form():
@@ -158,8 +167,10 @@ def test_profile_editor_lives_on_the_operational_files_page_not_the_sheet_form()
 
 def test_profile_form_exposes_only_the_allowed_tool_overrides():
     form = _text(PACKAGE / "almdina_erp" / "doctype" / "cnc_machining_profile" / "cnc_machining_profile.js")
-    assert 'settingAttribute: "data-profile-tool"' in form
-    assert "AlmdinaCncToolPicker" in form
+    binding = _text(PACKAGE / "public" / "js" / "cnc" / "cnc_profile_tool_binding.js")
+    assert "AlmdinaCncProfileToolBinding" in form
+    assert 'settingAttribute: "data-profile-tool"' in binding
+    assert "AlmdinaCncToolPicker" in binding
     for fieldname in (
         "tool_number",
         "stepdown_mm",
@@ -168,15 +179,19 @@ def test_profile_form_exposes_only_the_allowed_tool_overrides():
         "plunge_rate_mm_sec",
         "spindle_speed_rpm",
     ):
-        assert f'["{fieldname}",' in form
-    assert '["stepover_percent",' not in form
-    assert "Stepover Size (mm)" in form
-    assert 'data-profile-tool="${fieldname}"' in form
-    assert '["diameter_mm"' not in form
-    assert '["final_tool_offset_mm"' not in form
-    assert '["tool_type"' not in form
-    assert '["notes"' not in form
-    assert "allowed_tool_overrides" in form
+        assert f'["{fieldname}",' in binding
+    assert '["stepover_percent",' not in binding
+    assert "Stepover Size (mm)" in binding
+    assert 'data-profile-tool="${fieldname}"' in binding
+    assert '["diameter_mm"' not in binding
+    assert '["final_tool_offset_mm"' not in binding
+    assert '["tool_type"' not in binding
+    assert '["notes"' not in binding
+    assert "collectOverrides" in binding
+    assert "isCurrentToolLoad" in binding
+    assert '"quick_entry": 1' in _text(
+        PACKAGE / "almdina_erp" / "doctype" / "cnc_machining_profile" / "cnc_machining_profile.json"
+    )
 
 
 def test_profile_and_association_editors_hide_stepover_percent_and_normalize_tool_number():

@@ -123,11 +123,14 @@
                 });
                 return { tool: select ? select.value : "", fields };
             },
-            setTools(tools) {
+            setTools(tools, selected, options) {
                 const select = container.querySelector("[data-tool-picker-select]");
                 if (!select || !select.ownerDocument) return;
-                const current = select.value;
-                const emptyLabel = select.getAttribute("data-empty-label") || "";
+                const settings = options || {};
+                const emptyLabel = settings.emptyLabel != null
+                    ? String(settings.emptyLabel)
+                    : (select.getAttribute("data-empty-label") || "");
+                if (emptyLabel) select.setAttribute("data-empty-label", emptyLabel);
                 const rows = [{ value: "", label: emptyLabel }].concat(Array.isArray(tools) ? tools : []);
                 select.innerHTML = "";
                 rows.forEach(row => {
@@ -136,7 +139,38 @@
                     option.textContent = String(row.label || row.value || "");
                     select.appendChild(option);
                 });
-                select.value = current;
+                // Document truth wins. Never keep a previous document's select value
+                // when the caller provides the selected tool (including empty).
+                const nextSelected = selected !== undefined
+                    ? String(selected || "")
+                    : String(select.value || "");
+                select.value = nextSelected;
+                const face = container.querySelector(".dco-tool-picker__value");
+                if (face) {
+                    if (!nextSelected) {
+                        face.textContent = emptyLabel;
+                    } else if (settings.selectedLabel != null && String(settings.selectedLabel)) {
+                        face.textContent = String(settings.selectedLabel);
+                    } else {
+                        const match = rows.find(row => String(row.value || "") === nextSelected);
+                        face.textContent = match ? String(match.label || nextSelected) : nextSelected;
+                    }
+                }
+            },
+            clearSelection(emptyLabel) {
+                this.setTools(
+                    Array.from(container.querySelectorAll("[data-tool-picker-select] option"))
+                        .filter(option => option.value)
+                        .map(option => ({ value: option.value, label: option.textContent })),
+                    "",
+                    { emptyLabel: emptyLabel || "" }
+                );
+                const settings = container.querySelector("[data-tool-picker-settings]");
+                if (settings) {
+                    settings.innerHTML = "";
+                    settings.hidden = true;
+                }
+                setOpen(pickerRoot(container), false);
             },
             setState(next) {
                 const state = next || {};
@@ -152,6 +186,10 @@
 
     function mount(container, spec) {
         if (!container) return null;
+        // Remounting must drop prior binders so document switches cannot reuse
+        // listeners that close over a previous form/dialog.
+        if (container.dataset) delete container.dataset.toolPickerBound;
+        pickerRoots.delete(container);
         container.innerHTML = markup(spec);
         bind(container);
         const select = container.querySelector("[data-tool-picker-select]");

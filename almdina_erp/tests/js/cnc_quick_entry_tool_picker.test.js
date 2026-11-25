@@ -249,9 +249,11 @@ class QuickEntryForm {
 }
 
 english.frappe.ui.form.QuickEntryForm = QuickEntryForm;
+load("public/js/cnc/cnc_profile_tool_binding.js", english);
 assert.strictEqual(english.AlmdinaCncLabels.installQuickEntryForms(), true);
 assert.ok(english.frappe.ui.form.CNCToolPresetQuickEntryForm);
 assert.ok(english.frappe.ui.form.CNCMachineQuickEntryForm);
+assert.ok(english.frappe.ui.form.CNCMachiningProfileQuickEntryForm);
 assert.strictEqual(english.frappe.ui.form.OtherDocTypeQuickEntryForm, undefined);
 
 const toolFields = [
