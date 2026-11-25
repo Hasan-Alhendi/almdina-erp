@@ -6,6 +6,7 @@ import frappe
 ALMDINA_APP = "almdina_erp"
 APP_DESK_ROUTE = "/desk/almdina-erp"
 LEGACY_DESK_ROUTE = "/desk"
+PRIMARY_SHELL = "Almdina ERP"
 
 
 def _sync_desktop_icon_route() -> bool:
@@ -43,23 +44,56 @@ def _sync_desktop_icon_route() -> bool:
     return True
 
 
-def _clear_incomplete_site_dock_layers() -> bool:
-    """Drop non-standard Almdina Dock layers so the shipped standard dock wins.
+def dock_layer_has_primary_shell(dock_name: str) -> bool:
+    """Return True when a Dock layer still exposes the primary Almdina shell."""
 
-    Frappe 16.60 keeps site/user Dock arrangements over the app's exported rail.
-    An incomplete pre-upgrade site layer that only listed Reports hid the primary
-    Almdina ERP shell. Clearing those layers is idempotent and restores the
-    exported dock without touching other apps.
+    if not dock_name or not frappe.db.exists("DocType", "Dock Item"):
+        return False
+
+    items = frappe.get_all(
+        "Dock Item",
+        filters={"parent": dock_name, "parenttype": "Dock"},
+        fields=["link_type", "link_to", "hidden"],
+    )
+    for item in items:
+        if (
+            str(item.get("link_type") or "") == "Sidebar"
+            and str(item.get("link_to") or "") == PRIMARY_SHELL
+            and not int(item.get("hidden") or 0)
+        ):
+            return True
+    return False
+
+
+def list_incomplete_almdina_dock_layers() -> list[str]:
+    """Non-standard Almdina Dock layers that omit the primary shell.
+
+    Complete site/user arrangements that still name ``Almdina ERP`` are left
+    alone. Only layers that hide the primary shell (for example a Reports-only
+    pre-upgrade site layer) are candidates for reset.
     """
 
     if not frappe.db.exists("DocType", "Dock"):
-        return False
+        return []
 
     names = frappe.get_all(
         "Dock",
         filters={"app": ALMDINA_APP, "standard": 0},
         pluck="name",
     )
+    return [name for name in names if not dock_layer_has_primary_shell(name)]
+
+
+def _clear_incomplete_site_dock_layers() -> bool:
+    """Drop only incomplete non-standard Almdina Dock layers.
+
+    Frappe 16.60 keeps site/user Dock arrangements over the app's exported rail.
+    An incomplete pre-upgrade site layer that only listed Reports hid the primary
+    Almdina ERP shell. Clearing those incomplete layers is idempotent and restores
+    the exported dock without wiping healthy custom arrangements.
+    """
+
+    names = list_incomplete_almdina_dock_layers()
     if not names:
         return False
 
@@ -83,4 +117,10 @@ def sync_native_app_navigation() -> None:
     frappe.cache.delete_key("bootinfo")
 
 
-__all__ = ["APP_DESK_ROUTE", "sync_native_app_navigation"]
+__all__ = [
+    "APP_DESK_ROUTE",
+    "PRIMARY_SHELL",
+    "dock_layer_has_primary_shell",
+    "list_incomplete_almdina_dock_layers",
+    "sync_native_app_navigation",
+]

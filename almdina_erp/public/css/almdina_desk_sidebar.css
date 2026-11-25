@@ -31,8 +31,13 @@ body.almdina-shared-shell .body-sidebar-top:focus-within::-webkit-scrollbar-thum
     background-color: color-mix(in srgb, var(--alm-on-primary, #fff) 28%, transparent);
 }
 
+/*
+ * Collapsed rail: hide text labels. Keep selectors for both the classic
+ * `.sidebar-header` band and the dock `.shell-header` chrome Frappe 16.60 uses.
+ */
 body.almdina-shared-shell .body-sidebar-container:not(.expanded) .body-sidebar-top .standard-sidebar-item .sidebar-item-label,
 body.almdina-shared-shell .body-sidebar-container:not(.expanded) .sidebar-header .title-container,
+body.almdina-shared-shell .body-sidebar-container:not(.expanded) .shell-header .title-container,
 body.almdina-shared-shell .body-sidebar-container:not(.expanded) .section-item .sidebar-item-label,
 body.almdina-shared-shell .body-sidebar-container:not(.expanded) .onboarding-sidebar span,
 body.almdina-shared-shell .body-sidebar-container:not(.expanded) .promotional-banner-title {
@@ -45,7 +50,8 @@ body.almdina-shared-shell .body-sidebar-container:not(.expanded) .standard-sideb
     padding-inline: 0;
 }
 
-body.almdina-shared-shell .body-sidebar-container:not(.expanded) .sidebar-header {
+body.almdina-shared-shell .body-sidebar-container:not(.expanded) .sidebar-header,
+body.almdina-shared-shell .body-sidebar-container:not(.expanded) .shell-header {
     justify-content: center;
     padding-inline: 4px;
 }

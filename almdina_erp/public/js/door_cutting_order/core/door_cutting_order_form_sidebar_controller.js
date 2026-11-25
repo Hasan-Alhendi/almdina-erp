@@ -172,13 +172,29 @@
             // satisfied so presentation settle cannot spin on a missing rail.
             if (actual === null) return;
             if (actual === this.preferredExpanded) return;
+            // Prefer show/hide over Frappe's toggle helper. recover/settle can
+            // remount many times while form chrome rebuilds; toggle would flip
+            // the rail every other pass and thrash the main thread.
             this.setNativeSidebarExpanded(this.preferredExpanded);
         }
 
         setNativeSidebarExpanded(expanded) {
+            const wanted = Boolean(expanded);
             const actual = nativeSidebarExpanded(this.frm);
-            if (actual === null || actual === Boolean(expanded)) return false;
-            return this.toggleNativeSidebar();
+            if (actual === null || actual === wanted) return false;
+            if (isMobile()) return this.toggleNativeSidebar();
+
+            const wrapper = sidebarWrapper(this.frm);
+            if (!wrapper || !wrapper.length) return false;
+            if (wanted) {
+                if (typeof wrapper.show === "function") wrapper.show();
+            } else if (typeof wrapper.hide === "function") {
+                wrapper.hide();
+            } else {
+                return this.toggleNativeSidebar();
+            }
+            if (window.jQuery) window.jQuery(document.body).trigger("toggleSidebar");
+            return true;
         }
 
         toggleNativeSidebar() {

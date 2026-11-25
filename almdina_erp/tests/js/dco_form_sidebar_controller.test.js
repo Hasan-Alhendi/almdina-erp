@@ -51,6 +51,8 @@ class FakeJQuery {
     }
     is(selector) { return selector === ":visible" && this.target.visible; }
     hasClass(value) { return this.target.classList.has(value); }
+    show() { this.target.visible = true; return this; }
+    hide() { this.target.visible = false; return this; }
     toggle() { this.target.visible = !this.target.visible; return this; }
     on(event, handler) {
         this.target.events ||= {};

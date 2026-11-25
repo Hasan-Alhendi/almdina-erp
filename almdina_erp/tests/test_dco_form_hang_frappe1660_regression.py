@@ -1,47 +1,51 @@
-"""Regression guards for DCO form freezes after Frappe 16.60 form-chrome changes."""
+"""Point to the behavioral JS hang suite; keep a thin Python wiring guard."""
 
 from __future__ import annotations
 
+import subprocess
+import sys
 import unittest
 from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-PUBLIC = ROOT / "public" / "js" / "door_cutting_order" / "core"
-SIDEBAR = PUBLIC / "door_cutting_order_form_sidebar_controller.js"
-PRESENTATION = PUBLIC / "door_cutting_order_form_presentation_owner.js"
-ACTION_GUARD = PUBLIC / "door_cutting_order_action_permission_guard.js"
-EVENT_LOOP = ROOT / "tests" / "test_new_order_workspace_event_loop_regression.py"
+BEHAVIORAL = ROOT / "tests" / "js" / "dco_form_hang_behavioral.test.js"
+SIDEBAR = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "core"
+    / "door_cutting_order_form_sidebar_controller.js"
+)
 
 
 class TestDcoFormHangFrappe1660Regression(unittest.TestCase):
-    def test_missing_native_form_sidebar_does_not_block_presentation_ready(self) -> None:
+    def test_behavioral_hang_suite_exists(self) -> None:
+        self.assertTrue(BEHAVIORAL.exists())
+        source = BEHAVIORAL.read_text(encoding="utf-8")
+        self.assertIn("preference restore must not use toggle on desktop", source)
+        self.assertIn("settle reports ready without another recovery storm", source)
+
+    def test_desktop_preference_uses_show_hide_not_toggle(self) -> None:
         source = SIDEBAR.read_text(encoding="utf-8")
-        ready = source.split("function isPreferenceApplied(frm)", 1)[1].split(
-            "window.AlmdinaDcoFormSidebarController",
-            1,
-        )[0]
-        self.assertIn("if (actual === null) return true;", ready)
-        self.assertIn("Missing native sidebar must not block the presentation settle loop", ready)
-        self.assertIn("setNativeSidebarExpanded", source)
+        self.assertIn("wrapper.show", source)
+        self.assertIn("wrapper.hide", source)
+        self.assertIn("Prefer show/hide over Frappe's toggle helper", source)
 
-    def test_surfaces_settled_does_not_reenter_recover_when_already_ready(self) -> None:
-        source = PRESENTATION.read_text(encoding="utf-8")
-        self.assertIn('eventName === "almdina:surfaces-settled" && isReady(frm)', source)
-        self.assertIn("if (eventName === \"almdina:surfaces-settled\" && isReady(frm)) return;", source)
-
-    def test_action_permission_observer_is_scoped_to_form_root(self) -> None:
-        source = ACTION_GUARD.read_text(encoding="utf-8")
-        self.assertIn("function observeFormRoot(frm)", source)
-        self.assertIn("observer.observe(root, { childList: true, subtree: true });", source)
-        self.assertNotIn("document.documentElement", source)
-        self.assertIn("observeFormRoot(frm);", source)
-
-    def test_prior_workspace_event_loop_regression_remains_in_suite(self) -> None:
-        self.assertTrue(EVENT_LOOP.exists())
-        source = EVENT_LOOP.read_text(encoding="utf-8")
-        self.assertIn("TestNewOrderWorkspaceEventLoopRegression", source)
-        self.assertIn("settleUnavailable", source)
+    def test_behavioral_hang_suite_passes(self) -> None:
+        completed = subprocess.run(
+            ["node", str(BEHAVIORAL)],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if completed.returncode != 0:
+            self.fail(
+                "behavioral hang suite failed:\n"
+                f"stdout:\n{completed.stdout}\n"
+                f"stderr:\n{completed.stderr}"
+            )
 
 
 if __name__ == "__main__":

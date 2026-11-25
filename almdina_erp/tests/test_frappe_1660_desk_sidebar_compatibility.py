@@ -34,12 +34,64 @@ class TestFrappe1660DeskSidebarCompatibility(unittest.TestCase):
         self.assertIn("Almdina ERP", link_tos)
         self.assertIn("Almdina Reports", link_tos)
 
-    def test_site_dock_reset_is_wired_for_migrate(self) -> None:
+    def test_site_dock_reset_is_wired_and_surgical(self) -> None:
         patches = PATCHES.read_text(encoding="utf-8")
         nav = NATIVE_NAV.read_text(encoding="utf-8")
+        patch = (ROOT / "patches" / "v1_0" / "reset_almdina_site_dock_layers.py").read_text(
+            encoding="utf-8"
+        )
         self.assertIn("reset_almdina_site_dock_layers", patches)
-        self.assertIn("_clear_incomplete_site_dock_layers", nav)
-        self.assertIn('filters={"app": ALMDINA_APP, "standard": 0}', nav)
+        self.assertIn("list_incomplete_almdina_dock_layers", nav)
+        self.assertIn("dock_layer_has_primary_shell", nav)
+        self.assertIn("PRIMARY_SHELL", nav)
+        self.assertIn("list_incomplete_almdina_dock_layers", patch)
+        # after_migrate must filter to incomplete layers, not wipe every standard=0 row.
+        self.assertIn("names = list_incomplete_almdina_dock_layers()", nav)
+        self.assertNotIn(
+            'filters={"app": ALMDINA_APP, "standard": 0},\n        pluck="name",\n    )\n    if not names:\n        return False\n\n    for name in names:\n        frappe.delete_doc("Dock", name, force=True, ignore_permissions=True)',
+            nav,
+        )
+
+    def test_incomplete_dock_detection_keeps_complete_custom_layers(self) -> None:
+        import importlib
+        import sys
+        import types
+
+        fake_frappe = types.ModuleType("frappe")
+        fake_frappe.db = types.SimpleNamespace(exists=lambda *args, **kwargs: True)
+
+        def fake_get_all(doctype, filters=None, fields=None, pluck=None):
+            if doctype == "Dock":
+                return ["dock-complete", "dock-reports-only"]
+            if doctype == "Dock Item":
+                parent = (filters or {}).get("parent")
+                if parent == "dock-complete":
+                    return [
+                        {"link_type": "Sidebar", "link_to": "Almdina ERP", "hidden": 0},
+                        {"link_type": "Sidebar", "link_to": "Almdina Reports", "hidden": 0},
+                    ]
+                return [{"link_type": "Sidebar", "link_to": "Almdina Reports", "hidden": 0}]
+            return []
+
+        fake_frappe.get_all = fake_get_all
+        previous = sys.modules.get("frappe")
+        sys.modules["frappe"] = fake_frappe
+        module_name = "almdina_erp.almdina_erp.infrastructure.frappe.native_app_navigation"
+        sys.modules.pop(module_name, None)
+        try:
+            nav = importlib.import_module(module_name)
+            self.assertTrue(nav.dock_layer_has_primary_shell("dock-complete"))
+            self.assertFalse(nav.dock_layer_has_primary_shell("dock-reports-only"))
+            self.assertEqual(
+                nav.list_incomplete_almdina_dock_layers(),
+                ["dock-reports-only"],
+            )
+        finally:
+            sys.modules.pop(module_name, None)
+            if previous is not None:
+                sys.modules["frappe"] = previous
+            else:
+                sys.modules.pop("frappe", None)
 
     def test_app_only_boot_keeps_almdina_module_sidebars_and_home_shell(self) -> None:
         boot = BootHarness(

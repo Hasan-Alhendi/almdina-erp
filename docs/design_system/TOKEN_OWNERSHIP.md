@@ -52,7 +52,7 @@ Shared components/patterns (`.alm-page-intro`, `.alm-toolbar`, `.alm-summary-car
 
 | Role | Alm token | Frappe mapping (in `almdina_desk_theme.css`) | Notes |
 |---|---|---|---|
-| Brand / sidebar | `--alm-primary` | `--surface-menu-bar`, `--brand-color` | Never lighten globally to fix CTA text |
+| Brand / sidebar | `--alm-primary` | `--desk-sidebar-bg`, `--dock-bg`, `--surface-menu-bar`, `--brand-color` | Frappe 16.60 paints the rail with `--desk-sidebar-bg` (not `--surface-menu-bar`). Never lighten globally to fix CTA text |
 | Primary CTA fill | `--alm-action` / `--alm-on-action` | `--btn-primary` ← `--alm-action` | Frappe `.btn-primary` text uses `--neutral` (white Light / black Dark) |
 | Soft info chrome | `--alm-brand-soft` / `--alm-brand-soft-fg` | `--bg-blue`, `--bg-light-blue`, blue indicator pills | Theme-split; no `#ffffff` color-mix wash in Dark |
 | Interactive accent | `--alm-accent` | Dark `--primary` / indicator dots | Readable links/focus-adjacent roles without changing sidebar navy |
