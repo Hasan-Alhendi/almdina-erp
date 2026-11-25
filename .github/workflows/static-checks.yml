@@ -343,6 +343,7 @@ jobs:
           node almdina_erp/tests/js/factory_workforce_languages.test.js
           node almdina_erp/tests/js/dco_form_sidebar_controller.test.js
           node almdina_erp/tests/js/dco_form_hang_behavioral.test.js
+          node almdina_erp/tests/js/dco_toolbar_observer_frame.test.js
           node almdina_erp/tests/js/desk_sidebar_token_bridge.test.js
           node almdina_erp/tests/js/dco_form_presentation_owner.test.js
           node almdina_erp/tests/js/almdina_ui.test.js
