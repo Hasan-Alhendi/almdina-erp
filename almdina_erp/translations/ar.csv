@@ -3817,10 +3817,14 @@ The search batch limit was reached. Create a new preview.,وصلت إلى الح
 Plan {0},الخطة {0}
 {0} boards,{0} ألواح
 Reusable offcut: {0} m²,أكبر فضلة قابلة للاستعمال: {0} م²
+Offcut: {0} m²,الفضلة: {0} م²
+Boards: {0},الألواح: {0}
 Manufacturing checks passed,اجتازت فحوص التصنيع
 Alternative layout,توزيع بديل
 Show plan gallery,إظهار معرض الخطط
 Collapse plan gallery,طي معرض الخطط
+Collapse gallery,طي المعرض
+Expand gallery,توسيع المعرض
 Continue search (+{0} seconds),متابعة البحث (+{0} ثانية)
 Plan alternatives,بدائل خطة القص
 Only one manufacturing-valid plan was found.,توفرت خطة واحدة فقط تجتاز فحوص التصنيع.

@@ -531,6 +531,15 @@
         if (planUx && typeof planUx.refresh === "function") planUx.refresh(frm);
     }
 
+    function galleryToggleMarkup(collapsed) {
+        const label = translate(collapsed ? "Expand gallery" : "Collapse gallery");
+        const safeLabel = escapeHtml(label);
+        return `<button type="button" class="dco-candidate-toggle${collapsed ? " is-collapsed" : ""}" data-gallery-action="toggle" aria-expanded="${collapsed ? "false" : "true"}" aria-label="${safeLabel}" title="${safeLabel}">`
+            + '<svg class="dco-candidate-toggle__icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">'
+            + '<path d="m6 9 6 6 6-6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path>'
+            + "</svg></button>";
+    }
+
     function galleryMarkup(frm, canvas) {
         const owner = window.AlmdinaPlanPreviewSession;
         if (!owner?.isReady?.(frm)) return canvas;
@@ -540,37 +549,40 @@
             frm.__almdinaCandidateGalleryCollapsed = Boolean(window.matchMedia?.("(max-width: 767px)").matches);
         }
         const collapsed = frm.__almdinaCandidateGalleryCollapsed;
-        const best = payload.candidates[0].summary;
-        function distinction(candidate) {
-            const boards = Number(candidate.summary?.totals?.required_boards || 0) - Number(best.totals?.required_boards || 0);
-            if (boards > 0) return translate("{0} additional boards", [boards]);
-            const difference = Number(best.quality?.largest_reusable_free_area_m2 || 0) - Number(candidate.summary?.quality?.largest_reusable_free_area_m2 || 0);
-            if (difference > .000001) return translate("{0} m² less reusable offcut", [difference.toFixed(3)]);
-            return translate("Alternative layout");
-        }
         const cards = payload.candidates.map((candidate, index) => {
             const totals = candidate.summary?.totals || {}, quality = candidate.summary?.quality || {};
             const selected = candidate.candidate_id === payload.candidate_id;
+            const boards = Number(totals.required_boards || 0);
+            const offcut = Number(quality.largest_reusable_free_area_m2 || 0).toFixed(3);
+            const badgeLabel = index === 0 ? translate("Recommended") : translate("Alternative layout");
+            const badgeClass = index === 0
+                ? "dco-candidate-card__badge is-recommended"
+                : "dco-candidate-card__badge is-alternative";
+            const offcutFull = translate("Reusable offcut: {0} m²", [offcut]);
             return `<button type="button" class="dco-candidate-card${selected ? " is-selected" : ""}"
                 data-candidate-id="${escapeHtml(candidate.candidate_id)}" aria-pressed="${selected}" ${state.candidateBusy ? "disabled" : ""}>
-                <span class="dco-candidate-card__heading"><strong>${escapeHtml(translate("Plan {0}", [index + 1]))}</strong>
-                <span>${escapeHtml(index === 0 ? translate("Recommended") : distinction(candidate))}</span></span>
-                <span>${escapeHtml(translate("{0} boards", [Number(totals.required_boards || 0)]))}</span>
-                <span>${escapeHtml(translate("Reusable offcut: {0} m²", [Number(quality.largest_reusable_free_area_m2 || 0).toFixed(3)]))}</span>
-                <span class="dco-candidate-card__valid">${htmlMessage("Manufacturing checks passed")}</span>
+                <span class="dco-candidate-card__heading">
+                    <strong>${escapeHtml(translate("Plan {0}", [index + 1]))}</strong>
+                    <span class="${badgeClass}">${escapeHtml(badgeLabel)}</span>
+                </span>
+                <span class="dco-candidate-card__metrics">
+                    <span>${escapeHtml(translate("Boards: {0}", [boards]))}</span>
+                    <span title="${escapeHtml(offcutFull)}">${escapeHtml(translate("Offcut: {0} m²", [offcut]))}</span>
+                </span>
                 </button>`;
         }).join("");
         const ui = window.AlmdinaUi;
-        const toggle = ui?.button?.({label: translate(collapsed ? "Plans" : "Collapse plan gallery"),
-            className: "dco-candidate-toggle", attrs: {"data-gallery-action": "toggle", "aria-expanded": !collapsed, "aria-label": translate(collapsed ? "Show plan gallery" : "Collapse plan gallery")}}) || "";
+        const toggle = galleryToggleMarkup(collapsed);
         const more = ui?.button?.({label: translate("Continue search (+{0} seconds)", [payload.search_budget_sec]),
             className: "dco-candidate-continue", disabled: state.candidateBusy || !payload.can_continue,
             attrs: {"data-gallery-action": "continue"}}) || "";
         return `<div class="almdina-ui dco-candidate-layout${collapsed ? " is-collapsed" : ""}">
             <aside class="dco-candidate-gallery" dir="${escapeHtml(uiDirection())}" aria-label="${escapeHtml(translate("Plan alternatives"))}">
-                ${toggle}<div class="dco-candidate-gallery__body">
-                <div class="dco-candidate-gallery__intro"><strong>${htmlMessage("Plan alternatives")}</strong>
-                <span>${htmlMessage(payload.candidates.length === 1 ? "Only one manufacturing-valid plan was found." : "Choose a layout to preview. Nothing is saved until you press Save.")}</span></div>
+                <div class="dco-candidate-gallery__header">
+                    <strong class="dco-candidate-gallery__title">${htmlMessage("Plan alternatives")}</strong>
+                    ${toggle}
+                </div>
+                <div class="dco-candidate-gallery__body">
                 <div class="dco-candidate-gallery__cards">${cards}</div>${more}
                 <span class="dco-candidate-gallery__notice">${htmlMessage(state.candidateBusy ? "Searching or loading a plan…" : "Search is limited to three batches per preview.")}</span>
                 </div></aside><div class="dco-candidate-canvas" dir="${escapeHtml(uiDirection())}">${canvas}</div></div>`;

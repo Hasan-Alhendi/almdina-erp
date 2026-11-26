@@ -1,6 +1,36 @@
 "use strict";
 const assert = require('node:assert/strict'), fs = require('node:fs'), vm = require('node:vm'), path = require('node:path');
 const root=path.resolve(__dirname,'../../');
+const presenterSource = fs.readFileSync(
+    path.join(root, 'public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_preview_presenter.js'),
+    'utf8'
+);
+const galleryCss = fs.readFileSync(
+    path.join(root, 'public/css/door_cutting_order_plan_workspace_layout.css'),
+    'utf8'
+);
+const catalog = fs.readFileSync(path.join(root, 'translations/ar.csv'), 'utf8');
+const assets = fs.readFileSync(path.join(root, 'frontend_assets.py'), 'utf8');
+
+assert.match(presenterSource, /dco-candidate-gallery__header/);
+assert.match(presenterSource, /galleryToggleMarkup/);
+assert.match(presenterSource, /Expand gallery|Collapse gallery/);
+assert.match(presenterSource, /dco-candidate-card__badge/);
+assert.match(presenterSource, /Boards: \{0\}/);
+assert.match(presenterSource, /Offcut: \{0\} m²/);
+assert.doesNotMatch(presenterSource, /Choose a layout to preview\. Nothing is saved until you press Save\./);
+assert.doesNotMatch(presenterSource, /Manufacturing checks passed/);
+assert.doesNotMatch(presenterSource, /dco-candidate-gallery__intro/);
+assert.match(galleryCss, /\.dco-candidate-gallery__header/);
+assert.match(galleryCss, /\.dco-candidate-card__badge\.is-recommended/);
+assert.match(galleryCss, /\.dco-candidate-card__badge\.is-alternative/);
+assert.match(galleryCss, /\.dco-candidate-card__metrics/);
+assert.match(assets, /door_cutting_order_plan_workspace_layout\.css\?v=14/);
+assert.ok(catalog.includes('Collapse gallery,طي المعرض'));
+assert.ok(catalog.includes('Expand gallery,توسيع المعرض'));
+assert.ok(catalog.includes('Boards: {0},الألواح: {0}'));
+assert.ok(catalog.includes('Offcut: {0} m²,الفضلة: {0} م²'));
+
 const settings={packing_mode:'smart',cutting_machine_type:'CNC Router',kerf_mm:3,trim_margin_mm:0,optimization_time_limit_sec:10};
 const candidates=['a','b'].map((id,index)=>({candidate_id:id,manufacturing_status:'Validated',summary:{settings,totals:{required_boards:index+1},quality:{largest_reusable_free_area_m2:.4+index},validation:{status:'Valid',needs_recalculation:false}}}));
 const plan=id=>({sheets:[{id}],preview_candidate_id:id});
