@@ -9,6 +9,7 @@ from almdina_erp.almdina_erp.domain.cutting.plan_lifecycle import (
     DRAFT,
     UPLOADED_DXF,
     cancel_approval_transition,
+    prefer_plan_tab_for_source,
 )
 from almdina_erp.almdina_erp.domain.security.authorization import Capability
 from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_authorization import (
@@ -64,7 +65,9 @@ def cancel_approved_order_plan(order: Any) -> dict[str, Any]:
 
     The approved Cutting Plan is transitioned to ``Cancelled`` and the aggregate
     relation on Door Cutting Order is cleared. Geometry is never mutated back into
-    Draft; a later edit/recalculation creates or reuses a proper Draft revision.
+    Draft on that historical revision. Instead a geometry-preserving Draft copy is
+    created (or an already newer Draft of the same source is reused) so the same
+    distribution can be re-approved without recalculation when still compatible.
     A stale ``approved_plan`` pointing at another order is cleared without touching
     that foreign plan.
     """
@@ -89,7 +92,22 @@ def cancel_approved_order_plan(order: Any) -> dict[str, Any]:
             "cancelled_plan": None,
             "plan_status": str(getattr(plan, "status", None) or ""),
             "approved_plan": None,
+            "draft_plan": None,
+            "draft_source_type": None,
+            "prefer_plan_tab": "System",
+            "draft_reused": False,
         }
+
+    source_type = str(getattr(plan, "source_type", None) or "").strip()
+    existing_draft = repository.find_newer_draft(
+        order.name,
+        source_type=source_type,
+        min_revision=int(getattr(plan, "revision", 0) or 0),
+    )
+    draft_reused = bool(existing_draft)
+    # Create the working Draft while the tip is still Approved so DocType lineage
+    # validation and based_on_plan contracts stay intact.
+    draft = existing_draft or repository.create_geometry_preserving_draft(plan, order=order)
 
     _before, after = cancel_approval_transition(getattr(plan, "status", None))
     plan.status = after
@@ -110,11 +128,16 @@ def cancel_approved_order_plan(order: Any) -> dict[str, Any]:
         order=order,
     )
 
+    draft_name = str(getattr(draft, "name", None) or "").strip() or None
     return {
         "name": order.name,
         "cancelled_plan": plan.name,
         "plan_status": after,
         "approved_plan": None,
+        "draft_plan": draft_name,
+        "draft_source_type": source_type or None,
+        "prefer_plan_tab": prefer_plan_tab_for_source(source_type),
+        "draft_reused": draft_reused,
     }
 
 

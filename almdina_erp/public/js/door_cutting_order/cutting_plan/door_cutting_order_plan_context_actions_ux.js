@@ -566,14 +566,15 @@
         }
         return new Promise((resolve) => {
             frappe.confirm(
-                translate("The current production plan approval will be cancelled and kept in the revision history. The old plan will not become an editable draft. Do you want to continue?"),
+                translate("The current production plan approval will be cancelled and kept in the revision history. A matching draft copy will be prepared for re-approval without recalculation. Do you want to continue?"),
                 async () => {
                     try {
-                        await api.cancelApproval(frm.doc.name);
-                        frm.__almdina_active_plan_tab = "System";
+                        const result = await api.cancelApproval(frm.doc.name);
+                        const preferTab = String((result && result.prefer_plan_tab) || "").trim();
+                        frm.__almdina_active_plan_tab = preferTab || "System";
                         await refreshWorkspace(frm);
                         frappe.show_alert({
-                            message: translate("Cutting plan approval was cancelled and its history was kept."),
+                            message: translate("Cutting plan approval was cancelled. A matching draft is ready for review and re-approval."),
                             indicator: "green",
                         }, 5);
                         resolve(true);

@@ -575,6 +575,13 @@ def approve_order_plan(
             source_type=source_type,
             status=DRAFT,
         )
+        if not plan:
+            # Historical cancellations that predate geometry-preserving Draft
+            # copies can recover the last Cancelled tip once, without recalculation.
+            plan = repository.ensure_geometry_draft_from_cancelled(
+                order,
+                source_type=source_type,
+            )
     if not plan:
         if source_type == SYSTEM:
             message = _("لا توجد خطة قص من النظام جاهزة للاعتماد. أعد حساب الخطة أولًا.")

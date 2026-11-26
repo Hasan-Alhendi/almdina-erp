@@ -1645,6 +1645,7 @@ Cutting plan,خطة القص
 Cutting plan - {0},خطة قص - {0}
 Plan name,اسم الخطة
 Cutting plan approval was cancelled and its history was kept.,تم إلغاء اعتماد خطة القص مع الاحتفاظ بسجلها.
+Cutting plan approval was cancelled. A matching draft is ready for review and re-approval.,تم إلغاء اعتماد خطة القص. أصبحت مسودة مطابقة جاهزة للمراجعة وإعادة الاعتماد.
 Cutting plan commands,أوامر خطة القص
 Cutting plan engine,محرك خطة القص
 Cutting plan source,مصدر خطة القص
@@ -1702,6 +1703,7 @@ The DXF file was replaced and validated.,تم استبدال ملف DXF والت
 The DXF file was uploaded and validated.,تم رفع ملف DXF والتحقق منه.
 The browser blocked the print window. Allow pop-ups and try again.,المتصفح منع فتح نافذة الطباعة. اسمح بالنوافذ المنبثقة ثم جرّب مرة أخرى.
 The current production plan approval will be cancelled and kept in the revision history. The old plan will not become an editable draft. Do you want to continue?,سيتم إلغاء اعتماد خطة الإنتاج الحالية مع الاحتفاظ بها في سجل المراجعات، ولن تتحول الخطة القديمة إلى مسودة قابلة للتعديل. هل تريد المتابعة؟
+The current production plan approval will be cancelled and kept in the revision history. A matching draft copy will be prepared for re-approval without recalculation. Do you want to continue?,سيتم إلغاء اعتماد خطة الإنتاج الحالية مع الاحتفاظ بها في سجل المراجعات، وسيتم تجهيز نسخة مسودة مطابقة لإعادة الاعتماد دون إعادة الحساب. هل تريد المتابعة؟
 The direct result after applying the current cutting plan settings.,النتيجة المباشرة بعد تطبيق إعدادات خطة القص الحالية.
 The drawing approval was updated and replaced the previous approved plan.,تم تحديث اعتماد الرسم واستبدال الخطة المعتمدة السابقة.
 The drawing was approved for production.,تم اعتماد الرسم للإنتاج.
