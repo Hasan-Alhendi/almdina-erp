@@ -133,6 +133,29 @@
 		return Boolean(frm.doc && frm.doc.approved_plan);
 	}
 
+	function workspaceApprovedPlanAvailable(frm) {
+		// Content must follow the same workspace authority as context actions
+		// (cancel/approve chrome). Relying on frm.doc alone can claim “no
+		// approved plan” while the store already exposes approved_plan.
+		const facade = window.AlmdinaPlanTabsUX;
+		if (
+			facade
+			&& facade.__a52WorkspaceOwned
+			&& typeof facade.hasApprovedPlan === "function"
+			&& facade.hasApprovedPlan !== hasApprovedPlan
+		) {
+			if (facade.hasApprovedPlan(frm)) return true;
+		}
+		const owner = window.AlmdinaPlanWorkspaceState;
+		const state = owner && typeof owner.snapshot === "function" ? owner.snapshot(frm) : null;
+		const keep = window.AlmdinaWorkspaceKeepPaint;
+		const payload = keep && typeof keep.presentationData === "function"
+			? keep.presentationData(state)
+			: (state && state.status === "ready" ? state.data : null);
+		if (payload && String(payload.approved_plan || "").trim()) return true;
+		return hasApprovedPlan(frm);
+	}
+
 	function shouldShowPlanTabs(frm) {
 		return Boolean(frm && visibleTabs(frm).length);
 	}
@@ -153,6 +176,19 @@
 			return parseJsonField(frm.doc.custom_plan_json);
 		}
 		if (tab === "Approved") {
+			// When the A5.2 workspace facade owns getPlanForTab, read the live
+			// approved snapshot from the store instead of the transitional cache
+			// alone — the cache can lag one paint behind a ready workspace.
+			const facade = window.AlmdinaPlanTabsUX;
+			if (
+				facade
+				&& facade.__a52WorkspaceOwned
+				&& typeof facade.getPlanForTab === "function"
+				&& facade.getPlanForTab !== getPlanForTab
+			) {
+				const fromWorkspace = facade.getPlanForTab(frm, "Approved");
+				if (fromWorkspace) return fromWorkspace;
+			}
 			return getCachedApprovedPlan(frm);
 		}
 		if (tab === "BoardEditor") {
@@ -498,10 +534,24 @@
 		}
 
 		if (tab === "Approved") {
-			if (!hasApprovedPlan(frm)) {
+			const workspace = window.AlmdinaPlanWorkspaceState
+				&& typeof window.AlmdinaPlanWorkspaceState.snapshot === "function"
+				? window.AlmdinaPlanWorkspaceState.snapshot(frm)
+				: null;
+			const workspaceLoading = Boolean(workspace && String(workspace.status || "") === "loading");
+			const approvedAvailable = workspaceApprovedPlanAvailable(frm);
+			if (!approvedAvailable) {
+				// Keep-paint during a forced reload can briefly lack approved_plan.
+				// Do not claim “no approved plan” while that reload is in flight.
+				if (workspaceLoading) {
+					return emptyState("Loading the cutting plan...");
+				}
 				return emptyState("There is no plan approved for production.");
 			}
 			const plan = getPlanForTab(frm, "Approved");
+			if ((!plan || !plan.sheets || !plan.sheets.length) && workspaceLoading) {
+				return emptyState("Loading the cutting plan...");
+			}
 			const banner = planStatusBanner(frm, "Approved");
             return banner + (
                 renderPlanHtml(frm, plan) ||

@@ -196,10 +196,21 @@
         frm.doc.custom_plan_json = customPlan;
         frm.doc.production_dxf = customRow && customRow.dxf ? customRow.dxf.file || null : null;
         const currentApproved = String(payload.approved_plan || "").trim();
-        frm.doc.approved_plan = currentApproved || null;
-        frm.doc.approved_plan_source = currentApproved ? sourceLabel(approvedRow) : null;
-        frm.__almdina_approved_plan_snapshot = currentApproved ? approvedPlan : null;
-        frm.__almdina_approved_plan_order = frm.doc.name;
+        const state = snapshot(frm);
+        const loadingKeepPaint = Boolean(
+            state
+            && String(state.status || "") === "loading"
+            && !currentApproved
+            && String(frm.doc.approved_plan || "").trim()
+        );
+        // During keep-paint reloads, do not erase a known approved_plan with an
+        // empty retained snapshot; the settled ready payload remains authority.
+        if (!loadingKeepPaint) {
+            frm.doc.approved_plan = currentApproved || null;
+            frm.doc.approved_plan_source = currentApproved ? sourceLabel(approvedRow) : null;
+            frm.__almdina_approved_plan_snapshot = currentApproved ? approvedPlan : null;
+            frm.__almdina_approved_plan_order = frm.doc.name;
+        }
 
         const editor = window.AlmdinaWorkspaceFieldEditor;
         if (editor && typeof editor.project === "function") {

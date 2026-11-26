@@ -520,14 +520,40 @@
                 async () => {
                     try {
                         await transport.approve(frm.doc.name, source, planName || null);
-                        // Show the newly approved copy without requiring a manual refresh.
-                        frm.__almdina_active_plan_tab = "Approved";
+                        // Invalidate first so a keep-paint of the pre-approval
+                        // workspace cannot short-circuit the forced reload, and
+                        // only then select Approved — otherwise the loading paint
+                        // renders “no approved plan” into the Approved tab.
+                        const planOwner = stateOwner();
+                        if (planOwner && typeof planOwner.invalidate === "function") {
+                            planOwner.invalidate(frm, "cutting_plan_approved");
+                        }
                         await refreshWorkspaceOwners(frm);
+                        const afterSnap = planOwner && typeof planOwner.snapshot === "function"
+                            ? planOwner.snapshot(frm)
+                            : null;
+                        const approvedName = String(
+                            (afterSnap && afterSnap.data && afterSnap.data.approved_plan)
+                            || planName
+                            || ""
+                        ).trim();
+                        if (approvedName) {
+                            frm.doc.approved_plan = approvedName;
+                        }
+                        frm.__almdina_active_plan_tab = "Approved";
+                        const tabs = window.AlmdinaPlanTabsUX;
+                        if (tabs && typeof tabs.renderDualTabs === "function") {
+                            tabs.renderDualTabs(frm);
+                        }
                         const context = documentContext();
                         if (context && typeof context.refreshStageContext === "function") {
                             await context.refreshStageContext(frm);
                         } else if (context && typeof context.ensureStageContext === "function") {
                             await context.ensureStageContext(frm, { force: true });
+                        }
+                        frm.__almdina_active_plan_tab = "Approved";
+                        if (tabs && typeof tabs.renderDualTabs === "function") {
+                            tabs.renderDualTabs(frm);
                         }
                         frappe.show_alert({ message: translate("The cutting plan was approved for production."), indicator: "green" }, 5);
                         resolve(true);
