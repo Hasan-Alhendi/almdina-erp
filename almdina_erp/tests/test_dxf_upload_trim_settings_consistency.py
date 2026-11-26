@@ -1,8 +1,9 @@
-"""DXF upload must validate using the same settings that the Draft will persist.
+"""DXF upload must validate and persist using System manufacturing settings.
 
 Regression: orders 26-00491 and 26-00478 had a System Draft with trim=0,
-but their latest Cancelled Uploaded DXF had trim=3. The imported geometry
-passed at zero and failed mandatory trim during saving the newly seeded Draft.
+but an existing Uploaded DXF Draft (or cancelled lineage) still held trim=3.
+Import validated against the stale Uploaded Draft, then saving/approve saw a
+mismatched mandatory trim.
 """
 from __future__ import annotations
 
@@ -17,14 +18,21 @@ from almdina_erp.almdina_erp.infrastructure.frappe import (
     cutting_plan_command_repository as command_repo,
     cutting_plan_runtime_repository as runtime_repo,
 )
-from almdina_erp.almdina_erp.services import shop_floor_dxf_service as upload
+from almdina_erp.almdina_erp.services import (
+    cutting_plan_command_service as command_service,
+    shop_floor_dxf_service as upload,
+)
 
 
-def _settings(*, trim: float):
+def _settings(*, trim: float, kerf: float = 5.0, deduct: bool = False):
     return SimpleNamespace(
-        optimization_mode="smart", machine_type="Auto",
-        optimization_time_limit_sec=10, kerf_mm=5.0,
-        trim_margin_mm=trim, deduct_edge_thickness=False,
+        optimization_mode="smart",
+        machine_type="Auto",
+        optimization_time_limit_sec=10,
+        kerf_mm=kerf,
+        preferred_trim_mm=trim,
+        trim_margin_mm=trim,
+        deduct_edge_thickness=deduct,
     )
 
 
@@ -63,7 +71,8 @@ def test_new_uploaded_draft_inherits_the_active_import_settings_not_cancelled_li
     assert create.call_args.kwargs["source_type"] == "Uploaded DXF"
 
 
-def test_existing_uploaded_draft_is_reused_without_replacing_its_settings():
+def test_existing_uploaded_draft_is_reused_without_eager_settings_mutation():
+    """ensure_* may reuse the Draft; settings sync belongs on successful save."""
     repository = command_repo.FrappeCuttingPlanCommandRepository("upload_dxf")
     existing = _settings(trim=3)
     existing.name = "UPLOADED-DRAFT"
@@ -79,34 +88,81 @@ def test_existing_uploaded_draft_is_reused_without_replacing_its_settings():
     other.assert_not_called()
 
 
-def test_new_upload_uses_system_draft_for_import_and_tool_diameters():
+def test_upload_import_always_uses_manufacturing_settings_even_with_uploaded_draft():
     system = _settings(trim=0)
+    system_doc = SimpleNamespace(name="SYSTEM-DRAFT", kerf_mm=5)
     with (
-        patch.object(upload, "latest_plan", return_value=None),
         patch.object(upload, "manufacturing_plan_settings", return_value=system) as imported,
-        patch.object(upload, "manufacturing_plan_document", return_value=system) as diameter_doc,
-        patch.object(upload, "plan_settings") as stale_settings,
+        patch.object(upload, "manufacturing_plan_document", return_value=system_doc) as diameter_doc,
     ):
         settings, source_doc = upload._uploaded_dxf_import_context("26-00478")
     imported.assert_called_once_with("26-00478")
     diameter_doc.assert_called_once_with("26-00478")
-    stale_settings.assert_not_called()
     assert settings is system
-    assert source_doc is system
+    assert source_doc is system_doc
+    assert settings.preferred_trim_mm == 0
 
 
-def test_existing_uploaded_draft_owns_both_import_settings_and_tool_diameters():
-    uploaded = _settings(trim=3)
+def test_successful_uploaded_save_overwrites_stale_draft_trim_from_manufacturing():
+    order = SimpleNamespace(name="26-00491")
+    plan = SimpleNamespace(
+        name="UPLOADED-DRAFT",
+        optimization_mode="auto_pro",
+        machine_type="CNC Router",
+        optimization_time_limit_sec=4,
+        kerf_mm=3.0,
+        trim_margin_mm=3.0,
+        deduct_edge_thickness=1,
+        placed_pieces=[],
+        plan_needs_recalculation=0,
+    )
+    manufacturing = _settings(trim=0, kerf=5.0, deduct=False)
+    saved = []
+
+    class Repository:
+        def __init__(self, capability: str):
+            self.capability = capability
+
+        def ensure_uploaded_dxf_draft(self, _order):
+            return plan
+
+        def save_document(self, saved_plan):
+            saved.append(saved_plan)
+            return saved_plan
+
     with (
-        patch.object(upload, "latest_plan", return_value=uploaded) as lookup,
-        patch.object(upload, "plan_settings", return_value=uploaded) as settings_reader,
-        patch.object(upload, "manufacturing_plan_settings") as system_settings,
-        patch.object(upload, "manufacturing_plan_document") as system_document,
+        patch.object(command_service, "require_cutting_plan_capability"),
+        patch.object(command_service, "backfill_piece_instance_ids"),
+        patch.object(
+            command_service,
+            "FrappeCuttingPlanCommandRepository",
+            Repository,
+        ),
+        patch.object(
+            command_service,
+            "manufacturing_plan_settings",
+            return_value=manufacturing,
+        ),
+        patch.object(command_service, "initialize_draft_plan_cost_snapshot", return_value=False),
+        patch.object(command_service, "apply_validated_dxf_snapshot"),
+        patch.object(command_service, "apply_plan_costs"),
+        patch.object(command_service, "factory_execution_edge_cost", return_value=0),
+        patch.object(command_service, "now_datetime", return_value="2026-03-26 10:00:00"),
+        patch.object(command_service.frappe, "session", SimpleNamespace(user="designer@example.com")),
     ):
-        settings, tool_document = upload._uploaded_dxf_import_context("26-00491")
-    assert settings is uploaded
-    assert tool_document is uploaded
-    lookup.assert_called_once_with("26-00491", source_type="Uploaded DXF", status="Draft")
-    settings_reader.assert_called_once_with(uploaded)
-    system_settings.assert_not_called()
-    system_document.assert_not_called()
+        returned = command_service.save_uploaded_dxf_plan(
+            order,
+            {"sheets": []},
+            "/private/files/replacement.dxf",
+            capability=command_service.Capability.UPLOAD_DXF,
+        )
+
+    assert returned is plan
+    assert len(saved) == 1
+    assert plan.trim_margin_mm == 0
+    assert plan.kerf_mm == 5.0
+    assert plan.optimization_mode == "smart"
+    assert plan.machine_type == "Auto"
+    assert plan.optimization_time_limit_sec == 10
+    assert plan.deduct_edge_thickness == 0
+    assert plan.plan_needs_recalculation == 0

@@ -41,6 +41,9 @@ from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_authorization im
 from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_command_repository import (
     FrappeCuttingPlanCommandRepository,
 )
+from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_runtime_repository import (
+    manufacturing_plan_settings,
+)
 from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_costing_workspace import (
     COST_SNAPSHOT_VERSION,
     apply_plan_costs,
@@ -473,6 +476,23 @@ def current_uploaded_dxf_file(order_name: str) -> str:
     return str(getattr(plan, "dxf_file", None) or "") if plan else ""
 
 
+def _apply_manufacturing_settings_to_uploaded_draft(order: Any, plan: Any) -> None:
+    """Align a successful Uploaded DXF Draft with System manufacturing settings.
+
+    Applied only on the validated save path so a failed upload never mutates an
+    existing Uploaded Draft. Does not mark the plan for System recalculation and
+    does not rewrite Approved/historical revisions.
+    """
+
+    settings = manufacturing_plan_settings(order.name)
+    plan.optimization_mode = settings.optimization_mode
+    plan.machine_type = settings.machine_type
+    plan.optimization_time_limit_sec = settings.optimization_time_limit_sec
+    plan.kerf_mm = settings.kerf_mm
+    plan.trim_margin_mm = settings.preferred_trim_mm
+    plan.deduct_edge_thickness = 1 if settings.deduct_edge_thickness else 0
+
+
 def save_uploaded_dxf_plan(
     order: Any,
     snapshot: dict[str, Any],
@@ -494,6 +514,9 @@ def save_uploaded_dxf_plan(
 
     repository = FrappeCuttingPlanCommandRepository(capability)
     plan = repository.ensure_uploaded_dxf_draft(order)
+    # Settings sync happens only after geometry already validated against the
+    # same manufacturing settings, and only on this Draft before persist.
+    _apply_manufacturing_settings_to_uploaded_draft(order, plan)
     initialize_draft_plan_cost_snapshot(order, plan)
     previous_classification = [
         {
