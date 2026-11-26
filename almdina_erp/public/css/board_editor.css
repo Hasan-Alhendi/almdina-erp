@@ -15,6 +15,7 @@
   /* Single control point for the board-editor chrome scale (not Browser Zoom). */
   --abe-ui-zoom: 0.9;
   /* Height is the measured space under the Frappe page head, not another viewport. */
+  position: relative;
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -167,7 +168,9 @@
   color: #684117;
 }
 
-.abe-freshness-banner.is-stale {
+/* Draft-source conflict keeps the red strip. Out-of-date plan freshness uses
+   [data-abe-freshness="stale"] floating warning styles below instead. */
+.abe-freshness-banner.is-stale.abe-draft-source-conflict {
   background: #fff4f2;
   color: #9b2f26;
 }
@@ -205,7 +208,7 @@
   align-items: center;
 }
 
-.abe-freshness-banner.is-stale .abe-begin-from-source {
+.abe-freshness-banner.is-stale.abe-draft-source-conflict .abe-begin-from-source {
   min-height: 40px;
   padding: 0 16px;
   font-weight: 700;
@@ -216,10 +219,133 @@
   cursor: pointer;
 }
 
-.abe-freshness-banner.is-stale .abe-begin-from-source:hover {
+.abe-freshness-banner.is-stale.abe-draft-source-conflict .abe-begin-from-source:hover {
   background: #7f241d;
   border-color: #7f241d;
   color: #fff;
+}
+
+/* Floating out-of-date plan warning — scoped to freshness stale only. */
+.abe-freshness-banner[data-abe-freshness="stale"] {
+  position: absolute;
+  z-index: 24;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  flex: 0 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 12px;
+  width: max-content;
+  max-width: min(640px, calc(100% - 24px));
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--alm-status-warning-border, rgba(180, 83, 9, 0.24));
+  border-bottom: 1px solid var(--alm-status-warning-border, rgba(180, 83, 9, 0.24));
+  border-radius: var(--alm-radius-sm, 10px);
+  background: var(--alm-warning-bg, #fff7e8);
+  color: var(--alm-warning, #b45309);
+  box-shadow: var(--alm-shadow-sm, 0 1px 2px rgba(15, 23, 42, 0.04), 0 5px 18px rgba(15, 23, 42, 0.045));
+  box-sizing: border-box;
+  pointer-events: auto;
+}
+
+.abe-freshness-banner[data-abe-freshness="stale"] .abe-freshness-banner__lead {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+  flex: 1 1 14rem;
+}
+
+.abe-freshness-banner[data-abe-freshness="stale"] .abe-freshness-banner__icon {
+  flex: 0 0 auto;
+  margin-block-start: 1px;
+  font-size: 14px;
+  line-height: 1;
+  color: inherit;
+}
+
+.abe-freshness-banner[data-abe-freshness="stale"] .abe-freshness-banner__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  text-align: start;
+}
+
+.abe-freshness-banner[data-abe-freshness="stale"] .abe-freshness-banner__text strong {
+  font-size: var(--alm-font-size-sm, 12px);
+  font-weight: var(--alm-font-weight-heavy, 800);
+  line-height: 1.35;
+  color: var(--alm-warning, #b45309);
+}
+
+.abe-freshness-banner[data-abe-freshness="stale"] .abe-freshness-banner__text span {
+  font-size: 11px;
+  font-weight: var(--alm-font-weight-semibold, 600);
+  line-height: 1.4;
+  color: color-mix(in srgb, var(--alm-warning, #b45309) 82%, #000);
+}
+
+.abe-freshness-banner[data-abe-freshness="stale"] .abe-freshness-banner__action.abe-back,
+.abe-freshness-banner[data-abe-freshness="stale"] .abe-back {
+  flex: 0 0 auto;
+  align-self: center;
+  justify-self: auto;
+  margin-top: 0;
+  margin-inline-start: auto;
+  min-height: 34px;
+  height: 34px;
+  width: auto;
+  padding: 0 14px;
+  border: 1px solid var(--alm-warning, #b45309) !important;
+  border-radius: var(--alm-radius-button, 10px);
+  background: var(--alm-warning, #b45309) !important;
+  color: #fff !important;
+  font-size: 11px;
+  font-weight: var(--alm-font-weight-heavy, 800);
+  line-height: 1;
+  white-space: nowrap;
+  box-shadow: none !important;
+  cursor: pointer;
+}
+
+.abe-freshness-banner[data-abe-freshness="stale"] .abe-back:hover:not(:disabled),
+.abe-freshness-banner[data-abe-freshness="stale"] .abe-back:focus-visible:not(:disabled) {
+  background: color-mix(in srgb, var(--alm-warning, #b45309) 88%, #000) !important;
+  border-color: color-mix(in srgb, var(--alm-warning, #b45309) 88%, #000) !important;
+  color: #fff !important;
+}
+
+/* Keep white-on-amber readable when --alm-warning lightens in dark theme. */
+[data-theme="dark"] .abe-freshness-banner[data-abe-freshness="stale"] .abe-back {
+  border-color: #b45309 !important;
+  background: #b45309 !important;
+  color: #fff !important;
+}
+
+[data-theme="dark"] .abe-freshness-banner[data-abe-freshness="stale"] .abe-back:hover:not(:disabled),
+[data-theme="dark"] .abe-freshness-banner[data-abe-freshness="stale"] .abe-back:focus-visible:not(:disabled) {
+  border-color: #92400e !important;
+  background: #92400e !important;
+  color: #fff !important;
+}
+
+@media (max-width: 720px) {
+  .abe-freshness-banner[data-abe-freshness="stale"] {
+    top: 8px;
+    max-width: calc(100% - 16px);
+    padding: 10px 12px;
+  }
+
+  .abe-freshness-banner[data-abe-freshness="stale"] .abe-back {
+    flex: 1 1 100%;
+    margin-inline-start: 0;
+    width: 100%;
+  }
 }
 
 .abe-body {

@@ -348,10 +348,17 @@
                 </div>`;
             }
             if (freshness.needs_recalculation || freshness.reflects_current_order === false) {
-                return `<div class="abe-freshness-banner is-stale" role="status" data-abe-freshness="stale">
-                    <strong>${esc(translate("Cutting plan is out of date"))}</strong>
-                    <span>${esc(translate("Order measurements changed after this plan. Recalculate the cutting plan on the order, then reopen the editor. This view is not the new layout."))}</span>
-                    <button type="button" class="alm-btn-secondary abe-back">${esc(translate("Back to order"))}</button>
+                // Floating warning card (presentation only). Keep .abe-back for
+                // bindFreshnessActions; do not reuse draft-conflict chrome.
+                return `<div class="abe-freshness-banner is-stale abe-freshness-banner--floating" role="status" data-abe-freshness="stale">
+                    <div class="abe-freshness-banner__lead">
+                        <span class="abe-freshness-banner__icon" aria-hidden="true">⚠</span>
+                        <div class="abe-freshness-banner__text">
+                            <strong>${esc(translate("Cutting plan is out of date"))}</strong>
+                            <span>${esc(translate("Order measurements changed after this plan. Recalculate the cutting plan on the order, then reopen the editor. This view is not the new layout."))}</span>
+                        </div>
+                    </div>
+                    <button type="button" class="alm-btn-secondary abe-back abe-freshness-banner__action">${esc(translate("Back to order"))}</button>
                 </div>`;
             }
             return "";
