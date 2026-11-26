@@ -19,6 +19,8 @@ from almdina_erp.almdina_erp.domain.cutting.manufacturing_requirements import (
     ManufacturingRequirementsError,
 )
 from almdina_erp.almdina_erp.domain.cutting.plan_freshness import (
+    decide_uploaded_manufacturing_trim_mismatch,
+    manufacturing_trim_matches,
     select_uploaded_workspace_plan,
 )
 from almdina_erp.almdina_erp.domain.cutting.plan_lifecycle import (
@@ -40,6 +42,7 @@ from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_authorization im
 )
 from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_runtime_repository import (
     factory_default_plan_settings,
+    manufacturing_plan_settings,
 )
 from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_workspace import (
     plan_fingerprint_compatibility,
@@ -420,6 +423,46 @@ def _board_editor_unapplied_draft_hint(order_name: str, plan_name: str) -> dict[
     }
 
 
+def _apply_uploaded_trim_alignment(order: Any, plan: Any, payload: dict[str, Any]) -> None:
+    """Expose manufacturing vs validated trim and stale-mark Draft mismatches.
+
+    Covers orders that never saved System settings after this gate existed: the
+    read model compares live manufacturing trim to the Uploaded plan's stored
+    trim without rewriting that stored value.
+    """
+
+    if str(plan.get("source_type") or "") != "Uploaded DXF":
+        return
+
+    manufacturing = manufacturing_plan_settings(order.name)
+    validated_trim = flt(plan.get("trim_margin_mm"))
+    manufacturing_trim = flt(manufacturing.preferred_trim_mm)
+    payload["settings_alignment"] = {
+        "manufacturing_trim_margin_mm": manufacturing_trim,
+        "validated_trim_margin_mm": validated_trim,
+        "trim_matches": manufacturing_trim_matches(validated_trim, manufacturing_trim),
+    }
+
+    decision = decide_uploaded_manufacturing_trim_mismatch(
+        source_type=str(plan.get("source_type") or ""),
+        status=str(plan.get("status") or ""),
+        uploaded_trim_mm=validated_trim,
+        manufacturing_trim_mm=manufacturing_trim,
+    )
+    if not decision.should_invalidate:
+        return
+
+    validation = payload.setdefault("validation", {})
+    validation["needs_recalculation"] = True
+    state = str(validation.get("freshness_state") or "")
+    # Keep an existing order-input MISMATCH/REVIEW reason; trim clarifies the
+    # common System-settings case where the uploaded fingerprint stays compatible.
+    if state in {"", "COMPATIBLE", "PERSISTED_STALE"}:
+        validation["freshness_reason"] = decision.reason
+    if state in {"", "COMPATIBLE"}:
+        validation["freshness_state"] = "MISMATCH"
+
+
 def _plan_row_with_freshness(order: Any, plan: Any, snapshot_json: str) -> dict[str, Any]:
     payload = _plan_row(plan, snapshot_json, order=order)
     status = str(plan.get("status") or "")
@@ -441,6 +484,7 @@ def _plan_row_with_freshness(order: Any, plan: Any, snapshot_json: str) -> dict[
         )
     except (ManufacturingRequirementsError, frappe.ValidationError):
         payload["validation"].update(needs_recalculation=True, freshness_state="REVIEW_REQUIRED")
+        _apply_uploaded_trim_alignment(order, plan, payload)
         return payload
     persisted_stale = payload["validation"]["needs_recalculation"]
     payload["validation"].update(
@@ -449,6 +493,7 @@ def _plan_row_with_freshness(order: Any, plan: Any, snapshot_json: str) -> dict[
         freshness_reason=compatibility.reason,
         fingerprint_contract=compatibility.contract,
     )
+    _apply_uploaded_trim_alignment(order, plan, payload)
     return payload
 
 

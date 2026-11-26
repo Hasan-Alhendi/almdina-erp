@@ -8,6 +8,7 @@ from frappe.utils import cint
 from almdina_erp.almdina_erp.domain.cutting.plan_freshness import (
     decide_approved_plan_freshness,
     decide_draft_plan_freshness,
+    decide_uploaded_manufacturing_trim_mismatch,
     decide_uploaded_plan_mismatch,
 )
 from almdina_erp.almdina_erp.domain.cutting.plan_lifecycle import (
@@ -16,21 +17,28 @@ from almdina_erp.almdina_erp.domain.cutting.plan_lifecycle import (
     UPLOADED_DXF,
     cancel_approval_transition,
 )
+from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_runtime_repository import (
+    manufacturing_plan_settings,
+)
 from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_workspace import (
     manufacturing_baseline_v4,
     plan_fingerprint_compatibility,
 )
 
 
-def _mark_plan_needs_recalculation(plan_name: str) -> None:
+def _set_plan_needs_recalculation(plan_name: str, value: int) -> None:
     frappe.db.set_value(
         "Cutting Plan",
         plan_name,
         "plan_needs_recalculation",
-        1,
+        1 if value else 0,
         update_modified=False,
     )
     frappe.clear_document_cache("Cutting Plan", plan_name)
+
+
+def _mark_plan_needs_recalculation(plan_name: str) -> None:
+    _set_plan_needs_recalculation(plan_name, 1)
 
 
 def _sync_drawing_dxf_status(order: Any) -> None:
@@ -231,7 +239,79 @@ def invalidate_stale_draft_plans(order: Any) -> tuple[str, ...]:
     return tuple(invalidated)
 
 
+def sync_uploaded_draft_manufacturing_trim(order: Any) -> str | None:
+    """Keep Uploaded DXF Draft staleness aligned with manufacturing trim.
+
+    System plan fingerprints include that plan's own trim, so editing System
+    trim never stale-marks an Uploaded Draft through the order-input path.
+    This sync compares manufacturing trim to the trim stored on the Uploaded
+    Draft (the value used at DXF validation) and only flips
+    ``plan_needs_recalculation``. It never rewrites uploaded geometry, trim,
+    or Approved/historical revisions.
+
+    When trim rematches, the stale flag clears only if fingerprint freshness
+    still allows it — restoring trim alone does not waive other staleness.
+    """
+
+    if not getattr(order, "name", None) or getattr(order, "is_new", lambda: False)():
+        return None
+
+    rows = frappe.get_all(
+        "Cutting Plan",
+        filters={
+            "door_cutting_order": order.name,
+            "plan_kind": "Order",
+            "source_type": UPLOADED_DXF,
+            "status": DRAFT,
+        },
+        fields=["name", "status", "source_type", "trim_margin_mm", "input_fingerprint", "plan_needs_recalculation"],
+        order_by="revision desc, creation desc",
+        limit_page_length=1,
+    )
+    if not rows:
+        return None
+
+    row = rows[0]
+    plan_name = str(row.get("name") or "")
+    if not plan_name:
+        return None
+
+    manufacturing = manufacturing_plan_settings(order.name)
+    decision = decide_uploaded_manufacturing_trim_mismatch(
+        source_type=str(row.get("source_type") or ""),
+        status=str(row.get("status") or ""),
+        uploaded_trim_mm=row.get("trim_margin_mm"),
+        manufacturing_trim_mm=manufacturing.preferred_trim_mm,
+    )
+    already_stale = bool(cint(row.get("plan_needs_recalculation")))
+
+    if decision.should_invalidate:
+        if not already_stale:
+            _mark_plan_needs_recalculation(plan_name)
+        return plan_name
+
+    if not already_stale:
+        return None
+
+    plan = frappe.get_doc("Cutting Plan", plan_name)
+    expected = _expected_fingerprint(order, plan)
+    if expected is None:
+        return None
+    fingerprint = decide_uploaded_plan_mismatch(
+        source_type=str(plan.source_type or ""),
+        stored_fingerprint=str(plan.input_fingerprint or ""),
+        expected_fingerprint=expected,
+        already_needs_recalculation=False,
+    )
+    if fingerprint.should_invalidate:
+        return None
+
+    _set_plan_needs_recalculation(plan_name, 0)
+    return None
+
+
 __all__ = [
     "apply_stale_approved_plan_cancellation",
     "invalidate_stale_draft_plans",
+    "sync_uploaded_draft_manufacturing_trim",
 ]

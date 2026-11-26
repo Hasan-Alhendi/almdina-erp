@@ -41,8 +41,14 @@ from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_authorization im
 from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_command_repository import (
     FrappeCuttingPlanCommandRepository,
 )
+from almdina_erp.almdina_erp.domain.cutting.plan_freshness import (
+    decide_uploaded_manufacturing_trim_mismatch,
+)
 from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_runtime_repository import (
     manufacturing_plan_settings,
+)
+from almdina_erp.almdina_erp.services.cutting_plan_invalidation_service import (
+    sync_uploaded_draft_manufacturing_trim,
 )
 from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_costing_workspace import (
     COST_SNAPSHOT_VERSION,
@@ -376,6 +382,25 @@ def _assert_plan_ready_for_approval(order: Any, plan: Any) -> None:
             _("تكلفة خطة القص قديمة. حدّث الخطة أو احفظ إعدادات التكلفة ثم راجع النتيجة قبل الاعتماد."),
             frappe.ValidationError,
         )
+
+    if str(plan.source_type or SYSTEM) == UPLOADED_DXF:
+        manufacturing = manufacturing_plan_settings(order.name)
+        trim_decision = decide_uploaded_manufacturing_trim_mismatch(
+            source_type=str(plan.source_type or ""),
+            status=str(plan.status or ""),
+            uploaded_trim_mm=getattr(plan, "trim_margin_mm", None),
+            manufacturing_trim_mm=manufacturing.preferred_trim_mm,
+        )
+        if trim_decision.should_invalidate:
+            frappe.throw(
+                _(
+                    "The uploaded plan trim margin ({0} mm) does not match the current manufacturing trim ({1} mm). Upload a new DXF that matches the current margin before approval."
+                ).format(
+                    flt(getattr(plan, "trim_margin_mm", 0)),
+                    flt(manufacturing.preferred_trim_mm),
+                ),
+                frappe.ValidationError,
+            )
 
     expected_fingerprint = freshness_expected_fingerprint(
         order,
@@ -736,8 +761,12 @@ def save_system_plan_settings(
     if diameter_changed:
         repository.save_document(plan)
         plan = repository.get_document(plan.name)
+    # Uploaded DXF fingerprints include the uploaded revision's own trim, so a
+    # System trim edit must explicitly realign Uploaded Draft staleness.
+    uploaded_trim_sync = sync_uploaded_draft_manufacturing_trim(order)
     result = plan_payload(plan, order)
     result["changed_fields"] = [*changed, *diameter_changed]
+    result["uploaded_plan_trim_invalidated"] = bool(uploaded_trim_sync)
     return result
 
 
@@ -811,9 +840,11 @@ def recalculate_system_plan(
         only_if_basis_changed=True,
         order=order,
     )
+    uploaded_trim_sync = sync_uploaded_draft_manufacturing_trim(order)
     result = plan_payload(plan, order)
     result["changed_fields"] = changed
     result["final_price_approval_invalidated"] = bool(invalidated)
+    result["uploaded_plan_trim_invalidated"] = bool(uploaded_trim_sync)
     return result
 
 
