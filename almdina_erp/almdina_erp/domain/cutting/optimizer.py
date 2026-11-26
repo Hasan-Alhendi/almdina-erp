@@ -877,8 +877,34 @@ def _solve_cp_sat(
             "y": solver.value(data["ys"][chosen]) / 10,
             "w": width_mm / 10,
             "h": height_mm / 10,
-            "original_w": num(piece.get("width_cm")),
-            "original_h": num(piece.get("length_cm")),
+            "original_w": (
+                num(
+                    piece.get("final_width_cm")
+                    or piece.get("original_w")
+                    or piece.get("original_width_cm")
+                    or piece.get("width_cm")
+                )
+                if str(piece.get("piece_type") or "Regular") == "Special"
+                else num(
+                    piece.get("original_w")
+                    or piece.get("original_width_cm")
+                    or piece.get("width_cm")
+                )
+            ),
+            "original_h": (
+                num(
+                    piece.get("final_length_cm")
+                    or piece.get("original_h")
+                    or piece.get("original_length_cm")
+                    or piece.get("length_cm")
+                )
+                if str(piece.get("piece_type") or "Regular") == "Special"
+                else num(
+                    piece.get("original_h")
+                    or piece.get("original_length_cm")
+                    or piece.get("length_cm")
+                )
+            ),
             "piece_type": piece.get("piece_type") or "Regular",
             "clipped_corner_position": piece.get("clipped_corner_position") or "",
             "clipped_corner_width_cm": num(piece.get("clipped_corner_width_cm")),

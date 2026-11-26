@@ -111,6 +111,10 @@ def expand_piece_groups(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
         if not width_cm or not length_cm or not qty:
             continue
         for copy_no in range(1, qty + 1):
+            finished_width = num(row.get("final_width_cm") or row.get("original_w") or width_cm)
+            finished_length = num(
+                row.get("final_length_cm") or row.get("original_h") or length_cm
+            )
             pieces.append(
                 {
                     "id": serial,
@@ -124,6 +128,10 @@ def expand_piece_groups(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
                     "group_qty": qty,
                     "width_cm": width_cm,
                     "length_cm": length_cm,
+                    # Finished outer size stays distinct from cut nesting size so
+                    # Special blank polygons keep a matching original_* identity.
+                    "final_width_cm": finished_width,
+                    "final_length_cm": finished_length,
                     "piece_type": row.get("piece_type") or "Regular",
                     "clipped_corner_position": row.get("clipped_corner_position") or "",
                     "clipped_corner_width_cm": num(row.get("clipped_corner_width_cm")),
@@ -167,6 +175,36 @@ def orientations_for(piece: dict[str, Any]) -> list[dict[str, Any]]:
     return result
 
 
+def _placed_original_width_cm(piece: dict[str, Any]) -> float:
+    if str(piece.get("piece_type") or "Regular") == "Special":
+        return num(
+            piece.get("final_width_cm")
+            or piece.get("original_w")
+            or piece.get("original_width_cm")
+            or piece.get("width_cm")
+        )
+    return num(
+        piece.get("original_w")
+        or piece.get("original_width_cm")
+        or piece.get("width_cm")
+    )
+
+
+def _placed_original_length_cm(piece: dict[str, Any]) -> float:
+    if str(piece.get("piece_type") or "Regular") == "Special":
+        return num(
+            piece.get("final_length_cm")
+            or piece.get("original_h")
+            or piece.get("original_length_cm")
+            or piece.get("length_cm")
+        )
+    return num(
+        piece.get("original_h")
+        or piece.get("original_length_cm")
+        or piece.get("length_cm")
+    )
+
+
 def make_placed_piece(
     piece: dict[str, Any],
     x: float,
@@ -193,8 +231,11 @@ def make_placed_piece(
         "y": y,
         "w": w,
         "h": h,
-        "original_w": num(piece.get("width_cm")),
-        "original_h": num(piece.get("length_cm")),
+        # Special blanks are authored in finished centimetres. Prefer finished
+        # originals so CNC can scale the stored polygon into the cut viewport.
+        # Regular/Corner keep cut-sized originals to preserve nesting voids.
+        "original_w": _placed_original_width_cm(piece),
+        "original_h": _placed_original_length_cm(piece),
         "piece_type": piece.get("piece_type") or "Regular",
         "clipped_corner_position": piece.get("clipped_corner_position") or "",
         "clipped_corner_width_cm": num(piece.get("clipped_corner_width_cm")),

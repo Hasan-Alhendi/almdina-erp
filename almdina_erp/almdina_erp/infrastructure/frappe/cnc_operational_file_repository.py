@@ -143,6 +143,8 @@ def placed_piece_views(order: Any) -> list[dict[str, Any]]:
             "overlays": overlays,
         }
         for key in (
+            "placement_outline_cm",
+            "blank_reservation_cm",
             "glass_host_piece_id",
             "glass_hole_local_mm",
             "glass_margin_mm",
