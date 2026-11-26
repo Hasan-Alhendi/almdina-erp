@@ -129,9 +129,11 @@
     }
 
     function installStyles() {
-        if (document.getElementById("dco-simple-plan-controls-css")) return;
+        if (document.getElementById("dco-simple-plan-controls-css-v2")) return;
+        const legacy = document.getElementById("dco-simple-plan-controls-css");
+        if (legacy && legacy.parentNode) legacy.parentNode.removeChild(legacy);
         $("head").append(`
-            <style id="dco-simple-plan-controls-css">
+            <style id="dco-simple-plan-controls-css-v2">
                 [data-fieldname="plan_control_actions"] .dco-plan-actions {
                     display:flex !important;align-items:center !important;justify-content:flex-start !important;
                     gap:8px !important;flex-wrap:wrap !important;
@@ -142,6 +144,37 @@
                 [data-fieldname="plan_control_actions"] .dco-recalculate-plan,
                 [data-fieldname="plan_control_actions"] .dco-approve-cutting-plan {
                     min-width:210px;min-height:40px !important;font-weight:850 !important;border-radius:10px !important;
+                }
+                [data-fieldname="plan_control_actions"] .dco-plan-recalc-action-bar .dco-recalculate-plan,
+                [data-fieldname="plan_control_actions"] .dco-plan-recalc-action-bar .dco-recalculate-plan.btn,
+                [data-fieldname="plan_control_actions"] .dco-plan-recalc-action-bar .dco-recalculate-plan.alm-btn-primary {
+                    min-width:0 !important;
+                    width:auto !important;
+                    min-height:34px !important;
+                    height:auto !important;
+                    padding:6px 14px !important;
+                    white-space:nowrap;
+                    border-radius:var(--alm-radius-button, 10px) !important;
+                    border:1px solid var(--alm-warning, #b45309) !important;
+                    background:var(--alm-warning, #b45309) !important;
+                    color:#fff !important;
+                    box-shadow:none !important;
+                    font-weight:var(--alm-font-weight-heavy, 800) !important;
+                }
+                [data-fieldname="plan_control_actions"] .dco-plan-recalc-action-bar .dco-recalculate-plan:hover:not(:disabled),
+                [data-fieldname="plan_control_actions"] .dco-plan-recalc-action-bar .dco-recalculate-plan:focus-visible:not(:disabled) {
+                    background:color-mix(in srgb, var(--alm-warning, #b45309) 88%, #000) !important;
+                    border-color:color-mix(in srgb, var(--alm-warning, #b45309) 88%, #000) !important;
+                    color:#fff !important;
+                }
+                [data-fieldname="plan_control_actions"] .dco-plan-recalc-action-bar .dco-recalculate-plan:disabled {
+                    opacity:.58 !important;
+                    color:#fff !important;
+                }
+                @media (max-width:560px) {
+                    [data-fieldname="plan_control_actions"] .dco-plan-recalc-action-bar .dco-recalculate-plan {
+                        width:100% !important;
+                    }
                 }
                 [data-fieldname="plan_control_actions"] .dco-print-cutting-plan,
                 [data-fieldname="plan_control_actions"] .dco-export-dxf,
@@ -558,18 +591,32 @@
 
     function buttonHost(frm, wrapper) {
         if (workspaceEditing(frm)) {
-            wrapper.children(".dco-plan-calculate-host").remove();
+            wrapper.find(".dco-plan-calculate-host").remove();
             const slot = wrapper.find('[data-role="recalc"]').first();
             return slot.length ? slot : null;
         }
         if (hasSystemDraft(frm)) {
-            wrapper.children(".dco-plan-calculate-host").remove();
+            wrapper.find(".dco-plan-calculate-host").remove();
             return false;
         }
-        let host = wrapper.children(".dco-plan-calculate-host").first();
+        const actionSlot = wrapper.find('[data-role="stale-recalc-slot"]').first();
+        let host = wrapper.find(".dco-plan-calculate-host").first();
         if (!host.length) {
-            wrapper.append('<div class="dco-plan-calculate-host"></div>');
-            host = wrapper.children(".dco-plan-calculate-host").first();
+            const markup = '<div class="dco-plan-calculate-host"></div>';
+            if (actionSlot.length) {
+                actionSlot.append(markup);
+                host = actionSlot.children(".dco-plan-calculate-host").first();
+            } else {
+                wrapper.append(markup);
+                host = wrapper.children(".dco-plan-calculate-host").first();
+            }
+            return host;
+        }
+        if (actionSlot.length) {
+            const alreadyNested = actionSlot.find(".dco-plan-calculate-host").first();
+            if (!alreadyNested.length || alreadyNested.get(0) !== host.get(0)) {
+                actionSlot.append(host);
+            }
         }
         return host;
     }

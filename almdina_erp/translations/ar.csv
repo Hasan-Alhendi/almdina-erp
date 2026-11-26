@@ -1497,6 +1497,10 @@ You can keep working on the order. The cutting plan and cost will update automat
 {0} — {1},{0} — {1}
 ⚡ Recalculation needed,⚡ تحتاج إعادة حساب
 The cutting plan needs recalculation — press “Recalculate with the current settings” when you finish.,خطة القص تحتاج إعادة حساب — اضغط «إعادة الحساب بالإعدادات الحالية» بعد الانتهاء.
+The cutting plan has not been calculated yet,لم تُحسب خطة القص بعد
+Start with “Calculate the cutting plan” using the current settings.,ابدأ بـ«حساب خطة القص» باستخدام الإعدادات الحالية.
+The cutting plan needs recalculation,خطة القص تحتاج إعادة حساب
+Finish your changes, then recalculate with the current settings.,أنهِ تعديلاتك ثم أعد الحساب بالإعدادات الحالية.
 Saving cutting plan settings...,جاري حفظ إعدادات خطة القص...
 Recalculating the cutting plan...,جاري إعادة حساب خطة القص...
 Creating the first cutting plan...,جاري إنشاء خطة القص الأولى...

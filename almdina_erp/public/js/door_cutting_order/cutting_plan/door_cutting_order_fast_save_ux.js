@@ -40,45 +40,103 @@
     }
 
     function installStyles() {
-        if (document.getElementById("dco-fast-save-css")) return;
+        if (document.getElementById("dco-fast-save-css-v2")) return;
+        const legacy = document.getElementById("dco-fast-save-css");
+        if (legacy && legacy.parentNode) legacy.parentNode.removeChild(legacy);
         $("head").append(`
-            <style id="dco-fast-save-css">
-                .dco-plan-stale-banner {
+            <style id="dco-fast-save-css-v2">
+                .dco-plan-stale-banner.dco-plan-recalc-action-bar {
+                    display:flex;
+                    flex-wrap:wrap;
+                    align-items:center;
+                    justify-content:flex-start;
+                    gap:8px 12px;
+                    padding:6px 10px;
+                    margin:0 0 6px;
+                    border:1px solid var(--alm-status-warning-border, rgba(180, 83, 9, 0.24));
+                    border-radius:var(--alm-radius-sm, 10px);
+                    background:var(--alm-warning-bg, #fff7e8);
+                    color:var(--alm-warning, #b45309);
+                    font-size:var(--alm-font-size-sm, 12px);
+                    line-height:var(--alm-line-height-tight, 1.35);
+                    font-weight:var(--alm-font-weight-semibold, 600);
+                    white-space:normal;
+                    overflow:hidden;
+                    box-sizing:border-box;
+                    width:100%;
+                    max-width:100%;
+                }
+                .dco-plan-stale-banner.is-calculating,
+                .dco-plan-stale-banner.is-stalled {
+                    border-color:var(--alm-status-warning-border, rgba(180, 83, 9, 0.28));
+                    background:var(--alm-warning-bg, #fff7e8);
+                    color:var(--alm-warning, #b45309);
+                }
+                .dco-plan-recalc-action-bar__lead {
                     display:flex;
                     align-items:center;
                     gap:8px;
-                    padding:6px 10px;
-                    margin:0 0 6px;
-                    border:1px solid #f0c36d;
-                    border-radius:8px;
-                    background:#fff8e6;
-                    color:#6f4b00;
-                    font-size:10.5px;
-                    line-height:1.35;
-                    font-weight:750;
-                    white-space:nowrap;
-                    overflow:hidden;
-                    text-overflow:ellipsis;
+                    min-width:0;
+                    flex:1 1 12rem;
                 }
-                .dco-plan-stale-banner.is-calculating {
-                    border-color:color-mix(in srgb, var(--alm-primary, #172033) 32%, transparent);
-                    background:color-mix(in srgb, var(--alm-primary, #172033) 8%, transparent);
-                    color:#1d4f7a;
-                }
-                .dco-plan-stale-banner.is-stalled {
-                    border-color:rgba(190,125,25,.4);
-                    background:#fff3d8;
-                }
-                .dco-plan-stale-banner .icon {
+                .dco-plan-recalc-action-bar__icon {
                     flex:0 0 auto;
-                    font-size:14px;
+                    display:inline-flex;
+                    align-items:center;
+                    justify-content:center;
+                    width:1.15rem;
+                    font-size:13px;
                     line-height:1;
+                    color:inherit;
                 }
+                .dco-plan-recalc-action-bar__text {
+                    display:flex;
+                    flex-direction:column;
+                    gap:1px;
+                    min-width:0;
+                    text-align:start;
+                }
+                .dco-plan-recalc-action-bar__title,
                 .dco-plan-stale-banner .dco-plan-stale-copy {
                     min-width:0;
-                    overflow:hidden;
-                    text-overflow:ellipsis;
-                    white-space:nowrap;
+                    font-size:var(--alm-font-size-sm, 12px);
+                    font-weight:var(--alm-font-weight-heavy, 800);
+                    line-height:1.3;
+                    color:var(--alm-warning, #b45309);
+                    white-space:normal;
+                }
+                .dco-plan-recalc-action-bar__body {
+                    font-size:11px;
+                    font-weight:var(--alm-font-weight-semibold, 600);
+                    line-height:1.35;
+                    color:color-mix(in srgb, var(--alm-warning, #b45309) 82%, #000);
+                    white-space:normal;
+                }
+                .dco-plan-recalc-action-bar__action {
+                    display:flex;
+                    align-items:center;
+                    justify-content:flex-end;
+                    flex:0 0 auto;
+                    margin-inline-start:auto;
+                    min-width:0;
+                }
+                .dco-plan-recalc-action-bar__action:empty {
+                    display:none;
+                }
+                .dco-plan-recalc-action-bar .dco-plan-calculate-host {
+                    margin:0 !important;
+                    padding:0 !important;
+                    width:auto !important;
+                }
+                @media (max-width:560px) {
+                    .dco-plan-recalc-action-bar__action {
+                        flex:1 1 100%;
+                        justify-content:stretch;
+                        margin-inline-start:0;
+                    }
+                    .dco-plan-recalc-action-bar .dco-plan-calculate-host {
+                        width:100% !important;
+                    }
                 }
             </style>
         `);
@@ -167,7 +225,17 @@
         return Boolean(owner && typeof owner.isEditing === "function" && owner.isEditing(frm));
     }
 
+    function preserveCalculateHost(wrapper) {
+        const host = wrapper.find(".dco-plan-calculate-host").first();
+        if (!host.length) return;
+        // Keep the single owned recalculate button alive across banner rebuilds.
+        if (!host.parent().is(wrapper)) {
+            wrapper.append(host);
+        }
+    }
+
     function clearStaleBanners(wrapper) {
+        preserveCalculateHost(wrapper);
         wrapper.find(".dco-plan-stale-banner").remove();
         wrapper.find(".dco-plan-settings-editor__stale-copy").each(function resetCopy() {
             const node = $(this);
@@ -175,6 +243,99 @@
         });
         wrapper.find(".dco-plan-settings-editor__action-bar")
             .removeClass("is-stale is-calculating is-stalled");
+    }
+
+    function hasSystemDraftPlan(frm) {
+        const owner = window.AlmdinaPlanWorkspaceState;
+        if (!owner || typeof owner.snapshot !== "function") return Boolean(frm.doc.cutting_plan_json);
+        const state = owner.snapshot(frm);
+        const plans = state && state.data && state.data.plans;
+        const row = plans && plans.system_draft;
+        if (!row) return false;
+        if (typeof owner.isCurrentDraftRow === "function") {
+            return Boolean(owner.isCurrentDraftRow(row));
+        }
+        return String(row.status || "") === "Draft";
+    }
+
+    function canRequestRecalculation(frm) {
+        const controls = window.AlmdinaPlanControlsUX;
+        if (controls && typeof controls.canCalculate === "function") {
+            return Boolean(controls.canCalculate(frm));
+        }
+        return can(frm, "recalculate_plan");
+    }
+
+    function recalculationBlockReason(frm) {
+        const controls = window.AlmdinaPlanControlsUX;
+        if (controls && typeof controls.recalculationDisabledReason === "function") {
+            // Controls already return stable English message ids for localization.
+            return String(controls.recalculationDisabledReason(frm) || "").trim();
+        }
+        if (!can(frm, "recalculate_plan")) {
+            return "You need the “Recalculate plan” permission to run the engine.";
+        }
+        return "";
+    }
+
+    function staleActionCopy(frm) {
+        const firstPlan = !hasSystemDraftPlan(frm);
+        const allowed = canRequestRecalculation(frm);
+        const blocked = recalculationBlockReason(frm);
+
+        if (firstPlan) {
+            return {
+                title: translateCopy("The cutting plan has not been calculated yet"),
+                body: allowed
+                    ? translateCopy("Start with “Calculate the cutting plan” using the current settings.")
+                    : translateCopy(blocked || "You need the “Recalculate plan” permission to run the engine."),
+            };
+        }
+
+        if (allowed) {
+            return {
+                title: translateCopy("The cutting plan needs recalculation"),
+                body: translateCopy("Finish your changes, then recalculate with the current settings."),
+            };
+        }
+
+        return {
+            title: translateCopy("The cutting plan needs recalculation"),
+            body: translateCopy(
+                blocked
+                || "Press “Edit” to try new settings, then recalculate to preview."
+            ),
+        };
+    }
+
+    function renderRecalcActionBar(wrapper, options = {}) {
+        const title = String(options.title || "").trim();
+        const body = String(options.body || "").trim();
+        const icon = options.icon || "⚡";
+        const classes = ["dco-plan-stale-banner", "dco-plan-recalc-action-bar"]
+            .concat(options.extraClass ? [options.extraClass] : [])
+            .join(" ");
+        const bodyHtml = body
+            ? `<span class="dco-plan-recalc-action-bar__body">${frappe.utils.escape_html(body)}</span>`
+            : "";
+        wrapper.prepend(`
+            <div class="${classes}" role="status" aria-live="polite">
+                <div class="dco-plan-recalc-action-bar__lead">
+                    <span class="dco-plan-recalc-action-bar__icon" aria-hidden="true">${icon}</span>
+                    <div class="dco-plan-recalc-action-bar__text">
+                        <span class="dco-plan-recalc-action-bar__title dco-plan-stale-copy">${frappe.utils.escape_html(title)}</span>
+                        ${bodyHtml}
+                    </div>
+                </div>
+                <div class="dco-plan-recalc-action-bar__action" data-role="stale-recalc-slot"></div>
+            </div>`);
+    }
+
+    function syncOwnedRecalculateButton(frm) {
+        const controls = window.AlmdinaPlanControlsUX;
+        if (controls && typeof controls.syncRecalculateButton === "function") {
+            controls.syncRecalculateButton(frm);
+        }
     }
 
     function renderEditActionBar(frm, wrapper, options = {}) {
@@ -225,20 +386,22 @@
             const body = translateCopy(stalled
                 ? "The save succeeded, but the background worker has not started yet. You can keep working or use manual recalculation."
                 : "You can keep working on the order. The cutting plan and cost will update automatically when the calculation finishes.");
-            const message = stalled ? title : translateCopy("{0} — {1}", [title, body]);
             if (inEditLayout && renderEditActionBar(frm, wrapper, {
                 calculating: true,
                 stalled,
-                message,
+                message: stalled ? title : translateCopy("{0} — {1}", [title, body]),
                 editLayout: true,
             })) {
+                syncOwnedRecalculateButton(frm);
                 return;
             }
-            wrapper.prepend(`
-                <div class="dco-plan-stale-banner is-calculating${stalled ? " is-stalled" : ""}" role="status" aria-live="polite">
-                    <span class="icon">⏳</span>
-                    <span class="dco-plan-stale-copy">${frappe.utils.escape_html(message)}</span>
-                </div>`);
+            renderRecalcActionBar(wrapper, {
+                title,
+                body,
+                icon: "⏳",
+                extraClass: `is-calculating${stalled ? " is-stalled" : ""}`,
+            });
+            syncOwnedRecalculateButton(frm);
             return;
         }
 
@@ -253,18 +416,23 @@
                 editLayout: true,
             });
             if (stale) wrapper.find(".dco-plan-dirty-note").addClass("is-visible");
+            syncOwnedRecalculateButton(frm);
             return;
         }
 
-        if (!stale) return;
+        if (!stale) {
+            syncOwnedRecalculateButton(frm);
+            return;
+        }
 
-        const staleLine = translateCopy("The cutting plan needs recalculation — press “Recalculate with the current settings” when you finish.");
-        wrapper.prepend(`
-            <div class="dco-plan-stale-banner">
-                <span class="icon">⚡</span>
-                <span class="dco-plan-stale-copy">${frappe.utils.escape_html(staleLine)}</span>
-            </div>`);
+        const copy = staleActionCopy(frm);
+        renderRecalcActionBar(wrapper, {
+            title: copy.title,
+            body: copy.body,
+            icon: "⚡",
+        });
         wrapper.find(".dco-plan-dirty-note").addClass("is-visible");
+        syncOwnedRecalculateButton(frm);
     }
 
     function schedule(frm) {

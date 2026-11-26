@@ -135,6 +135,16 @@
             padding-block:8px !important;
             padding-inline:var(--dco-tab-card-inset-inline, 44px) !important;
         }
+        [data-fieldname="plan_control_actions"] .dco-plan-recalc-action-bar .dco-plan-calculate-host {
+            padding:0 !important;
+            width:auto !important;
+        }
+        [data-fieldname="plan_control_actions"] .dco-plan-recalc-action-bar {
+            width:100% !important;
+            max-width:100% !important;
+            box-sizing:border-box !important;
+            margin:0 0 6px !important;
+        }
         [data-fieldname="cutting_plan_html"] .dco-plan-workspace-chrome {
             width:100% !important;
             max-width:none !important;

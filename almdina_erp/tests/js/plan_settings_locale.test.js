@@ -26,6 +26,9 @@ for (const row of [
     "Panel Saw,منشار ألواح",
     "Cutting plan settings,إعدادات خطة القص",
     "{0} — currently unavailable,{0} — غير متاح حاليًا",
+    "The cutting plan has not been calculated yet,لم تُحسب خطة القص بعد",
+    "The cutting plan needs recalculation,خطة القص تحتاج إعادة حساب",
+    "Finish your changes, then recalculate with the current settings.,أنهِ تعديلاتك ثم أعد الحساب بالإعدادات الحالية.",
 ]) {
     assert.ok(catalog.includes(row), row);
 }
@@ -45,6 +48,12 @@ const french = {
     "Recalculating the cutting plan and cost in the background": "Recalcul en arrière-plan",
     "You can keep working on the order. The cutting plan and cost will update automatically when the calculation finishes.": "Vous pouvez continuer.",
     "The cutting plan needs recalculation — press “Recalculate with the current settings” when you finish.": "Le plan doit être recalculé.",
+    "The cutting plan has not been calculated yet": "Le plan n'a pas encore été calculé.",
+    "Start with “Calculate the cutting plan” using the current settings.": "Commencez par calculer le plan.",
+    "The cutting plan needs recalculation": "Le plan doit être recalculé.",
+    "Finish your changes, then recalculate with the current settings.": "Terminez puis recalculez.",
+    "Press “Edit” to try new settings, then recalculate to preview.": "Appuyez sur Modifier.",
+    "You need the “Recalculate plan” permission to run the engine.": "Permission requise.",
     "Saving cutting plan settings...": "Enregistrement des réglages...",
     "mm": "mm",
     "seconds": "s",
@@ -271,7 +280,10 @@ const fastForm = {
     },
 };
 loaded.window.AlmdinaFastSaveUX.renderStaleState(fastForm);
-assert.match(banners.at(-1), /Le plan doit être recalculé/);
+assert.match(banners.at(-1), /dco-plan-recalc-action-bar/);
+assert.match(banners.at(-1), /data-role="stale-recalc-slot"/);
+assert.match(banners.at(-1), /Le plan n'a pas encore été calculé/);
+assert.match(banners.at(-1), /Permission requise/);
 
 async function exerciseSave() {
     const recorded = [];

@@ -346,12 +346,24 @@
                 height: 36px !important;
                 padding: 0 12px !important;
             }
-            .${ROOT_CLASS} [data-fieldname="plan_control_actions"] .dco-plan-stale-banner {
+            .${ROOT_CLASS} [data-fieldname="plan_control_actions"] .dco-plan-stale-banner.dco-plan-recalc-action-bar {
                 margin: 0 0 6px !important;
                 padding: 6px 10px !important;
-                font-size: 10.5px !important;
-                line-height: 1.45 !important;
+                font-size: var(--alm-font-size-sm, 12px) !important;
+                line-height: 1.3 !important;
                 align-items: center !important;
+                justify-content: flex-start !important;
+                gap: 8px 12px !important;
+                background: var(--alm-warning-bg, #fff7e8) !important;
+                border-color: var(--alm-status-warning-border, rgba(180, 83, 9, 0.24)) !important;
+                color: var(--alm-warning, #b45309) !important;
+            }
+            .${ROOT_CLASS} [data-fieldname="plan_control_actions"] .dco-plan-recalc-action-bar .dco-recalculate-plan.btn {
+                width: auto !important;
+                min-width: 0 !important;
+                background: var(--alm-warning, #b45309) !important;
+                border-color: var(--alm-warning, #b45309) !important;
+                color: #fff !important;
             }
             /* Beat Frappe: body:not(.full-width) .std-form-layout .section-body { max-width: 900px } */
             body:not(.full-width) .${ROOT_CLASS} .std-form-layout .dco-plan-actions-section > .section-head,

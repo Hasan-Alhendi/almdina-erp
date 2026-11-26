@@ -731,7 +731,8 @@
             .dco-plan-settings-editor__recalc-btn.btn:disabled {
                 opacity: 0.55;
             }
-            [data-fieldname="plan_control_actions"]:has(.dco-plan-settings-editor) > .dco-plan-stale-banner {
+            [data-fieldname="plan_control_actions"]:has(.dco-plan-settings-editor) > .dco-plan-stale-banner,
+            [data-fieldname="plan_control_actions"]:has(.dco-plan-settings-editor) > .dco-plan-recalc-action-bar {
                 display: none !important;
             }
             @media (max-width: 575px) {

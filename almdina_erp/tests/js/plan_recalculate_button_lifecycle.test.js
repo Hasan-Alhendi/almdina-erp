@@ -267,6 +267,19 @@ sync();
 assert.equal(buttons().length, 1);
 assert.equal(buttons()[0].textValue, "Calculate the cutting plan");
 assert.equal(buttons()[0].disabled, false);
+
+const actionBar = new Node("dco-plan-stale-banner dco-plan-recalc-action-bar");
+const actionSlot = new Node("");
+actionSlot.attrs["data-role"] = "stale-recalc-slot";
+actionSlot.parent = actionBar;
+actionBar.children.push(actionSlot);
+actionBar.parent = root;
+root.children.unshift(actionBar);
+sync();
+assert.equal(buttons().length, 1);
+assert.equal(buttons()[0].parent.className, "dco-plan-calculate-host");
+assert.equal(buttons()[0].parent.parent, actionSlot);
+
 click(buttons()[0]);
 click(buttons()[0]);
 await flush();
@@ -279,6 +292,7 @@ previewCalls.length = 0;
 readyState({ deduct: 1 });
 sync();
 assert.equal(buttons()[0].disabled, false);
+assert.equal(buttons()[0].parent.parent, actionSlot);
 click(buttons()[0]);
 await flush();
 assert.equal(previewCalls.length, 1);

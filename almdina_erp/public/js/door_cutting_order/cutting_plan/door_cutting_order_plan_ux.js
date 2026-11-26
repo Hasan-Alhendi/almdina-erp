@@ -344,6 +344,10 @@
                     border-radius:10px;
                     font-weight:850;
                 }
+                .dco-plan-recalc-action-bar .dco-plan-calculate-host .dco-recalculate-plan {
+                    width:auto;
+                    min-width:0;
+                }
                 .dco-solver-badge {
                     display:inline-flex;
                     align-items:center;
