@@ -158,10 +158,14 @@ def test_one_operational_file_keeps_one_physical_tool():
 
 
 def test_approved_system_and_uploaded_plans_are_eligible_and_drafts_are_not():
+    from almdina_erp.almdina_erp.domain.cnc.operational_file import BOARD_EDITOR_PLAN_SOURCE
+
     system = assess_approved_plan(_approved(SYSTEM_PLAN_SOURCE), current=True)
     uploaded = assess_approved_plan(_approved(UPLOADED_PLAN_SOURCE), current=True)
+    board_editor = assess_approved_plan(_approved(BOARD_EDITOR_PLAN_SOURCE), current=True)
     assert system.source_type == "System"
     assert uploaded.source_type == "Uploaded DXF"
+    assert board_editor.source_type == "Board Editor"
 
     with pytest.raises(OperationalFileError) as missing:
         assess_approved_plan(None, current=False)
@@ -173,6 +177,10 @@ def test_approved_system_and_uploaded_plans_are_eligible_and_drafts_are_not():
             current=True,
         )
     assert draft.value.code == "draft_plan"
+
+    with pytest.raises(OperationalFileError) as unsupported:
+        assess_approved_plan(_approved("Unknown Source"), current=True)
+    assert unsupported.value.code == "unsupported_plan_source"
 
 
 def test_path_identity_is_stable_and_keeps_geometry_separate_from_settings():

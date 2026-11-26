@@ -38,7 +38,10 @@ SHEET_PRESET_SOURCE = "Sheet"
 APPROVED_PLAN_STATUS = "Approved"
 SYSTEM_PLAN_SOURCE = "System"
 UPLOADED_PLAN_SOURCE = "Uploaded DXF"
-_PLAN_SOURCES = frozenset({SYSTEM_PLAN_SOURCE, UPLOADED_PLAN_SOURCE})
+# Keep aligned with domain.cutting.plan_lifecycle.MANUFACTURING_EXPORT_SOURCES:
+# an approved Board Editor tip is a first-class manufacturing source.
+BOARD_EDITOR_PLAN_SOURCE = "Board Editor"
+_PLAN_SOURCES = frozenset({SYSTEM_PLAN_SOURCE, UPLOADED_PLAN_SOURCE, BOARD_EDITOR_PLAN_SOURCE})
 _INTERNAL_OPERATIONS = ("liner", "recessed_handle_cutout", "back_groove")
 
 
@@ -673,6 +676,7 @@ __all__ = [
     "OPERATIONAL_FILE_STATUSES",
     "SYSTEM_PLAN_SOURCE",
     "UPLOADED_PLAN_SOURCE",
+    "BOARD_EDITOR_PLAN_SOURCE",
     "FACTORY_PRESET_SOURCE",
     "SHEET_PRESET_SOURCE",
     "ApprovedPlanRef",

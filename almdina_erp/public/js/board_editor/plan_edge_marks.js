@@ -3,10 +3,11 @@
 
     // Display-only edge bands. Manufacturing geometry stays untouched.
     // Rectangle inset matches the cutting-plan screen rule: 3px inside the
-    // border, spanning the middle 66.666% of the side.
-    // Corner bands call AlmdinaClippedCornerGeometry (the plan resolver).
+    // border for default bands, farther for non-default, spanning the middle
+    // 66.666% of the side. Corner bands call AlmdinaClippedCornerGeometry.
 
     const SCREEN_INSET_PX = 3;
+    const SCREEN_CUSTOM_INSET_PX = 6;
     const EDGE_SPAN = 66.666;
     const TARGET_FONT_PX = 10;
     const MIN_FONT_PX = 7;
@@ -22,13 +23,13 @@
         return { px, mm: px / safe };
     }
 
-    function insetMm(scale) {
-        return SCREEN_INSET_PX / Math.max(Number(scale) || 0, 0.02);
+    function insetMm(scale, custom = false) {
+        const px = custom ? SCREEN_CUSTOM_INSET_PX : SCREEN_INSET_PX;
+        return px / Math.max(Number(scale) || 0, 0.02);
     }
 
     function rectangleBands(rect, edges, scale) {
         if (!rect || !(rect.w > 0) || !(rect.h > 0) || !edges) return [];
-        const inset = Math.min(insetMm(scale), rect.w * 0.2, rect.h * 0.2);
         const start = (100 - EDGE_SPAN) / 200;
         const end = start + EDGE_SPAN / 100;
         const x0 = rect.x + rect.w * start;
@@ -39,10 +40,27 @@
         const add = (points, custom, side) => bands.push({ points, custom, kind: "edge", side });
         const selected = (side) => Boolean(edges[side] && edges[side].selected);
         const custom = (side) => Boolean(edges[side] && edges[side].custom);
-        if (selected("top")) add([[x0, rect.y + inset], [x1, rect.y + inset]], custom("top"), "top");
-        if (selected("bottom")) add([[x0, rect.y + rect.h - inset], [x1, rect.y + rect.h - inset]], custom("bottom"), "bottom");
-        if (selected("left")) add([[rect.x + inset, y0], [rect.x + inset, y1]], custom("left"), "left");
-        if (selected("right")) add([[rect.x + rect.w - inset, y0], [rect.x + rect.w - inset, y1]], custom("right"), "right");
+        const sideInset = (isCustom) => Math.min(
+            insetMm(scale, isCustom),
+            rect.w * 0.2,
+            rect.h * 0.2,
+        );
+        if (selected("top")) {
+            const inset = sideInset(custom("top"));
+            add([[x0, rect.y + inset], [x1, rect.y + inset]], custom("top"), "top");
+        }
+        if (selected("bottom")) {
+            const inset = sideInset(custom("bottom"));
+            add([[x0, rect.y + rect.h - inset], [x1, rect.y + rect.h - inset]], custom("bottom"), "bottom");
+        }
+        if (selected("left")) {
+            const inset = sideInset(custom("left"));
+            add([[rect.x + inset, y0], [rect.x + inset, y1]], custom("left"), "left");
+        }
+        if (selected("right")) {
+            const inset = sideInset(custom("right"));
+            add([[rect.x + rect.w - inset, y0], [rect.x + rect.w - inset, y1]], custom("right"), "right");
+        }
         return bands;
     }
 
@@ -146,7 +164,18 @@
             h: (Number(piece.placement_cm && piece.placement_cm.h) || 0) * 10,
         };
         if (!(rect.w > 0) || !(rect.h > 0)) return [];
-        const paths = geometry.clippedEdgePaths(source, 100, 100);
+        const hasCustom = ["top", "bottom", "left", "right", "break", "breakOnly"]
+            .some((side) => customSide(source, side, defaultType));
+        const display = displayApi();
+        const customViewInset = display && Number(display.EDGE_BAND_CUSTOM_VIEWBOX_INSET) > 0
+            ? Number(display.EDGE_BAND_CUSTOM_VIEWBOX_INSET)
+            : 4;
+        const paths = geometry.clippedEdgePaths(
+            source,
+            100,
+            100,
+            hasCustom ? { insetPx: customViewInset } : {},
+        );
         const bands = [];
         const take = (key, flag, side) => {
             if (!flag || !paths || !Array.isArray(paths[key]) || paths[key].length < 2) return;
@@ -205,6 +234,7 @@
     window.AlmdinaBoardEditor = window.AlmdinaBoardEditor || {};
     window.AlmdinaBoardEditor.PlanEdgeMarks = Object.freeze({
         SCREEN_INSET_PX,
+        SCREEN_CUSTOM_INSET_PX,
         TARGET_FONT_PX,
         measurementFontMm,
         insetMm,

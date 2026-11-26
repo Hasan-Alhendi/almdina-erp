@@ -407,7 +407,7 @@
             if (!points) return "";
             const paint = (window.AlmdinaEdgeDisplay && window.AlmdinaEdgeDisplay.bandPaint)
                 ? window.AlmdinaEdgeDisplay.bandPaint(band.custom)
-                : { color: band.custom ? "#1d4ed8" : "#d00000", dash: band.custom ? "5 2.5 1.5 2.5" : "" };
+                : { color: band.custom ? "#0f766e" : "#d00000", dash: band.custom ? "5 2.5 1.5 2.5" : "" };
             const color = paint.color;
             const dash = paint.dash ? ` stroke-dasharray="${paint.dash}"` : "";
             const side = band.side ? ` data-edge-side="${esc(band.side)}"` : "";

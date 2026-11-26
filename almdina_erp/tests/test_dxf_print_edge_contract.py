@@ -65,4 +65,4 @@ def test_shared_renderer_draws_edge_markers_on_screen_and_print():
     assert ".dco-edge-line-svg {" in renderer
     assert ".dco-edge-line-svg.dco-edge-line--custom" in renderer
     assert "border-color: #e00000 !important;" in renderer
-    assert "stroke: #1d4ed8 !important;" in renderer
+    assert "stroke: #0f766e !important;" in renderer

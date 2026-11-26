@@ -3122,7 +3122,7 @@ This step saves machining settings only. It does not create a machine file.,هذ
 Save the order before preparing operational files.,احفظ الطلب قبل تجهيز الملفات التشغيلية.
 Loading operational files...,جارٍ تحميل الملفات التشغيلية...
 Operational files could not be loaded.,تعذر تحميل الملفات التشغيلية.
-"This order has no approved cutting plan. Operational files can be prepared only from the current approved plan, whether the system calculated it or it was uploaded and then approved.",لا توجد خطة قص معتمدة لهذا الطلب. لا يمكن تجهيز الملفات التشغيلية إلا من الخطة المعتمدة الحالية، سواء حُسبت في النظام أو رُفعت ثم اعتُمدت.
+"This order has no approved cutting plan. Operational files can be prepared only from the current approved plan, whether the system calculated it, it was uploaded, or it was prepared in the Board Editor and then approved.",لا توجد خطة قص معتمدة لهذا الطلب. لا يمكن تجهيز الملفات التشغيلية إلا من الخطة المعتمدة الحالية، سواء حُسبت في النظام أو رُفعت أو أُعدّت في محرر الألواح ثم اعتُمدت.
 This approved plan source cannot be used for operational files.,لا يمكن استخدام مصدر هذه الخطة المعتمدة للملفات التشغيلية.
 The approved plan is missing a stable piece identity.,الخطة المعتمدة تفتقد هوية ثابتة للدرفة.
 The approved plan liner setup cannot be read.,تعذر قراءة إعداد اللاينر في الخطة المعتمدة.

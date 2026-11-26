@@ -83,8 +83,8 @@ from almdina_erp.almdina_erp.infrastructure.frappe.cnc_operational_file_reposito
 
 _NO_APPROVED_PLAN = (
     "This order has no approved cutting plan. Operational files can be prepared "
-    "only from the current approved plan, whether the system calculated it or "
-    "it was uploaded and then approved."
+    "only from the current approved plan, whether the system calculated it, "
+    "it was uploaded, or it was prepared in the Board Editor and then approved."
 )
 _MESSAGES = {
     "no_approved_plan": _NO_APPROVED_PLAN,

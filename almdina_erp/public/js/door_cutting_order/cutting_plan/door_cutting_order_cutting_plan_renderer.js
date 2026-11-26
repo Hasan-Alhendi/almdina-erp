@@ -158,9 +158,12 @@
     }
 
     const EDGE_BAND_DEFAULT_COLOR = "#d00000";
-    const EDGE_BAND_CUSTOM_COLOR = "#1d4ed8";
+    // Keep in sync with AlmdinaEdgeDisplay: teal non-default bands on cyan fills.
+    const EDGE_BAND_CUSTOM_COLOR = "#0f766e";
     // CSS px dash-dot so zoom/print scale keeps the pattern readable.
     const EDGE_BAND_CUSTOM_DASHARRAY = "5px 2.5px 1.5px 2.5px";
+    const EDGE_BAND_DEFAULT_VIEWBOX_INSET = 1;
+    const EDGE_BAND_CUSTOM_VIEWBOX_INSET = 4;
     const EDGE_TYPE_OVERRIDE_FIELDS = Object.freeze([
         "edge_long_right_type_override",
         "edge_long_left_type_override",
@@ -239,6 +242,16 @@
 
     function piece_edge_custom_flags(frm, piece, geometryModel = null) {
         return edgeDisplay().pieceEdgeCustomFlags(piece, defaultEdgeTypeName(frm), geometryModel);
+    }
+
+    function edgeViewBoxInset(custom) {
+        const display = window.AlmdinaEdgeDisplay;
+        if (display && typeof display.bandPaint === "function") {
+            return Number(display.bandPaint(Boolean(custom)).viewBoxInset) || (
+                custom ? EDGE_BAND_CUSTOM_VIEWBOX_INSET : EDGE_BAND_DEFAULT_VIEWBOX_INSET
+            );
+        }
+        return custom ? EDGE_BAND_CUSTOM_VIEWBOX_INSET : EDGE_BAND_DEFAULT_VIEWBOX_INSET;
     }
 
     function svgEdgeLineMarkup(x1, y1, x2, y2, custom) {
@@ -382,16 +395,26 @@
         return piece;
     }
 
+    function cornerEdgeBandOptions(sideCustom) {
+        const options = {
+            inheritStroke: true,
+            sideCustom,
+            customColor: EDGE_BAND_CUSTOM_COLOR,
+            customDasharray: EDGE_BAND_CUSTOM_DASHARRAY,
+        };
+        // When any non-default band is present, pull the drawn paths farther
+        // from the outline so the dash-dot mark is not glued to the border.
+        if (sideCustom && Object.values(sideCustom).some(Boolean)) {
+            options.insetPx = EDGE_BAND_CUSTOM_VIEWBOX_INSET;
+        }
+        return options;
+    }
+
     function posedCornerEdgeMarkup(piece, geometry, sideCustom) {
         // A baked nesting rotation is already the system-plan corner model.
         // Do not rebuild those bands in the unrotated frame.
         if (piece && piece.rotated && !(Math.abs(Number(piece.rotation_deg) || 0) > 1e-6)) {
-            return geometry.edgeBandSvgMarkup(piece, 100, 100, {
-                inheritStroke: true,
-                sideCustom,
-                customColor: EDGE_BAND_CUSTOM_COLOR,
-                customDasharray: EDGE_BAND_CUSTOM_DASHARRAY,
-            });
+            return geometry.edgeBandSvgMarkup(piece, 100, 100, cornerEdgeBandOptions(sideCustom));
         }
         // Build bands in the unrotated manufacturing frame, then apply the same
         // session rotation that posed the usable-sheet outline — never twice.
@@ -415,12 +438,7 @@
             original_h: heightMm / 10,
         };
         if (!(Math.abs(angle) > 1e-6)) {
-            return geometry.edgeBandSvgMarkup(localPiece, 100, 100, {
-                inheritStroke: true,
-                sideCustom,
-                customColor: EDGE_BAND_CUSTOM_COLOR,
-                customDasharray: EDGE_BAND_CUSTOM_DASHARRAY,
-            });
+            return geometry.edgeBandSvgMarkup(localPiece, 100, 100, cornerEdgeBandOptions(sideCustom));
         }
         if (typeof geometry.points !== "function") return "";
         const localOutline = geometry.points(localPiece, widthMm, heightMm);
@@ -441,7 +459,10 @@
         const spanX = maxX - minX;
         const spanY = maxY - minY;
         if (!(spanX > 1e-6) || !(spanY > 1e-6)) return "";
-        const paths = geometry.clippedEdgePaths(localPiece, widthMm, heightMm);
+        const pathOptions = Object.values(sideCustom || {}).some(Boolean)
+            ? { insetPx: EDGE_BAND_CUSTOM_VIEWBOX_INSET }
+            : {};
+        const paths = geometry.clippedEdgePaths(localPiece, widthMm, heightMm, pathOptions);
         const toView = (path) => (path || []).map((point) => {
             const rotated = rotateCornerBandPoint(point, pivot, angle);
             return [
@@ -507,12 +528,7 @@
         };
         const markup = isPosedUsableSheetGeometry(piece)
             ? posedCornerEdgeMarkup(edgePiece, geometry, sideCustom)
-            : geometry.edgeBandSvgMarkup(edgePiece, 100, 100, {
-                inheritStroke: true,
-                sideCustom,
-                customColor: EDGE_BAND_CUSTOM_COLOR,
-                customDasharray: EDGE_BAND_CUSTOM_DASHARRAY,
-            });
+            : geometry.edgeBandSvgMarkup(edgePiece, 100, 100, cornerEdgeBandOptions(sideCustom));
         if (!markup) return "";
         const pathData = (
             geometryModel
@@ -557,10 +573,22 @@
         if (geometryModel && geometryModel.vector) {
             const lines = [];
             const end = EDGE_LINE_START + EDGE_LINE_PERCENT;
-            if (left) lines.push(svgEdgeLineMarkup(1, EDGE_LINE_START, 1, end, custom.left));
-            if (right) lines.push(svgEdgeLineMarkup(99, EDGE_LINE_START, 99, end, custom.right));
-            if (top) lines.push(svgEdgeLineMarkup(EDGE_LINE_START, 1, end, 1, custom.top));
-            if (bottom) lines.push(svgEdgeLineMarkup(EDGE_LINE_START, 99, end, 99, custom.bottom));
+            if (left) {
+                const insetX = edgeViewBoxInset(custom.left);
+                lines.push(svgEdgeLineMarkup(insetX, EDGE_LINE_START, insetX, end, custom.left));
+            }
+            if (right) {
+                const insetX = edgeViewBoxInset(custom.right);
+                lines.push(svgEdgeLineMarkup(100 - insetX, EDGE_LINE_START, 100 - insetX, end, custom.right));
+            }
+            if (top) {
+                const insetY = edgeViewBoxInset(custom.top);
+                lines.push(svgEdgeLineMarkup(EDGE_LINE_START, insetY, end, insetY, custom.top));
+            }
+            if (bottom) {
+                const insetY = edgeViewBoxInset(custom.bottom);
+                lines.push(svgEdgeLineMarkup(EDGE_LINE_START, 100 - insetY, end, 100 - insetY, custom.bottom));
+            }
             if (!lines.length) return "";
             return `
                 <svg class="dco-piece-edge-svg" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true" style="position:absolute;inset:0;width:100%;height:100%;z-index:3;overflow:hidden;">
@@ -574,30 +602,31 @@
         // non-default sides use an SVG dash-dot stroke for print-safe patterning.
         const customSvgLines = [];
         const end = EDGE_LINE_START + EDGE_LINE_PERCENT;
+        const customInset = edgeViewBoxInset(true);
         if (left) {
             if (custom.left) {
-                customSvgLines.push(svgEdgeLineMarkup(1, EDGE_LINE_START, 1, end, true));
+                customSvgLines.push(svgEdgeLineMarkup(customInset, EDGE_LINE_START, customInset, end, true));
             } else {
                 html += `<span class="dco-edge-line" style="position:absolute;left:${inset};top:${EDGE_LINE_START}%;height:${EDGE_LINE_PERCENT}%;border-left:${thickness} solid ${color};z-index:3;"></span>`;
             }
         }
         if (right) {
             if (custom.right) {
-                customSvgLines.push(svgEdgeLineMarkup(99, EDGE_LINE_START, 99, end, true));
+                customSvgLines.push(svgEdgeLineMarkup(100 - customInset, EDGE_LINE_START, 100 - customInset, end, true));
             } else {
                 html += `<span class="dco-edge-line" style="position:absolute;right:${inset};top:${EDGE_LINE_START}%;height:${EDGE_LINE_PERCENT}%;border-right:${thickness} solid ${color};z-index:3;"></span>`;
             }
         }
         if (top) {
             if (custom.top) {
-                customSvgLines.push(svgEdgeLineMarkup(EDGE_LINE_START, 1, end, 1, true));
+                customSvgLines.push(svgEdgeLineMarkup(EDGE_LINE_START, customInset, end, customInset, true));
             } else {
                 html += `<span class="dco-edge-line" style="position:absolute;top:${inset};left:${EDGE_LINE_START}%;width:${EDGE_LINE_PERCENT}%;border-top:${thickness} solid ${color};z-index:3;"></span>`;
             }
         }
         if (bottom) {
             if (custom.bottom) {
-                customSvgLines.push(svgEdgeLineMarkup(EDGE_LINE_START, 99, end, 99, true));
+                customSvgLines.push(svgEdgeLineMarkup(EDGE_LINE_START, 100 - customInset, end, 100 - customInset, true));
             } else {
                 html += `<span class="dco-edge-line" style="position:absolute;bottom:${inset};left:${EDGE_LINE_START}%;width:${EDGE_LINE_PERCENT}%;border-bottom:${thickness} solid ${color};z-index:3;"></span>`;
             }
@@ -2624,7 +2653,7 @@ ${printHeaderCss()}
 }
 .dco-edge-line-svg.dco-edge-line--custom,
 .dco-piece-edge-svg .dco-edge-line-svg.dco-edge-line--custom {
-    stroke: #1d4ed8 !important;
+    stroke: #0f766e !important;
     stroke-dasharray: 3.2pt 1.6pt 0.9pt 1.6pt !important;
     stroke-linecap: butt !important;
     -webkit-print-color-adjust: exact !important;

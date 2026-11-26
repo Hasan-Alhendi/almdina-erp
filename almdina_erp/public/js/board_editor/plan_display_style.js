@@ -13,7 +13,7 @@
     const EXACT_SPECIAL_FILL = "#ffe5ad";
     const SPECIAL_STROKE = "#7a4c13";
     const EDGE_DEFAULT = "#d00000";
-    const EDGE_CUSTOM = "#1d4ed8";
+    const EDGE_CUSTOM = "#0f766e";
     const EDGE_DASH = "5 2.5 1.5 2.5";
     const LINER = "#1d6fbf";
     const BACK_GROOVE = "#2a7d4f";

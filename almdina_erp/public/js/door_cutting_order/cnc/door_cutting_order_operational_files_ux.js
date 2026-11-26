@@ -1074,7 +1074,7 @@
 
     function paint(frm, root, workspace) {
         if (!workspace.eligible) {
-            root.innerHTML = `<div class="dco-operational-files" role="status"><p>${escapeHtml(workspace.message || translate("This order has no approved cutting plan. Operational files can be prepared only from the current approved plan, whether the system calculated it or it was uploaded and then approved."))}</p></div>`;
+            root.innerHTML = `<div class="dco-operational-files" role="status"><p>${escapeHtml(workspace.message || translate("This order has no approved cutting plan. Operational files can be prepared only from the current approved plan, whether the system calculated it, it was uploaded, or it was prepared in the Board Editor and then approved."))}</p></div>`;
             return;
         }
         const sheets = Array.isArray(workspace.sheets) ? workspace.sheets : [];
@@ -2564,7 +2564,7 @@
                 const workspace = (response && response.message) || {};
                 workspace.order_name = workspace.order_name || orderName;
                 if (!workspace.eligible) {
-                    main.innerHTML = `<div class="dco-cnc-sheet-page" role="status"><p>${escapeHtml(workspace.message || translate("This order has no approved cutting plan. Operational files can be prepared only from the current approved plan, whether the system calculated it or it was uploaded and then approved."))}</p></div>`;
+                    main.innerHTML = `<div class="dco-cnc-sheet-page" role="status"><p>${escapeHtml(workspace.message || translate("This order has no approved cutting plan. Operational files can be prepared only from the current approved plan, whether the system calculated it, it was uploaded, or it was prepared in the Board Editor and then approved."))}</p></div>`;
                     return;
                 }
                 const sheet = (workspace.sheets || []).find(item => Number(item.sheet_no) === sheetNo);

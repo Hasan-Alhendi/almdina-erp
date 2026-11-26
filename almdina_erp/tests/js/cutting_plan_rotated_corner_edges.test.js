@@ -681,12 +681,12 @@ const posedLHtml = renderer.build(frm, planFor(posedL));
 assert.equal(posedLHtml.includes('data-geometry-source="dxf"'), true);
 assert.ok(polylines(posedLHtml).length >= 3, "posed L keeps top/left/break bands without quarter-turns");
 assert.match(posedLHtml, /stroke="#d00000"/);
-assert.match(posedLHtml, /stroke="#1d4ed8"/);
+assert.match(posedLHtml, /stroke="#0f766e"/);
 assert.match(posedLHtml, /dco-edge-break-svg/);
 assert.equal(
     edgePolylineClasses(posedLHtml).some((value) => value.includes("dco-edge-line--custom")),
     true,
-    "empty override inherits; explicit override paints custom blue",
+    "empty override inherits; explicit override paints custom teal",
 );
 
 const posedClipBreakOnly = posedBoardEditorCorner("Clipped Corner", {
@@ -832,7 +832,12 @@ function reflectX(points, width) {
             },
         };
         const html = renderer.build(frm, planFor(piece));
-        const expected = polylines(geometry.edgeBandSvgMarkup(oriented, 100, 100, { inheritStroke: true }));
+        // Non-default overrides use the shared custom viewBox inset (4), not the
+        // geometry default 3.5% inset used for all-default corner bands.
+        const expected = polylines(geometry.edgeBandSvgMarkup(oriented, 100, 100, {
+            inheritStroke: true,
+            insetPx: 4,
+        }));
         assert.deepEqual(polylines(html), expected, `${pieceType} mirror turn ${turns} bands`);
         assert.equal(piece.geometry.outer, storedOuter, `${pieceType} mirror turn ${turns} does not rewrite DXF`);
         assert.match(html, /dco-edge-break-svg/, `${pieceType} mirror turn ${turns} keeps the corner strap`);

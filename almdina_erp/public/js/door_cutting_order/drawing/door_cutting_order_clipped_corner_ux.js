@@ -777,7 +777,7 @@
         const inheritStroke = options.inheritStroke !== false;
         const color = options.color || "#d00000";
         const strokeWidth = options.strokeWidth || 3;
-        const customColor = options.customColor || "#1d4ed8";
+        const customColor = options.customColor || "#0f766e";
         // Screen-space dash-dot (CSS px) so board zoom does not stretch the pattern.
         const customDash = options.customDasharray || "5px 2.5px 1.5px 2.5px";
         const sideCustom = options.sideCustom || {};

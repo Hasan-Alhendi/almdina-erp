@@ -8,11 +8,15 @@
     if (window.AlmdinaEdgeDisplay) return;
 
     const EDGE_BAND_DEFAULT_COLOR = "#d00000";
-    const EDGE_BAND_CUSTOM_COLOR = "#1d4ed8";
+    // Teal keeps non-default bands distinct from the cyan piece fill and red default.
+    const EDGE_BAND_CUSTOM_COLOR = "#0f766e";
     const EDGE_BAND_CUSTOM_DASHARRAY = "5px 2.5px 1.5px 2.5px";
     const EDGE_BAND_CUSTOM_DASH = "5 2.5 1.5 2.5";
     const EDGE_STROKE_PX = 3;
     const EDGE_INSET_PX = 3;
+    // Screen/plan viewBox inset for non-default bands (farther from the piece border).
+    const EDGE_CUSTOM_INSET_PX = 6;
+    const EDGE_BAND_CUSTOM_VIEWBOX_INSET = 4;
     const EDGE_SPAN = 66.666;
     const BOARD_TITLE_PX = 11.5;
     const BOARD_STATS_PX = 9;
@@ -162,7 +166,8 @@
                 dash: EDGE_BAND_CUSTOM_DASH,
                 dashCss: EDGE_BAND_CUSTOM_DASHARRAY,
                 widthPx: EDGE_STROKE_PX,
-                insetPx: EDGE_INSET_PX,
+                insetPx: EDGE_CUSTOM_INSET_PX,
+                viewBoxInset: EDGE_BAND_CUSTOM_VIEWBOX_INSET,
                 span: EDGE_SPAN,
             };
         }
@@ -173,6 +178,7 @@
             dashCss: "",
             widthPx: EDGE_STROKE_PX,
             insetPx: EDGE_INSET_PX,
+            viewBoxInset: 1,
             span: EDGE_SPAN,
         };
     }
@@ -234,6 +240,8 @@
         EDGE_BAND_CUSTOM_DASH,
         EDGE_STROKE_PX,
         EDGE_INSET_PX,
+        EDGE_CUSTOM_INSET_PX,
+        EDGE_BAND_CUSTOM_VIEWBOX_INSET,
         EDGE_SPAN,
         BOARD_TITLE_PX,
         BOARD_STATS_PX,

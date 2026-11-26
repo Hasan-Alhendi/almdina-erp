@@ -19,12 +19,13 @@ const rendererSource = read("cutting_plan/door_cutting_order_cutting_plan_render
 assert.match(catalog, /^Default edge banding,قشاط افتراضي$/m);
 assert.match(catalog, /^Non-default edge banding,قشاط غير افتراضي$/m);
 assert.match(rendererSource, /dco-edge-line--custom/);
-assert.match(rendererSource, /#1d4ed8/);
+assert.match(rendererSource, /#0f766e/);
 assert.match(rendererSource, /EDGE_BAND_CUSTOM_DASHARRAY/);
+assert.match(rendererSource, /EDGE_BAND_CUSTOM_VIEWBOX_INSET/);
 assert.match(rendererSource, /render_edge_band_legend/);
 assert.match(
     rendererSource,
-    /\.dco-edge-line-svg\.dco-edge-line--custom[\s\S]*?#1d4ed8 !important/,
+    /\.dco-edge-line-svg\.dco-edge-line--custom[\s\S]*?#0f766e !important/,
 );
 assert.match(
     rendererSource,
@@ -142,14 +143,14 @@ const oneCustom = regularPiece({
     edge_width_top_type_override: "ABS Special",
 });
 const oneCustomHtml = renderer.build(frm, planFor(oneCustom));
-assert.match(oneCustomHtml, /dco-edge-line--custom[^>]*stroke="#1d4ed8"/);
+assert.match(oneCustomHtml, /dco-edge-line--custom[^>]*stroke="#0f766e"/);
 assert.match(oneCustomHtml, /stroke-dasharray="5px 2\.5px 1\.5px 2\.5px"/);
 assert.equal((oneCustomHtml.match(/dco-edge-line--custom/g) || []).length, 1);
 assert.equal((oneCustomHtml.match(/border-(?:left|right|top|bottom):3px solid #d00000/g) || []).length, 3);
-// Custom top must be the SVG near y=1, not a misplaced side.
+// Custom top sits farther from the border than the old y=1 glue point.
 assert.match(
     oneCustomHtml,
-    /dco-edge-line--custom[^>]*y1="1"[^>]*y2="1"|dco-edge-line--custom[^>]*y1="1"/,
+    /dco-edge-line--custom[^>]*y1="4"[^>]*y2="4"|dco-edge-line--custom[^>]*y1="4"/,
 );
 
 const mixed = regularPiece({
@@ -184,7 +185,7 @@ assert.equal(rotatedFlags.top, 1);
 assert.equal(rotatedCustomFlags.top, 1);
 assert.equal(rotatedCustomFlags.left, 0);
 const rotatedHtml = renderer.build(frm, planFor(rotatedCustom));
-assert.match(rotatedHtml, /dco-edge-line--custom[^>]*(?:y1="1"|x1="16\.667")/);
+assert.match(rotatedHtml, /dco-edge-line--custom[^>]*(?:y1="4"|x1="16\.667")/);
 
 const allFourCustom = regularPiece({
     edge_long_right_type_override: "A",

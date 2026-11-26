@@ -268,7 +268,7 @@ const top = bands.find((band) => band.side === "top");
 assert.ok(left && right && top);
 assert.equal(left.stroke, "#d00000");
 assert.equal(left.dash, false);
-assert.equal(right.stroke, "#1d4ed8");
+assert.equal(right.stroke, "#0f766e");
 assert.equal(right.dash, true);
 assert.equal(bands.some((band) => band.side === "bottom"), false);
 
@@ -423,7 +423,7 @@ const mixedView = renderPiece({
     scale: 0.25, opened: true, userAdjusted: true, columns: 1, scrollX: 0, scrollY: 0, fitted: false, cameraToken: 10,
 }, "PVC Default");
 const mixedBands = parseBands(mixedView.host.innerHTML);
-assert.equal(mixedBands.find((band) => band.side === "left").stroke, "#1d4ed8");
+assert.equal(mixedBands.find((band) => band.side === "left").stroke, "#0f766e");
 assert.equal(mixedBands.find((band) => band.side === "left").dash, true);
 assert.equal(mixedBands.find((band) => band.side === "right").stroke, "#d00000");
 assert.equal(mixedBands.find((band) => band.side === "top").dash, false);
@@ -449,7 +449,7 @@ const rotatedView = renderPiece(rotatedPiece, {
     scale: 0.25, opened: true, userAdjusted: true, columns: 1, scrollX: 0, scrollY: 0, fitted: false, cameraToken: 11,
 }, "PVC Default");
 const rotatedBands = parseBands(rotatedView.host.innerHTML);
-assert.equal(rotatedBands.find((band) => band.side === "top").stroke, "#1d4ed8");
+assert.equal(rotatedBands.find((band) => band.side === "top").stroke, "#0f766e");
 assert.equal(rotatedBands.find((band) => band.side === "bottom").stroke, "#d00000");
 
 const breakPiece = cornerPiece({
@@ -560,7 +560,7 @@ const clippedView = renderPiece(clipped, cornerElement(clipped), {
 const clippedBands = parseBands(clippedView.host.innerHTML);
 assert.deepEqual(clippedBands.map((band) => band.side).sort(), ["break", "right", "top"]);
 const breakBand = clippedBands.find((band) => band.side === "break");
-assert.equal(breakBand.stroke, "#1d4ed8");
+assert.equal(breakBand.stroke, "#0f766e");
 assert.equal(breakBand.dash, true);
 const plain = clippedBands.find((band) => band.side === "top");
 assert.equal(plain.stroke, "#d00000");
