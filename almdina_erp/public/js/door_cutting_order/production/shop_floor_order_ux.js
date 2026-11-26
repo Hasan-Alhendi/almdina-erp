@@ -542,9 +542,14 @@
 		}
 		// Standalone toolbar button — not nested under «صالة الإنتاج».
 		// Keep the Frappe button reference; never re-find by visible label.
-		const button = frm.add_custom_button(translate("Send to production"), () => openDispatchDialog(frm));
+		const label = translate("Send to production");
+		const button = frm.add_custom_button(label, () => openDispatchDialog(frm));
 		if (button && typeof button.addClass === "function") {
 			button.addClass("dco-dispatch-toolbar-button");
+		}
+		const icons = window.AlmdinaDcoPageActionIcons;
+		if (icons && typeof icons.ensure === "function") {
+			icons.ensure(button, { icon: "send", label });
 		}
 	}
 

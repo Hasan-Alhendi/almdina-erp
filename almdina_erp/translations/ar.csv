@@ -1424,6 +1424,7 @@ A WhatsApp message will not be sent because the session is disconnected.,لن ي
 "Save the order first, then send the measurements table.",احفظ الطلب أولاً ثم أرسل جدول القياسات.
 Send measurements via WhatsApp,إرسال القياسات عبر واتساب
 Send measurement changes via WhatsApp,إرسال تعديلات القياسات عبر واتساب
+Share Changes,مشاركة التعديلات
 Sending WhatsApp…,جاري إرسال واتساب...
 Could not reach the server.,تعذر الاتصال بالخادم.
 Could not identify the order for sending measurements.,تعذر تحديد الطلب لإرسال القياسات.

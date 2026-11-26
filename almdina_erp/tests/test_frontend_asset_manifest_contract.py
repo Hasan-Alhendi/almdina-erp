@@ -27,7 +27,7 @@ def test_global_asset_order_is_frozen_during_manifest_extraction():
     css = manifest["app_include_css"]
     js = manifest["app_include_js"]
     responsive = "/assets/almdina_erp/css/door_cutting_order_responsive.css"
-    presentation = "/assets/almdina_erp/css/door_cutting_order_form_presentation.css?v=3"
+    presentation = "/assets/almdina_erp/css/door_cutting_order_form_presentation.css?v=4"
     sidebar = "/assets/almdina_erp/css/door_cutting_order_form_sidebar.css"
     assert css.count(presentation) == 1
     assert css.count(sidebar) == 1
@@ -56,11 +56,12 @@ def test_door_cutting_order_asset_order_is_frozen_during_manifest_extraction():
     owner = "public/js/door_cutting_order/core/door_cutting_order_form_presentation_owner.js"
     edit = "public/js/door_cutting_order/core/door_cutting_order_edit_session_coordinator.js"
     header = "public/js/door_cutting_order/responsive/door_cutting_order_header_ux.js"
+    action_icons = "public/js/door_cutting_order/core/door_cutting_order_page_action_icons.js"
     toolbar = "public/js/door_cutting_order/core/door_cutting_order_toolbar_stability_ux.js"
-    for asset in (context, sidebar, owner, edit, header, toolbar):
+    for asset in (context, sidebar, owner, edit, header, action_icons, toolbar):
         assert assets.count(asset) == 1, asset
     assert assets.index(context) < assets.index(sidebar) < assets.index(owner) < assets.index(edit)
-    assert assets.index(owner) < assets.index(header) < assets.index(toolbar)
+    assert assets.index(owner) < assets.index(header) < assets.index(action_icons) < assets.index(toolbar)
     assert manifest["doctype_js"]["Edge Banding Type"] == "public/js/edge_banding_type_ux.js"
     assert manifest["doctype_js"]["Production Routing"] == "public/js/production_routing_ux.js"
     assert manifest["doctype_js"]["Role"] == "public/js/role_form_ux.js"

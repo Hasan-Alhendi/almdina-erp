@@ -193,7 +193,8 @@ assert.equal(delivery.fakeWindow.AlmdinaDcoEditSessionCoordinator.kind, "order")
 assert.equal(delivery.ux.CONFIRM_MESSAGE, "Send the measurements file to the customer?");
 assert.equal(delivery.ux.AMENDMENT_CONFIRM_MESSAGE, "Send the measurement changes to the customer?");
 assert.equal(delivery.ux.BUTTON_ACTION_LABEL, "Send measurements via WhatsApp");
-assert.equal(delivery.ux.BUTTON_LABEL_AMENDMENT, "Send measurement changes via WhatsApp");
+assert.equal(delivery.ux.BUTTON_LABEL_AMENDMENT, "Share Changes");
+assert.equal(delivery.ux.BUTTON_LABEL_VISIBLE, "Share Changes");
 
 const invoiceToolbarSource = fs.readFileSync(
     path.resolve(
@@ -229,12 +230,12 @@ function savedDraft(overrides = {}) {
 const firstSaveFrm = savedDraft({ __almdina_whatsapp_just_created: true });
 assert.equal(delivery.ux.isAmendmentContext(firstSaveFrm), false);
 assert.equal(delivery.ux.confirmMessage(firstSaveFrm), delivery.ux.CONFIRM_MESSAGE);
-assert.equal(delivery.ux.buttonLabel(firstSaveFrm), delivery.ux.BUTTON_ACTION_LABEL);
+assert.equal(delivery.ux.buttonLabel(firstSaveFrm), delivery.ux.BUTTON_LABEL_VISIBLE);
 
 const editedFrm = savedDraft({ __almdina_whatsapp_amendment: true });
 assert.equal(delivery.ux.isAmendmentContext(editedFrm), true);
 assert.equal(delivery.ux.confirmMessage(editedFrm), delivery.ux.AMENDMENT_CONFIRM_MESSAGE);
-assert.equal(delivery.ux.buttonLabel(editedFrm), delivery.ux.BUTTON_LABEL_AMENDMENT);
+assert.equal(delivery.ux.buttonLabel(editedFrm), delivery.ux.BUTTON_LABEL_VISIBLE);
 
 assert.equal(delivery.ux.canShowSendButton({
     doctype: "Door Cutting Order",

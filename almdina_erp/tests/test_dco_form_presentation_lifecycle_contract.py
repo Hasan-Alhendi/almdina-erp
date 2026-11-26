@@ -121,15 +121,18 @@ def test_static_styles_load_with_manifest_and_are_not_injected_at_refresh():
     toolbar = text(TOOLBAR)
 
     assert assets.count('"/assets/almdina_erp/css/door_cutting_order_form_sidebar.css"') == 1
-    assert assets.count('"/assets/almdina_erp/css/door_cutting_order_form_presentation.css?v=3"') == 1
-    assert '"/assets/almdina_erp/css/door_cutting_order_form_presentation.css?v=3"' in assets
+    assert assets.count('"/assets/almdina_erp/css/door_cutting_order_form_presentation.css?v=4"') == 1
+    assert '"/assets/almdina_erp/css/door_cutting_order_form_presentation.css?v=4"' in assets
+    assert "door_cutting_order_page_action_icons.js" in assets
     assert ".dco-sticky-tabs .nav-link.active" in css
     assert ".page-head.dco-stable-actions-head .page-actions" in css
     assert ".page-head.dco-responsive-head .page-actions" in css
-    assert "position:static!important" in css
+    assert re.search(r"position:\s*static\s*!important", css)
     assert "position: fixed !important" in css
-    assert "margin-inline-start:auto!important" in css
+    assert re.search(r"margin-inline-start:\s*auto\s*!important", css)
     assert "border-radius" in css
+    assert "--dco-nav-cluster-gap" in css
+    assert "--dco-nav-end-inset" in css
     assert "style.textContent" not in header and "style.textContent" not in toolbar
     assert "node almdina_erp/tests/js/dco_form_presentation_owner.test.js" in text(STATIC_WORKFLOW)
     assert "node almdina_erp/tests/js/dco_form_presentation_owner.test.js" in text(DCO_WORKFLOW)
@@ -165,8 +168,9 @@ def test_native_tab_row_keeps_inner_flex_contract_and_outer_sticky_geometry():
     inner_row_selectors = {
         ".dco-operator-form .dco-sticky-tabs .form-tabs-list",
         ".dco-operator-form .dco-sticky-tabs .nav-tabs",
-        ".dco-operator-form .dco-sticky-tabs > .form-tabs",
-        ".dco-operator-form .form-tabs-list.dco-sticky-tabs > .form-tabs",
+        # CSS source keeps the child combinator compact (no spaces around '>').
+        ".dco-operator-form .dco-sticky-tabs>.form-tabs",
+        ".dco-operator-form .form-tabs-list.dco-sticky-tabs>.form-tabs",
     }
     flex_rules = [
         selectors

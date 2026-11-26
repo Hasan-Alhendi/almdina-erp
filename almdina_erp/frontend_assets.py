@@ -20,10 +20,10 @@ app_include_css = [
     "/assets/almdina_erp/css/role_form.css?v=2",
     "/assets/almdina_erp/css/door_cutting_order_measurement_structure.css",
     "/assets/almdina_erp/css/door_cutting_order_responsive.css",
-    "/assets/almdina_erp/css/door_cutting_order_form_tab_layout.css?v=8",
+    "/assets/almdina_erp/css/door_cutting_order_form_tab_layout.css?v=9",
     "/assets/almdina_erp/css/door_cutting_order_plan_workspace_layout.css?v=13",
     "/assets/almdina_erp/css/door_cutting_order_plan_workspace_shell.css?v=14",
-    "/assets/almdina_erp/css/door_cutting_order_form_presentation.css?v=3",
+    "/assets/almdina_erp/css/door_cutting_order_form_presentation.css?v=4",
     "/assets/almdina_erp/css/door_cutting_order_form_sidebar.css",
     # Raw /assets paths are not content-fingerprinted by Frappe; bump the bounded
     # DCO list revision when its presentation contract changes.
@@ -171,6 +171,8 @@ doctype_js = {
         "public/js/door_cutting_order/core/door_cutting_order_tab_permissions_ux.js",
         "public/js/door_cutting_order/core/door_cutting_order_permission_refresh_ux.js",
         "public/js/door_cutting_order/responsive/door_cutting_order_header_ux.js",
+        # Idempotent leading icons for DCO page actions (notes / WhatsApp / dispatch / cancel).
+        "public/js/door_cutting_order/core/door_cutting_order_page_action_icons.js",
         # Collaboration is independent from the DCO save/revision lifecycle. This
         # adapter only mounts a button and opens the globally reusable NotesPanel.
         "public/js/door_cutting_order/notes/door_cutting_order_notes_ux.js",

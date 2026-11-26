@@ -137,8 +137,15 @@
 
     function actionLabel(node) {
         if (!node) return "";
-        if (node.matches("button,a")) return text(node);
+        if (node.matches("button,a")) {
+            const labeled = node.querySelector("[data-dco-action-label]");
+            return text(labeled || node);
+        }
         const trigger = node.querySelector(":scope > button, :scope > a");
+        if (trigger) {
+            const triggerLabel = trigger.querySelector("[data-dco-action-label]");
+            if (triggerLabel) return text(triggerLabel);
+        }
         return text(trigger || node);
     }
 

@@ -64,6 +64,53 @@
     box-shadow: none;
 }
 
+.dco-operator-form .page-head .page-actions .btn.icon-btn {
+    width: var(--btn-height, 28px);
+    min-width: var(--btn-height, 28px);
+    height: var(--btn-height, 28px);
+    min-height: var(--btn-height, 28px);
+    padding: 0;
+    border-radius: 999px;
+}
+
+.dco-operator-form .page-head .page-actions .btn.dco-page-action-with-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+}
+
+.dco-operator-form .page-head .page-actions .dco-page-action-icon {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    line-height: 0;
+    color: inherit;
+}
+
+.dco-operator-form .page-head .page-actions .dco-page-action-icon svg,
+.dco-operator-form .page-head .page-actions .dco-page-action-icon .icon {
+    display: block;
+    width: 16px;
+    height: 16px;
+    color: inherit;
+    stroke: currentColor;
+}
+
+.dco-operator-form .page-head .page-actions .dco-page-action-icon[data-dco-action-icon="whatsapp"] svg {
+    stroke: none;
+    fill: currentColor;
+}
+
+.dco-operator-form .page-head .page-actions .dco-page-action-label {
+    display: inline-block;
+    line-height: 1.2;
+    white-space: nowrap;
+}
+
 .dco-operator-form .page-head .page-actions .btn.btn-danger {
     color: var(--alm-status-danger-fg, #b91c1c);
     background: var(--alm-danger-soft, #fff1f2);
@@ -74,6 +121,44 @@
     color: var(--alm-accent, #2563eb);
     background: var(--alm-accent-soft, #eff6ff);
     border-color: color-mix(in srgb, var(--alm-accent, #2563eb) 35%, var(--alm-card, #ffffff));
+}
+
+.dco-operator-form .page-head .page-actions .dco-whatsapp-send-measurements {
+    color: #167a42;
+    background: #e8f6ed;
+    border-color: color-mix(in srgb, #167a42 24%, #e8f6ed);
+}
+
+.dco-operator-form .page-head .page-actions .dco-whatsapp-send-measurements:hover:not(:disabled),
+.dco-operator-form .page-head .page-actions .dco-whatsapp-send-measurements:focus-visible:not(:disabled) {
+    color: #167a42;
+    background: color-mix(in srgb, #167a42 14%, #e8f6ed);
+    border-color: color-mix(in srgb, #167a42 36%, #e8f6ed);
+    outline: none;
+    box-shadow: 0 0 0 3px color-mix(in srgb, #167a42 18%, transparent);
+}
+
+.dco-operator-form .page-head .page-actions .dco-whatsapp-send-measurements:disabled,
+.dco-operator-form .page-head .page-actions .dco-whatsapp-send-measurements.disabled {
+    color: color-mix(in srgb, #167a42 55%, #98a2b3);
+    background: color-mix(in srgb, #e8f6ed 70%, var(--alm-card, #fff));
+    border-color: color-mix(in srgb, #167a42 14%, var(--alm-card-border, #e4e8ee));
+    opacity: 0.72;
+    box-shadow: none;
+}
+
+[data-theme="dark"] .dco-operator-form .page-head .page-actions .dco-whatsapp-send-measurements {
+    color: #4ade80;
+    background: rgba(22, 122, 66, 0.18);
+    border-color: rgba(74, 222, 128, 0.28);
+}
+
+[data-theme="dark"] .dco-operator-form .page-head .page-actions .dco-whatsapp-send-measurements:hover:not(:disabled),
+[data-theme="dark"] .dco-operator-form .page-head .page-actions .dco-whatsapp-send-measurements:focus-visible:not(:disabled) {
+    color: #4ade80;
+    background: rgba(22, 122, 66, 0.28);
+    border-color: rgba(74, 222, 128, 0.4);
+    box-shadow: 0 0 0 3px rgba(74, 222, 128, 0.18);
 }
 
 .dco-operator-form .layout-side-section {

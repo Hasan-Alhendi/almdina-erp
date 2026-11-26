@@ -115,7 +115,12 @@
         button.classList.add(NOTES_BUTTON_CLASS);
         button.dataset.almdinaNotesButton = "1";
         const label = buttonLabel(frm);
-        if (button.textContent !== label) button.textContent = label;
+        const icons = window.AlmdinaDcoPageActionIcons;
+        if (icons && typeof icons.ensure === "function") {
+            icons.ensure(button, { icon: "message-square", label });
+        } else if (button.textContent !== label) {
+            button.textContent = label;
+        }
         button.classList.toggle(
             "dco-notes-button-has-important",
             Boolean(String(frm.doc && frm.doc.important_note_preview || "").trim())

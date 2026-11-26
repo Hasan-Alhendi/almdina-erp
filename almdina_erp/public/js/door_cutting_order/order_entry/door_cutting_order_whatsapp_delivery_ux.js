@@ -14,8 +14,11 @@
     const AMENDMENT_CONFIRM_MESSAGE = "Send the measurement changes to the customer?";
     const DISCONNECTED_MESSAGE = "A WhatsApp message will not be sent because the session is disconnected.";
     const SAVE_FIRST_MESSAGE = "Save the order first, then send the measurements table.";
+    // Registration identity for Frappe custom_buttons (stable English message id).
     const BUTTON_ACTION_LABEL = "Send measurements via WhatsApp";
-    const BUTTON_LABEL_AMENDMENT = "Send measurement changes via WhatsApp";
+    // Visible label for amendment context (legacy key kept for contracts/tests).
+    const BUTTON_LABEL_AMENDMENT = "Share Changes";
+    const BUTTON_LABEL_VISIBLE = "Share Changes";
     const BUTTON_CLASS = "dco-whatsapp-send-measurements";
 
     let offerQueued = false;
@@ -96,7 +99,10 @@
     }
 
     function buttonLabel(frm) {
-        return translateCopy(isAmendmentContext(frm) ? BUTTON_LABEL_AMENDMENT : BUTTON_ACTION_LABEL);
+        // Display uses Share Changes for both first-send and amendment; registration
+        // identity stays BUTTON_ACTION_LABEL so remove/add stays stable.
+        void frm;
+        return translateCopy(BUTTON_LABEL_VISIBLE);
     }
 
     function canShowSendButton(frm) {
@@ -242,9 +248,15 @@
         if (!button) return false;
         frm._almdinaWhatsAppSendButton = button;
         button.classList.add(BUTTON_CLASS);
-        button.textContent = buttonLabel(frm);
-        button.title = button.textContent;
-        button.setAttribute("aria-label", button.textContent);
+        const label = buttonLabel(frm);
+        const icons = window.AlmdinaDcoPageActionIcons;
+        if (icons && typeof icons.ensure === "function") {
+            icons.ensure(button, { icon: "whatsapp", label });
+        } else {
+            button.textContent = label;
+        }
+        button.title = label;
+        button.setAttribute("aria-label", label);
         return true;
     }
 
@@ -342,6 +354,7 @@
         BUTTON_ACTION_LABEL,
         BUTTON_CLASS,
         BUTTON_LABEL_AMENDMENT,
+        BUTTON_LABEL_VISIBLE,
         CHECKPOINT_KEY,
         CONFIRM_MESSAGE,
         DISCONNECTED_MESSAGE,

@@ -349,13 +349,21 @@
             removeManagedLifecycleButton(frm, LABELS.return_to_draft);
         }
         if (canCancelOrder(frm, context)) {
+            const cancelLabel = labelText(LABELS.cancel);
             const cancelButton = ensureLifecycleButton(
                 frm,
-                labelText(LABELS.cancel),
+                cancelLabel,
                 () => cancelOrder(frm)
             );
             if (cancelButton && typeof cancelButton.removeClass === "function") {
                 cancelButton.removeClass("btn-default").addClass("btn-danger");
+            }
+            const icons = window.AlmdinaDcoPageActionIcons;
+            if (icons && typeof icons.ensure === "function") {
+                const rendered = cancelButton
+                    || (frm.custom_buttons && frm.custom_buttons[cancelLabel])
+                    || null;
+                icons.ensure(rendered, { icon: "circle-x", label: cancelLabel });
             }
         } else {
             removeManagedLifecycleButton(frm, LABELS.cancel);

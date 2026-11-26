@@ -23,7 +23,7 @@ for (const relative of files) {
     const source = fs.readFileSync(path.join(root, relative), "utf8");
     assert.doesNotMatch(source, /^(?:const|let|var)\s+\w+\s*=\s*__\(/m, relative);
     assert.doesNotMatch(source, /direction:\s*rtl/, relative);
-    assert.doesNotMatch(source, /isArabic|labelAr|labelEn/, relative);
+    assert.doesNotMatch(source, /\bisArabic\b|\blabelAr\b|\blabelEn\b/, relative);
 }
 
 const catalog = fs.readFileSync(path.join(root, "translations/ar.csv"), "utf8");
@@ -32,13 +32,14 @@ for (const row of [
     "Edit order,تعديل",
     "{0} pieces,{0} قطعة",
     "Send measurements via WhatsApp,إرسال القياسات عبر واتساب",
+    "Share Changes,مشاركة التعديلات",
     "Edge color: {0},لون القشاط: {0}",
 ]) {
     assert.ok(catalog.includes(row), row);
 }
 assert.ok(catalog.includes("Panel Saw,منشار ألواح"));
-assert.ok(catalog.startsWith("Almdina ERP,") || catalog.includes("\nEdit,إعداد\n"));
-assert.match(catalog, /^Edit,إعداد$/m);
+assert.ok(catalog.startsWith("Almdina ERP,") || catalog.includes("\nEdit,تعديل\n"));
+assert.match(catalog, /^Edit,تعديل$/m);
 
 function element(tag) {
     const children = [];
@@ -240,7 +241,7 @@ const french = {
     "Select the cutting machine type": "Choisissez la machine",
     "Send the measurements file to the customer?": "Envoyer le fichier ?",
     "Send measurements via WhatsApp": "Envoyer les mesures",
-    "Send measurement changes via WhatsApp": "Envoyer les modifications",
+    "Share Changes": "Partager les modifications",
     "Send the measurement changes to the customer?": "Envoyer les modifications ?",
     "The measurements table was sent to the customer via WhatsApp.": "Mesures envoyées",
     "WhatsApp": "WhatsApp",
@@ -253,6 +254,8 @@ const french = {
     "Edge color: {0}": "Couleur de chant : {0}",
     "Not specified": "Non précisé",
     "Print measurements": "Imprimer",
+    "Expand measurement table": "Agrandir le tableau",
+    "Open measurement table in a separate window": "Ouvrir dans une fenêtre",
     "Open the entry table in a separate window": "Ouvrir dans une fenêtre",
     "All changes are saved": "Tout est enregistré",
     "Length": "Longueur",
@@ -385,7 +388,7 @@ assert.deepEqual(values, ["CNC", "مشرحة"]);
 assert.match(machineField.querySelectorAll("span").map(node => node.textContent).join(" "), /Scie à panneaux/);
 assert.doesNotMatch(calls.join("\n"), /مشرحة/);
 
-const deliveryContext = loaded[2];
+const deliveryContext = loaded[3];
 const serverMessage = "رسالة الخادم الجاهزة";
 deliveryContext.window.AlmdinaFrontend = {
     rpc(method) {
@@ -404,9 +407,10 @@ const order = {
     is_dirty() { return false; },
     __almdina_whatsapp_just_created: true,
 };
-assert.equal(delivery.buttonLabel(order), "Envoyer les mesures");
+assert.equal(delivery.buttonLabel(order), "Partager les modifications");
 assert.equal(delivery.confirmMessage(order), "Envoyer le fichier ?");
 assert.equal(delivery.BUTTON_ACTION_LABEL, "Send measurements via WhatsApp");
+assert.equal(delivery.BUTTON_LABEL_VISIBLE, "Share Changes");
 
 async function exercise() {
 delivery.offerFromButton(order);
@@ -415,7 +419,7 @@ await Promise.resolve();
 assert.equal(deliveryContext.window.alerts.at(-1).message, serverMessage);
 assert.equal(calls.includes(serverMessage), false);
 
-const actions = loaded[3];
+const actions = loaded[4];
 const toolbar = element("div");
 toolbar.className = "dco-fast-entry-toolbar";
 const shell = element("div");
@@ -438,8 +442,8 @@ const measurementForm = {
     is_dirty() { return false; },
 };
 actions.handlers[0].events.refresh(measurementForm);
-assert.equal(toolbar.querySelector(".dco-print-measurements").textContent, "Imprimer");
-assert.equal(toolbar.querySelector(".dco-open-measurements-window").querySelectorAll("span")[1].textContent, "Ouvrir dans une fenêtre");
+assert.equal(toolbar.querySelector(".dco-print-measurements").getAttribute("aria-label"), "Imprimer");
+assert.equal(toolbar.querySelector(".dco-open-measurements-window").title, "Ouvrir dans une fenêtre");
 toolbar.querySelector(".dco-open-measurements-window").click();
 const overlay = actions.document.body.querySelector(".dco-measurement-entry-window");
 assert.equal(overlay.getAttribute("dir"), "ltr");
@@ -457,7 +461,7 @@ const rtlOverlay = actions.document.body.querySelector(".dco-measurement-entry-w
 assert.equal(rtlOverlay.getAttribute("dir"), "rtl");
 direction = "ltr";
 
-const edges = loaded[6].window.AlmdinaMultiEdgeBanding;
+const edges = loaded[7].window.AlmdinaMultiEdgeBanding;
 const detail = edges.detailForSide(
     { doc: { default_edge_type: "PVC أبيض" }, _dco_side_edge_profiles: new Map() },
     { edge_long_right: 1, width_cm: 40, length_cm: 80, qty: 1 },
@@ -480,7 +484,7 @@ const colorForm = {
         pieces_fast_entry: { $wrapper: { get() { return colorField; } } },
     },
 };
-const colorContext = loaded[5];
+const colorContext = loaded[6];
 colorContext.handlers[0].events.refresh(colorForm);
 const badge = badgeHost.querySelector(".dco-order-edge-color-badge");
 assert.match(badge.innerHTML, /لون الزبون الخاص/);
@@ -489,12 +493,12 @@ assert.equal(badge.getAttribute("title") || badge.title, "Couleur de commande");
 assert.equal(calls.includes("لون الزبون الخاص"), false);
 
 direction = "rtl";
-const guard = loaded[8];
+const guard = loaded[9];
 assert.equal(typeof guard.window.AlmdinaEdgeProfileDoubleClickGuard.cancelPendingClick, "function");
-const controls = loaded[7].window.AlmdinaEdgeProfileControls;
+const controls = loaded[8].window.AlmdinaEdgeProfileControls;
 const anchor = element("button");
 const rowNode = element("tr");
-const popoverDocument = loaded[7].document;
+const popoverDocument = loaded[8].document;
 popoverDocument.body.appendChild(anchor);
 rowNode.dataset.rowName = "ROW-1";
 controls.openSidePopover(

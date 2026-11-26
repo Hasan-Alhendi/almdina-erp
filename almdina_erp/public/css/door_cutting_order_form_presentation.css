@@ -1,4 +1,26 @@
 /* Extracted from door_cutting_order_header_ux.js to load DCO shell styles before first render. */
+.dco-form-presentation-shell {
+    /* Mirror tab-shell tokens so page-head nav can share the same end inset as Edit. */
+    --dco-tab-shell-max: 1440px;
+    --dco-tab-content-gutter: 20px;
+    --dco-nav-cluster-gap: 6px;
+    /* Tab bar end padding (16px) + edit-slot end padding (2px). */
+    --dco-tab-edit-end-pad: 18px;
+    --dco-nav-end-inset: calc(var(--dco-tab-content-gutter) + var(--dco-tab-edit-end-pad));
+}
+
+@media (max-width: 1200px) {
+    .dco-form-presentation-shell {
+        --dco-tab-content-gutter: 16px;
+    }
+}
+
+@media (max-width: 720px) {
+    .dco-form-presentation-shell {
+        --dco-tab-content-gutter: 12px;
+    }
+}
+
 .dco-form-presentation-shell .page-head.dco-responsive-head {
     height: auto !important;
     min-height: 54px !important;
@@ -45,28 +67,33 @@
     max-width: calc(100%) !important;
     margin: 0 !important;
     margin-inline-start: auto !important;
+    /* Match Edit button outer edge: tab gutter + tab/edit end padding on the shared container. */
+    padding-inline-end: var(--dco-nav-end-inset) !important;
     display: flex !important;
     align-items: center !important;
     justify-content: flex-start !important;
     flex-wrap: wrap !important;
-    gap: 6px !important;
+    gap: var(--dco-nav-cluster-gap, 6px) !important;
     overflow: visible !important;
     transform: none !important;
 }
 
 .dco-form-presentation-shell .page-head.dco-responsive-head .page-actions .custom-actions,
 .dco-form-presentation-shell .page-head.dco-responsive-head .page-actions .standard-actions,
-.dco-form-presentation-shell .page-head.dco-responsive-head .page-actions .menu-btn-group {
+.dco-form-presentation-shell .page-head.dco-responsive-head .page-actions .menu-btn-group,
+.dco-form-presentation-shell .page-head.dco-responsive-head .page-actions .page-icon-group {
     display: flex !important;
     align-items: center !important;
     flex-wrap: wrap !important;
-    gap: 6px !important;
+    gap: var(--dco-nav-cluster-gap, 6px) !important;
     margin: 0 !important;
 }
 
 .dco-form-presentation-shell .page-head.dco-responsive-head .page-actions .btn,
 .dco-form-presentation-shell .page-head.dco-responsive-head .page-actions .dropdown,
-.dco-form-presentation-shell .page-head.dco-responsive-head .page-actions .btn-group {
+.dco-form-presentation-shell .page-head.dco-responsive-head .page-actions .btn-group,
+.dco-form-presentation-shell .page-head.dco-responsive-head .page-actions .page-icon-group > .btn,
+.dco-form-presentation-shell .page-head.dco-responsive-head .page-actions .menu-btn-group > .btn {
     flex: 0 0 auto !important;
     margin: 0 !important;
 }
@@ -552,13 +579,15 @@ body.modal-open .dco-operator-form .form-tabs-list.dco-sticky-tabs.dco-tabs-is-f
 
     .dco-form-presentation-shell .page-head.dco-stable-actions-head .page-actions,
     .dco-form-presentation-shell .page-head.dco-stable-actions-head .custom-actions,
-    .dco-form-presentation-shell .page-head.dco-stable-actions-head .standard-actions {
+    .dco-form-presentation-shell .page-head.dco-stable-actions-head .standard-actions,
+    .dco-form-presentation-shell .page-head.dco-stable-actions-head .page-icon-group,
+    .dco-form-presentation-shell .page-head.dco-stable-actions-head .menu-btn-group {
         display: flex !important;
         visibility: visible !important;
         opacity: 1 !important;
         flex-wrap: wrap !important;
         align-items: center !important;
-        gap: 6px !important;
+        gap: var(--dco-nav-cluster-gap, 6px) !important;
     }
 
     .dco-form-presentation-shell .page-head.dco-stable-actions-head .page-actions {
@@ -567,6 +596,7 @@ body.modal-open .dco-operator-form .form-tabs-list.dco-sticky-tabs.dco-tabs-is-f
         transform: none !important;
         margin: 0 !important;
         margin-inline-start: auto !important;
+        padding-inline-end: var(--dco-nav-end-inset) !important;
         justify-content: flex-start !important;
         flex: 1 1 auto !important;
         width: auto !important;
