@@ -957,6 +957,9 @@
         if (cutterMm && cutterMm.linerExport) throw cutterMm;
         const layerDiameters = layerDiametersMm(plan, cutterMm);
         assertRequiredGlassOpenings(plan);
+        // Sheets must already be in print presentation order (snapshot order).
+        // Do not re-sort by sheet_no: shop-floor packing keeps fill-order
+        // numbers while reversing the list so the last-filled board prints first.
         const sheets = plan.sheets || [];
         const rowSizes = sheetPrintRows(sheets.length);
         const maxColumns = Math.max(0, ...rowSizes);

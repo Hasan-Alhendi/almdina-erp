@@ -84,11 +84,20 @@ def test_tool_machine_and_profile_fields_are_required_english_labels():
             continue
         assert field.get("reqd") == 1, field["fieldname"]
     generated = {"profile_id", "tool_values_json"}
-    layout_fieldtypes = {"Column Break", "Section Break", "Tab Break", "Fold"}
+    assert profile["field_order"] == [
+        "profile_id",
+        "profile_name",
+        "tool_preset",
+        "tool_values_json",
+        "final_depth_mm",
+        "safe_z_mm",
+        "home_x_mm",
+        "home_y_mm",
+        "home_z_mm",
+        "enabled",
+    ]
+    assert all(field.get("fieldtype") != "Column Break" for field in profile["fields"])
     for field in profile["fields"]:
-        if field.get("fieldtype") in layout_fieldtypes:
-            assert field.get("allow_in_quick_entry") == 1, field["fieldname"]
-            continue
         label = str(field.get("label") or "")
         assert label
         assert not any(_ARABIC.start <= ord(character) <= _ARABIC.stop - 1 for character in label)
@@ -101,8 +110,6 @@ def test_tool_machine_and_profile_fields_are_required_english_labels():
     assert profile.get("quick_entry") == 1
     assert all(field.get("fieldname") != "final_depth_mm" for field in tool["fields"])
     assert any(field.get("fieldname") == "final_depth_mm" and field.get("reqd") == 1 for field in profile["fields"])
-    assert "column_break_home_y" in profile["field_order"]
-    assert "column_break_home_z" in profile["field_order"]
 
 
 def test_profile_editor_lives_on_the_operational_files_page_not_the_sheet_form():

@@ -32,7 +32,7 @@ assert.ok(typeof ux.sheetSettingsUrl === "function");
 assert.ok(panel.includes("openSheetSettingsTab("));
 assert.ok(!panel.includes("openSheetDialog("));
 assert.ok(!panel.includes("dco-operational-sheet-dialog"));
-assert.ok(pageSource.includes('"/assets/almdina_erp/js/cnc/artcam_machining_ux.js?v=1"'));
+assert.ok(pageSource.includes('"/assets/almdina_erp/js/cnc/artcam_machining_ux.js?v=3"'));
 assert.ok(pageSource.includes('"/assets/almdina_erp/js/door_cutting_order/cnc/door_cutting_order_operational_files_ux.js?v=1"'));
 assert.ok(pageSource.includes('door_cutting_order_operational_files.css?v=23'));
 assert.ok(pageSource.includes("frappe.assets.load_asset(path, new URL(asset, window.location.origin).toString())"));

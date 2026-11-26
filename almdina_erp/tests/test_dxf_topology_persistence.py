@@ -420,3 +420,73 @@ def test_export_reconstruction_fails_closed_when_saved_piece_identity_is_missing
 
     with pytest.raises(DxfGeometrySnapshotError):
         _plan_to_export_snapshot(plan)
+
+
+def test_export_snapshot_preserves_shop_floor_presentation_sheet_order():
+    """Print Board 1 is the first snapshot sheet, even when sheet_no is 8.
+
+    Shop-floor packing reverses the sheet list while keeping fill-order numbers.
+    Export must not re-sort sources by ascending sheet_no, or DXF slot 1 would
+    contain print Board 8's content.
+    """
+
+    def source(sheet_no: int):
+        row = _source()
+        row.sheet_no = sheet_no
+        return row
+
+    def piece(sheet_no: int):
+        row = _saved_piece(sheet_no, f"{sheet_no}.1", sheet_no * 10)
+        row.sheet_no = sheet_no
+        return row
+
+    presentation_nos = [8, 7, 6, 5, 4, 3, 2, 1]
+    persisted = {
+        "kerf_cm": 0.5,
+        "sheets": [
+            {
+                "sheet_no": sheet_no,
+                "pieces": [
+                    {
+                        "id": sheet_no,
+                        "label": f"{sheet_no}.1",
+                        "geometry": _geometry(
+                            (
+                                (sheet_no * 10, 0),
+                                (sheet_no * 10 + 100, 0),
+                                (sheet_no * 10 + 100, 100),
+                                (sheet_no * 10, 100),
+                            )
+                        ),
+                    }
+                ],
+            }
+            for sheet_no in presentation_nos
+        ],
+    }
+    # Child-table order intentionally disagrees with snapshot presentation so
+    # the rebuild must follow snapshot order, not sheet_no or source append order.
+    plan = SimpleNamespace(
+        snapshot_json=json.dumps(persisted),
+        placed_pieces=[piece(sheet_no) for sheet_no in sorted(presentation_nos)],
+        sources=[source(sheet_no) for sheet_no in sorted(presentation_nos)],
+        engine_version="test",
+        method_key="system",
+        method_label="System",
+        full_board_width_mm=1000,
+        full_board_length_mm=1000,
+        usable_board_width_mm=1000,
+        usable_board_length_mm=1000,
+        kerf_mm=5,
+        trim_margin_mm=0,
+        used_area_m2=0.08,
+        total_source_area_m2=8,
+        waste_area_m2=7.92,
+        required_boards=8,
+    )
+
+    rebuilt = _plan_to_export_snapshot(plan)
+    assert [sheet["sheet_no"] for sheet in rebuilt["sheets"]] == presentation_nos
+    assert [sheet["pieces"][0]["id"] for sheet in rebuilt["sheets"]] == presentation_nos
+    assert rebuilt["sheets"][0]["pieces"][0]["x"] == 8.0
+    assert rebuilt["sheets"][-1]["pieces"][0]["x"] == 1.0

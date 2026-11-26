@@ -25,7 +25,8 @@ const frappe = {
         load_asset(assetPath, url) {
             requests.push({ path: assetPath, url });
             assert.equal(new URL(url).pathname, assetPath);
-            assert.equal(new URL(url).searchParams.get("v"), "1");
+            const expectedVersion = path.basename(assetPath) === "artcam_machining_ux.js" ? "3" : "1";
+            assert.equal(new URL(url).searchParams.get("v"), expectedVersion);
             const file = path.join(root, "public", assetPath.replace("/assets/almdina_erp/", ""));
             vm.runInNewContext(fs.readFileSync(file, "utf8"), { window: windowObject });
             return Promise.resolve();
@@ -50,7 +51,7 @@ async function mainTest() {
     ]);
     assert.notEqual(windowObject.AlmdinaArtcamMachining, staleArtcam);
     assert.notEqual(windowObject.AlmdinaOperationalFilesUX, stalePanel);
-    assert.equal(windowObject.AlmdinaArtcamMachining.assetRevision, 1);
+    assert.equal(windowObject.AlmdinaArtcamMachining.assetRevision, 3);
     assert.equal(windowObject.AlmdinaOperationalFilesUX.assetRevision, 1);
     const sheet = { sheet_no: 1, machining: { profiles: [], associations: [] } };
     const workspace = { can_prepare: false, cnc_machines: [] };

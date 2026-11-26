@@ -1,10 +1,27 @@
 (() => {
     "use strict";
 
-    const ASSET_REVISION = 1;
+    const ASSET_REVISION = 3;
     if (window.AlmdinaArtcamMachining?.assetRevision === ASSET_REVISION) return;
 
     const METHOD = "almdina_erp.almdina_erp.services.cnc_operational_file_service";
+    // Display-only English labels for the Vector Source dropdown. Values and
+    // DXF layer identities stay unchanged.
+    const VECTOR_SOURCE_LABELS = Object.freeze({
+        liner: "Liner",
+        recessed_handle_cutout: "Handle Recess",
+        back_groove: "Rear Groove",
+        cut_path: "cut path",
+        sheet_perimeter: "out",
+        selected_vectors: "Selected Vectors",
+    });
+    // Display order only. Does not change machining execution order.
+    const VECTOR_SOURCE_LAYER_ORDER = Object.freeze([
+        "liner",
+        "recessed_handle_cutout",
+        "back_groove",
+        "cut_path",
+    ]);
     const PROFILE_FIELDS = Object.freeze([
         ["final_depth_mm", "Final Depth (mm)"],
         ["safe_z_mm", "Safe Z (mm)"],
@@ -196,28 +213,47 @@
                 if (operation) ownedOperations.add(operation);
             });
         });
-        const options = [];
+        const layersByKey = new Map();
         (availability.layers || []).forEach(layer => {
             if (!layer || !layer.operation_key) return;
-            const current = form && form.source === `layer:${layer.operation_key}`;
-            if ((layer.disabled || ownedOperations.has(String(layer.operation_key))) && !current) return;
-            options.push({ value: `layer:${layer.operation_key}`, label: layer.dxf_layer || layer.operation_key });
+            layersByKey.set(String(layer.operation_key), layer);
         });
-        options.push({ value: "selected_vectors", label: "Selected Vectors" });
+        const options = [];
+        const appendLayer = key => {
+            const layer = layersByKey.get(key);
+            if (!layer) return;
+            const current = form && form.source === `layer:${key}`;
+            if ((layer.disabled || ownedOperations.has(key)) && !current) return;
+            options.push({
+                value: `layer:${key}`,
+                label: VECTOR_SOURCE_LABELS[key] || layer.dxf_layer || key,
+            });
+            layersByKey.delete(key);
+        };
+        VECTOR_SOURCE_LAYER_ORDER.forEach(appendLayer);
+        Array.from(layersByKey.keys()).forEach(appendLayer);
         const perimeter = availability.sheet_perimeter;
         const serverAvailable = Boolean(perimeter && !perimeter.disabled);
         const ready = context.state ? context.state.perimeterGeometryReady : null;
         const geometryOk = ready === true || (ready == null && serverAvailable);
         if (perimeterMode(context) === "connected" && geometryOk && !perimeterOwned) {
-            options.push({ value: "sheet_perimeter", label: "SHEET_PERIMETER" });
+            options.push({
+                value: "sheet_perimeter",
+                label: VECTOR_SOURCE_LABELS.sheet_perimeter,
+            });
         }
+        options.push({
+            value: "selected_vectors",
+            label: VECTOR_SOURCE_LABELS.selected_vectors,
+        });
         return options;
     }
 
     function sourceLabel(value, context) {
-        if (value === "sheet_perimeter") return "SHEET_PERIMETER";
-        if (value === "selected_vectors") return "Selected Vectors";
+        if (value === "sheet_perimeter") return VECTOR_SOURCE_LABELS.sheet_perimeter;
+        if (value === "selected_vectors") return VECTOR_SOURCE_LABELS.selected_vectors;
         const layer = String(value || "").startsWith("layer:") ? String(value).slice(6) : "";
+        if (VECTOR_SOURCE_LABELS[layer]) return VECTOR_SOURCE_LABELS[layer];
         const match = ((machining(context.sheet).availability || {}).layers || [])
             .find(row => row.operation_key === layer);
         return match ? (match.dxf_layer || layer) : layer;
@@ -330,8 +366,8 @@
                 </label>
                 <label class="dco-artcam-field">${escapeHtml(fieldLabel("profile", "Vector Source"))}
                     <select class="form-control" data-field="source"${canPrepare ? "" : " disabled"}>
-                        <option value="">${escapeHtml(translate("Choose"))}</option>
-                        ${options.map(option => `<option value="${escapeHtml(option.value)}"${option.value === form.source ? " selected" : ""}>${escapeHtml(option.value === "sheet_perimeter" || option.value === "selected_vectors" ? translate(option.label) : option.label)}</option>`).join("")}
+                        <option value="">${escapeHtml(translate("Choose vectors"))}</option>
+                        ${options.map(option => `<option value="${escapeHtml(option.value)}"${option.value === form.source ? " selected" : ""}>${escapeHtml(option.label)}</option>`).join("")}
                     </select>
                 </label>
                 <p class="dco-artcam-note" data-perimeter-source-note${perimeterSourceNote(context, form) ? "" : " hidden"}>${escapeHtml(perimeterSourceNote(context, form))}</p>
@@ -758,12 +794,9 @@
             : null;
         if (select) {
             const current = String((state.artcamForm && state.artcamForm.source) || "");
-            select.innerHTML = `<option value="">${escapeHtml(translate("Choose"))}</option>${options.map(option => {
-                const label = option.value === "sheet_perimeter" || option.value === "selected_vectors"
-                    ? translate(option.label)
-                    : option.label;
-                return `<option value="${escapeHtml(option.value)}"${option.value === current ? " selected" : ""}>${escapeHtml(label)}</option>`;
-            }).join("")}`;
+            select.innerHTML = `<option value="">${escapeHtml(translate("Choose vectors"))}</option>${options.map(option => (
+                `<option value="${escapeHtml(option.value)}"${option.value === current ? " selected" : ""}>${escapeHtml(option.label)}</option>`
+            )).join("")}`;
             select.value = options.some(option => option.value === current) ? current : "";
             if (state.artcamForm && select.value !== current) state.artcamForm.source = select.value;
         }

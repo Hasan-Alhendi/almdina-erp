@@ -104,12 +104,52 @@ const form = {
     tool: { stepdown_mm: 4, tool_number: "9" },
     toolOpen: true,
 };
-const connected = artcam.sourceOptions(context("connected", true, form), form).map(row => row.value);
+const connectedOptions = artcam.sourceOptions(context("connected", true, form), form);
+const connected = connectedOptions.map(row => row.value);
 assert.ok(connected.includes("sheet_perimeter"));
 assert.ok(connected.includes("layer:cut_path"));
+assert.deepEqual(
+    connectedOptions.map(row => [row.value, row.label]),
+    [
+        ["layer:cut_path", "cut path"],
+        ["sheet_perimeter", "out"],
+        ["selected_vectors", "Selected Vectors"],
+    ]
+);
 const disconnected = artcam.sourceOptions(context("disconnected", null, form), form).map(row => row.value);
 assert.ok(!disconnected.includes("sheet_perimeter"));
 assert.ok(disconnected.includes("layer:cut_path"));
+const arabic = {
+    translate(message) {
+        return ({
+            Choose: "اختر",
+            "Choose vectors": "اختر",
+            "Selected Vectors": "المتجهات المحددة",
+            SHEET_PERIMETER: "محيط اللوح",
+        })[message] || message;
+    },
+};
+const host = {
+    querySelector(selector) {
+        if (selector.includes('data-field="source"')) return this.select;
+        return null;
+    },
+    select: { innerHTML: "", value: "" },
+};
+const previousLocale = sandbox.window.AlmdinaLocale;
+sandbox.window.AlmdinaLocale = arabic;
+artcam.syncPerimeterSource(host, context("connected", true, {
+    association_id: "association:edit",
+    source: "",
+}));
+assert.match(host.select.innerHTML, />اختر</);
+assert.match(host.select.innerHTML, />cut path</);
+assert.match(host.select.innerHTML, />Selected Vectors</);
+assert.match(host.select.innerHTML, />out</);
+assert.ok(host.select.innerHTML.indexOf(">out<") < host.select.innerHTML.indexOf(">Selected Vectors<"));
+assert.ok(!host.select.innerHTML.includes("المتجهات المحددة"));
+assert.ok(!host.select.innerHTML.includes("محيط اللوح"));
+sandbox.window.AlmdinaLocale = previousLocale;
 
 const editing = { ...form, source: "sheet_perimeter" };
 const state = context("disconnected", null, editing).state;
@@ -174,6 +214,35 @@ assert.ok(translations.includes("عمق التمريرة (مم)"));
 assert.ok(translations.includes("المصادم الأيمن (سم)"));
 assert.ok(translations.includes("المصادم العلوي (سم)"));
 assert.ok(translations.includes("اسم الربط"));
+assert.ok(translations.includes("Choose vectors,اختر"));
+assert.match(markup, /Choose vectors|اختر/);
+const allLayerForm = {
+    association_id: "association:layers",
+    source: "",
+};
+const allLayerOptions = artcam.sourceOptions({
+    sheet: {
+        machining: {
+            availability: {
+                layers: [
+                    { operation_key: "cut_path", dxf_layer: "CUT_PATH", disabled: false },
+                    { operation_key: "back_groove", dxf_layer: "Rear Groove", disabled: false },
+                    { operation_key: "liner", dxf_layer: "Liner", disabled: false },
+                    { operation_key: "recessed_handle_cutout", dxf_layer: "Handle Recess", disabled: false },
+                ],
+                vectors: [],
+                sheet_perimeter: { disabled: false },
+            },
+            associations: [],
+        },
+    },
+    state: { perimeterJoinMode: "connected", perimeterGeometryReady: true, artcamForm: allLayerForm },
+}, allLayerForm);
+assert.deepEqual(
+    allLayerOptions.map(row => row.label),
+    ["Liner", "Handle Recess", "Rear Groove", "cut path", "out", "Selected Vectors"]
+);
+assert.equal(allLayerOptions[allLayerOptions.length - 1].value, "selected_vectors");
 const labelsSource = fs.readFileSync(path.join(root, "public/js/cnc/cnc_field_labels.js"), "utf8");
 assert.ok(labelsSource.includes('position === "Center"'));
 const machineMeta = fs.readFileSync(path.join(root, "almdina_erp/doctype/cnc_machine/cnc_machine.json"), "utf8");

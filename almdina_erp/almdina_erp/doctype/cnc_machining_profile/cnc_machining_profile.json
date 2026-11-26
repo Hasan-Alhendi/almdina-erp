@@ -12,9 +12,7 @@
     "final_depth_mm",
     "safe_z_mm",
     "home_x_mm",
-    "column_break_home_y",
     "home_y_mm",
-    "column_break_home_z",
     "home_z_mm",
     "enabled"
   ],
@@ -85,21 +83,11 @@
     },
     {
       "allow_in_quick_entry": 1,
-      "fieldname": "column_break_home_y",
-      "fieldtype": "Column Break"
-    },
-    {
-      "allow_in_quick_entry": 1,
       "fieldname": "home_y_mm",
       "fieldtype": "Float",
       "label": "Home Y (mm)",
       "precision": "3",
       "reqd": 1
-    },
-    {
-      "allow_in_quick_entry": 1,
-      "fieldname": "column_break_home_z",
-      "fieldtype": "Column Break"
     },
     {
       "allow_in_quick_entry": 1,

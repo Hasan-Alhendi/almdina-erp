@@ -21,17 +21,16 @@ def nc_export_filename(
     sheet_no: int,
     content_sha256: str,
 ) -> str:
-    """Build a deterministic on-demand NC download filename."""
+    """Build the on-demand NC download filename ``{order}({board}).nc``.
 
-    digest = str(content_sha256 or "")[:12] or "empty"
-    parts = [
-        _safe_token(order_name, "order"),
-        _safe_token(cutting_plan, "plan"),
-        f"r{int(plan_revision)}",
-        f"sheet{int(sheet_no)}",
-        digest,
-    ]
-    return f"{'_'.join(parts)}.nc"
+    ``cutting_plan``, ``plan_revision``, and ``content_sha256`` remain in the
+    signature for existing callers; they do not appear in the download name.
+    """
+
+    _ = (cutting_plan, plan_revision, content_sha256)
+    order = _safe_token(order_name, "order")
+    board = int(sheet_no)
+    return f"{order}({board}).nc"
 
 
 def nc_download_payload(
