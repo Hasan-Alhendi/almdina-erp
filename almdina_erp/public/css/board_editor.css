@@ -35,6 +35,8 @@
 
 /* Restore Arabic reading direction on content shells; keep .abe-body LTR for columns. */
 .abe-page[dir="rtl"] > .abe-freshness-banner,
+.abe-page[dir="rtl"] > .abe-floating-banner-stack,
+.abe-page[dir="rtl"] > .abe-floating-banner-stack .abe-freshness-banner,
 .abe-page[dir="rtl"] > .abe-state,
 .abe-page[dir="rtl"] > .abe-review-dialog,
 .abe-page[dir="rtl"] .abe-sidebar-host,
@@ -168,13 +170,6 @@
   color: #684117;
 }
 
-/* Draft-source conflict keeps the red strip. Out-of-date plan freshness uses
-   [data-abe-freshness="stale"] floating warning styles below instead. */
-.abe-freshness-banner.is-stale.abe-draft-source-conflict {
-  background: #fff4f2;
-  color: #9b2f26;
-}
-
 .abe-freshness-banner.is-calculating {
   background: #eef6ff;
   color: #1d4ed8;
@@ -208,51 +203,51 @@
   align-items: center;
 }
 
-.abe-freshness-banner.is-stale.abe-draft-source-conflict .abe-begin-from-source {
-  min-height: 40px;
-  padding: 0 16px;
-  font-weight: 700;
-  border: 1px solid #9b2f26;
-  background: #9b2f26;
-  color: #fff;
-  border-radius: 8px;
-  cursor: pointer;
-}
-
-.abe-freshness-banner.is-stale.abe-draft-source-conflict .abe-begin-from-source:hover {
-  background: #7f241d;
-  border-color: #7f241d;
-  color: #fff;
-}
-
-/* Floating out-of-date plan warning — scoped to freshness stale only. */
-.abe-freshness-banner[data-abe-freshness="stale"] {
+/*
+  Floating warning cards (stale plan + draft source conflict).
+  Positioned via .abe-floating-banner-stack so multiple cards stack with gap
+  and never push .abe-body. Color chrome is selector-scoped per case.
+*/
+.abe-floating-banner-stack {
   position: absolute;
   z-index: 24;
   top: 12px;
   left: 50%;
   transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  width: max-content;
+  max-width: min(660px, calc(100% - 24px));
+  box-sizing: border-box;
+  pointer-events: none;
+}
+
+.abe-freshness-banner.abe-freshness-banner--floating {
+  position: relative;
+  top: auto;
+  left: auto;
+  transform: none;
   flex: 0 0 auto;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 10px 12px;
-  width: max-content;
-  max-width: min(640px, calc(100% - 24px));
+  width: 100%;
+  max-width: 100%;
   margin: 0;
   padding: 12px 14px;
-  border: 1px solid var(--alm-status-warning-border, rgba(180, 83, 9, 0.24));
-  border-bottom: 1px solid var(--alm-status-warning-border, rgba(180, 83, 9, 0.24));
   border-radius: var(--alm-radius-sm, 10px);
-  background: var(--alm-warning-bg, #fff7e8);
-  color: var(--alm-warning, #b45309);
   box-shadow: var(--alm-shadow-sm, 0 1px 2px rgba(15, 23, 42, 0.04), 0 5px 18px rgba(15, 23, 42, 0.045));
   box-sizing: border-box;
   pointer-events: auto;
+  border-bottom-width: 1px;
+  border-bottom-style: solid;
 }
 
-.abe-freshness-banner[data-abe-freshness="stale"] .abe-freshness-banner__lead {
+.abe-freshness-banner.abe-freshness-banner--floating .abe-freshness-banner__lead {
   display: flex;
   align-items: flex-start;
   gap: 8px;
@@ -260,7 +255,7 @@
   flex: 1 1 14rem;
 }
 
-.abe-freshness-banner[data-abe-freshness="stale"] .abe-freshness-banner__icon {
+.abe-freshness-banner.abe-freshness-banner--floating .abe-freshness-banner__icon {
   flex: 0 0 auto;
   margin-block-start: 1px;
   font-size: 14px;
@@ -268,7 +263,7 @@
   color: inherit;
 }
 
-.abe-freshness-banner[data-abe-freshness="stale"] .abe-freshness-banner__text {
+.abe-freshness-banner.abe-freshness-banner--floating .abe-freshness-banner__text {
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -276,41 +271,67 @@
   text-align: start;
 }
 
-.abe-freshness-banner[data-abe-freshness="stale"] .abe-freshness-banner__text strong {
+.abe-freshness-banner.abe-freshness-banner--floating .abe-freshness-banner__text strong {
   font-size: var(--alm-font-size-sm, 12px);
   font-weight: var(--alm-font-weight-heavy, 800);
   line-height: 1.35;
-  color: var(--alm-warning, #b45309);
 }
 
-.abe-freshness-banner[data-abe-freshness="stale"] .abe-freshness-banner__text span {
+.abe-freshness-banner.abe-freshness-banner--floating .abe-freshness-banner__text span {
   font-size: 11px;
   font-weight: var(--alm-font-weight-semibold, 600);
   line-height: 1.4;
-  color: color-mix(in srgb, var(--alm-warning, #b45309) 82%, #000);
 }
 
-.abe-freshness-banner[data-abe-freshness="stale"] .abe-freshness-banner__action.abe-back,
-.abe-freshness-banner[data-abe-freshness="stale"] .abe-back {
+.abe-freshness-banner.abe-freshness-banner--floating .abe-freshness-actions {
   flex: 0 0 auto;
   align-self: center;
   justify-self: auto;
   margin-top: 0;
   margin-inline-start: auto;
+}
+
+.abe-freshness-banner.abe-freshness-banner--floating .abe-freshness-banner__action,
+.abe-freshness-banner.abe-freshness-banner--floating .abe-back,
+.abe-freshness-banner.abe-freshness-banner--floating .abe-begin-from-source {
+  flex: 0 0 auto;
+  align-self: center;
+  justify-self: auto;
+  margin-top: 0;
   min-height: 34px;
   height: 34px;
   width: auto;
   padding: 0 14px;
-  border: 1px solid var(--alm-warning, #b45309) !important;
   border-radius: var(--alm-radius-button, 10px);
-  background: var(--alm-warning, #b45309) !important;
-  color: #fff !important;
   font-size: 11px;
   font-weight: var(--alm-font-weight-heavy, 800);
   line-height: 1;
   white-space: nowrap;
   box-shadow: none !important;
   cursor: pointer;
+}
+
+/* Yellow: out-of-date cutting plan — [data-abe-freshness="stale"] only. */
+.abe-freshness-banner[data-abe-freshness="stale"] {
+  border: 1px solid var(--alm-status-warning-border, rgba(180, 83, 9, 0.24));
+  border-bottom: 1px solid var(--alm-status-warning-border, rgba(180, 83, 9, 0.24));
+  background: var(--alm-warning-bg, #fff7e8);
+  color: var(--alm-warning, #b45309);
+}
+
+.abe-freshness-banner[data-abe-freshness="stale"] .abe-freshness-banner__text strong {
+  color: var(--alm-warning, #b45309);
+}
+
+.abe-freshness-banner[data-abe-freshness="stale"] .abe-freshness-banner__text span {
+  color: color-mix(in srgb, var(--alm-warning, #b45309) 82%, #000);
+}
+
+.abe-freshness-banner[data-abe-freshness="stale"] .abe-back {
+  margin-inline-start: auto;
+  border: 1px solid var(--alm-warning, #b45309) !important;
+  background: var(--alm-warning, #b45309) !important;
+  color: #fff !important;
 }
 
 .abe-freshness-banner[data-abe-freshness="stale"] .abe-back:hover:not(:disabled),
@@ -320,7 +341,6 @@
   color: #fff !important;
 }
 
-/* Keep white-on-amber readable when --alm-warning lightens in dark theme. */
 [data-theme="dark"] .abe-freshness-banner[data-abe-freshness="stale"] .abe-back {
   border-color: #b45309 !important;
   background: #b45309 !important;
@@ -334,16 +354,92 @@
   color: #fff !important;
 }
 
+/* Red: draft source conflict — [data-abe-draft="source-conflict"] only. */
+.abe-freshness-banner[data-abe-draft="source-conflict"],
+.abe-freshness-banner.abe-draft-source-conflict {
+  border: 1px solid color-mix(in srgb, #9b2f26 22%, #fff1f0);
+  border-bottom: 1px solid color-mix(in srgb, #9b2f26 22%, #fff1f0);
+  background: #fff1f0;
+  color: #9b2f26;
+}
+
+.abe-freshness-banner[data-abe-draft="source-conflict"] .abe-freshness-banner__text strong,
+.abe-freshness-banner.abe-draft-source-conflict .abe-freshness-banner__text strong {
+  color: #9b2f26;
+}
+
+.abe-freshness-banner[data-abe-draft="source-conflict"] .abe-freshness-banner__text span,
+.abe-freshness-banner.abe-draft-source-conflict .abe-freshness-banner__text span {
+  color: color-mix(in srgb, #9b2f26 88%, #000);
+}
+
+.abe-freshness-banner[data-abe-draft="source-conflict"] .abe-begin-from-source,
+.abe-freshness-banner.abe-draft-source-conflict .abe-begin-from-source {
+  border: 1px solid #9b2f26 !important;
+  background: #9b2f26 !important;
+  color: #fff !important;
+}
+
+.abe-freshness-banner[data-abe-draft="source-conflict"] .abe-begin-from-source:hover:not(:disabled),
+.abe-freshness-banner[data-abe-draft="source-conflict"] .abe-begin-from-source:focus-visible:not(:disabled),
+.abe-freshness-banner.abe-draft-source-conflict .abe-begin-from-source:hover:not(:disabled),
+.abe-freshness-banner.abe-draft-source-conflict .abe-begin-from-source:focus-visible:not(:disabled) {
+  border-color: #7f241d !important;
+  background: #7f241d !important;
+  color: #fff !important;
+}
+
+[data-theme="dark"] .abe-freshness-banner[data-abe-draft="source-conflict"],
+[data-theme="dark"] .abe-freshness-banner.abe-draft-source-conflict {
+  border-color: var(--alm-danger-soft-border, rgba(248, 113, 113, 0.35));
+  border-bottom-color: var(--alm-danger-soft-border, rgba(248, 113, 113, 0.35));
+  background: var(--alm-danger-soft, rgba(185, 28, 28, 0.18));
+  color: var(--alm-status-danger-fg, #f87171);
+}
+
+[data-theme="dark"] .abe-freshness-banner[data-abe-draft="source-conflict"] .abe-freshness-banner__text strong,
+[data-theme="dark"] .abe-freshness-banner.abe-draft-source-conflict .abe-freshness-banner__text strong,
+[data-theme="dark"] .abe-freshness-banner[data-abe-draft="source-conflict"] .abe-freshness-banner__text span,
+[data-theme="dark"] .abe-freshness-banner.abe-draft-source-conflict .abe-freshness-banner__text span {
+  color: var(--alm-status-danger-fg, #f87171);
+}
+
+[data-theme="dark"] .abe-freshness-banner[data-abe-draft="source-conflict"] .abe-begin-from-source,
+[data-theme="dark"] .abe-freshness-banner.abe-draft-source-conflict .abe-begin-from-source {
+  border-color: #9b2f26 !important;
+  background: #9b2f26 !important;
+  color: #fff !important;
+}
+
+[data-theme="dark"] .abe-freshness-banner[data-abe-draft="source-conflict"] .abe-begin-from-source:hover:not(:disabled),
+[data-theme="dark"] .abe-freshness-banner[data-abe-draft="source-conflict"] .abe-begin-from-source:focus-visible:not(:disabled),
+[data-theme="dark"] .abe-freshness-banner.abe-draft-source-conflict .abe-begin-from-source:hover:not(:disabled),
+[data-theme="dark"] .abe-freshness-banner.abe-draft-source-conflict .abe-begin-from-source:focus-visible:not(:disabled) {
+  border-color: #7f241d !important;
+  background: #7f241d !important;
+  color: #fff !important;
+}
+
 @media (max-width: 720px) {
-  .abe-freshness-banner[data-abe-freshness="stale"] {
+  .abe-floating-banner-stack {
     top: 8px;
     max-width: calc(100% - 16px);
+  }
+
+  .abe-freshness-banner.abe-freshness-banner--floating {
     padding: 10px 12px;
   }
 
-  .abe-freshness-banner[data-abe-freshness="stale"] .abe-back {
+  .abe-freshness-banner.abe-freshness-banner--floating .abe-back,
+  .abe-freshness-banner.abe-freshness-banner--floating .abe-begin-from-source,
+  .abe-freshness-banner.abe-freshness-banner--floating .abe-freshness-actions {
     flex: 1 1 100%;
     margin-inline-start: 0;
+    width: 100%;
+  }
+
+  .abe-freshness-banner.abe-freshness-banner--floating .abe-begin-from-source,
+  .abe-freshness-banner.abe-freshness-banner--floating .abe-back {
     width: 100%;
   }
 }

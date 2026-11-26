@@ -375,17 +375,43 @@
         function draftBannerHtml(payload) {
             const draft = (payload && payload.editor_draft) || {};
             if (draft.conflict === "source") {
-                // Red top-of-editor alert (abe-freshness-banner.is-stale). The
-                // begin action must stay inside this banner — not in the sidebar.
-                return `<div class="abe-freshness-banner is-stale abe-draft-source-conflict" role="status" data-abe-draft="source-conflict">
-                    <strong>${esc(translate("Saved draft does not match this plan source."))}</strong>
-                    <span>${esc(translate("It was not applied. The cutting plan itself was not changed. Start a new draft from the current source to continue editing and saving. The previous draft is archived first; local unsaved moves on this screen are discarded on start."))}</span>
+                // Floating red warning card (presentation only). Keep
+                // .abe-begin-from-source for bindFreshnessActions; confirm flow
+                // is unchanged. Scope chrome via data-abe-draft=source-conflict.
+                return `<div class="abe-freshness-banner is-stale abe-draft-source-conflict abe-freshness-banner--floating" role="status" data-abe-draft="source-conflict">
+                    <div class="abe-freshness-banner__lead">
+                        <span class="abe-freshness-banner__icon" aria-hidden="true">⚠</span>
+                        <div class="abe-freshness-banner__text">
+                            <strong>${esc(translate("Saved draft does not match this plan source."))}</strong>
+                            <span>${esc(translate("It was not applied. The cutting plan itself was not changed. Start a new draft from the current source to continue editing and saving. The previous draft is archived first; local unsaved moves on this screen are discarded on start."))}</span>
+                        </div>
+                    </div>
                     <div class="abe-freshness-actions">
-                        <button type="button" class="btn alm-btn-primary abe-begin-from-source">${esc(translate("Start draft from current source"))}</button>
+                        <button type="button" class="btn alm-btn-primary abe-begin-from-source abe-freshness-banner__action">${esc(translate("Start draft from current source"))}</button>
                     </div>
                 </div>`;
             }
             return "";
+        }
+
+        function composeEditorBanners(payload) {
+            // Floating cards share one absolute stack so they never overlap;
+            // in-flow strips (calculating / historical / source-view) stay above body.
+            const parts = [
+                freshnessBannerHtml(payload),
+                draftBannerHtml(payload),
+                sourceViewBanner(),
+            ].filter(Boolean);
+            const floating = [];
+            const strips = [];
+            parts.forEach((html) => {
+                if (html.indexOf("abe-freshness-banner--floating") !== -1) floating.push(html);
+                else strips.push(html);
+            });
+            const stack = floating.length
+                ? `<div class="abe-floating-banner-stack">${floating.join("")}</div>`
+                : "";
+            return `${stack}${strips.join("")}`;
         }
 
         function confirmBeginFromCurrentSource() {
@@ -4194,7 +4220,7 @@
 
         function renderWorkspace(payload) {
             activeOrderName = payload.order_name || "";
-            const banner = `${freshnessBannerHtml(payload)}${draftBannerHtml(payload)}${sourceViewBanner()}`;
+            const banner = composeEditorBanners(payload);
             ensureShell().innerHTML = `
                 <div class="almdina-ui alm-page--workbench abe-page abe-root" dir="${esc(uiDirection())}">
                     ${banner}

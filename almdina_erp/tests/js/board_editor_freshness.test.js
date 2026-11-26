@@ -51,10 +51,10 @@ assert.match(apiSource, /get_system_plan_recalculation_status/);
 assert.match(pageSource, /on_page_show/);
 assert.match(pageSource, /active\.open\(context\)/);
 assert.match(pageSource, /plan_display_style\.js\?v=18/);
-assert.match(pageSource, /controller\.js\?v=58/);
+assert.match(pageSource, /controller\.js\?v=59/);
 assert.match(pageSource, /api\.js\?v=23/);
 assert.match(pageSource, /session_document\.js\?v=25/);
-assert.match(pageSource, /board_editor\.css\?v=54/);
+assert.match(pageSource, /board_editor\.css\?v=55/);
 assert.match(pageSource, /transform_geometry\.js\?v=3/);
 assert.match(pageSource, /move_geometry\.js\?v=24/);
 assert.match(pageSource, /rotation_geometry\.js\?v=21/);
@@ -141,14 +141,21 @@ assert.match(apiSource, /begin_board_editor_draft_from_current_source/);
     assert.match(cssSource, /\.abe-begin-from-source/);
     assert.match(cssSource, /\.abe-freshness-actions/);
     assert.match(cssSource, /\[data-abe-freshness="stale"\]/);
-    assert.match(cssSource, /\.abe-freshness-banner\.is-stale\.abe-draft-source-conflict/);
+    assert.match(cssSource, /\[data-abe-draft="source-conflict"\]/);
+    assert.match(cssSource, /\.abe-floating-banner-stack/);
+    assert.match(cssSource, /#fff1f0/);
+    assert.match(cssSource, /#9b2f26/);
     assert.match(cssSource, /position:\s*absolute/);
     assert.match(controllerSource, /abe-freshness-banner--floating/);
+    assert.match(controllerSource, /composeEditorBanners/);
     assert.match(controllerSource, /data-abe-freshness="stale"/);
+    assert.match(controllerSource, /data-abe-draft="source-conflict"/);
     assert.match(controllerSource, /abe-freshness-banner__action/);
+    assert.match(controllerSource, /confirmBeginFromCurrentSource/);
+    assert.match(controllerSource, /beginDraftFromCurrentSource/);
     assert.doesNotMatch(
         controllerSource.split('data-abe-freshness="stale"')[1].split("function ")[0],
-        /#fff4f2|#9b2f26/
+        /#fff1f0|#9b2f26/
     );
 }
 {
