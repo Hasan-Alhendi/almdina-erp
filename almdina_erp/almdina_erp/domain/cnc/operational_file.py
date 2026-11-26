@@ -321,6 +321,7 @@ def settings_fingerprint(
     perimeter_join_mode: str = "separate",
     cut_path_sequence: Sequence[str] | None = None,
     perimeter_cut_early_confirmed: bool = False,
+    join_cutting_paths: str = "no",
     sheet_placement: Mapping[str, Any] | None = None,
     toolpath_snapshots: Sequence[Mapping[str, Any]] | None = None,
     vector_associations: Sequence[Mapping[str, Any]] | None = None,
@@ -339,6 +340,7 @@ def settings_fingerprint(
         "perimeter_join_mode": str(perimeter_join_mode or "separate"),
         "cut_path_sequence": [str(key) for key in (cut_path_sequence or ())],
         "perimeter_cut_early_confirmed": bool(perimeter_cut_early_confirmed),
+        "join_cutting_paths": str(join_cutting_paths or "no"),
         "machine_profile": dict(machine_profile or {}),
         "sheet_placement": dict(sheet_placement or {}),
     }

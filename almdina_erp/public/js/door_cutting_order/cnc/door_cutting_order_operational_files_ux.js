@@ -336,6 +336,21 @@
             input.checked = String(input.value || "") === joinMode;
             input.disabled = !canPrepare;
         });
+        let joinCutsField = article.querySelector("fieldset[data-join-cutting-paths]");
+        if (!joinCutsField) {
+            const temp = document.createElement("div");
+            temp.innerHTML = markup;
+            const created = temp.querySelector("fieldset[data-join-cutting-paths]");
+            if (created) existing.insertAdjacentElement("afterend", created);
+            joinCutsField = article.querySelector("fieldset[data-join-cutting-paths]");
+        }
+        const joinCuts = normalizeJoinCuttingPaths(state.joinCuttingPaths);
+        if (joinCutsField) {
+            joinCutsField.querySelectorAll("input[data-join-cutting-paths]").forEach(input => {
+                input.checked = String(input.value || "") === joinCuts;
+                input.disabled = !canPrepare;
+            });
+        }
         const early = joinMode === "connected" && sheetPerimeterPrecedesMilling(state.order);
         let warning = existing.querySelector("[data-perimeter-early-warning]");
         if (early && !warning) {
@@ -376,6 +391,7 @@
             if (preset) overrides[path.path_key] = preset;
         });
         const joinMode = normalizePerimeterJoinMode(sheet.perimeter_join_mode);
+        const joinCuttingPaths = normalizeJoinCuttingPaths(sheet.join_cutting_paths);
         const state = {
             operations,
             sources,
@@ -386,6 +402,7 @@
             perimeterJoinMode: joinMode,
             cutPathSequence: [],
             perimeterEarlyConfirmed: Boolean(sheet.perimeter_cut_early_confirmed),
+            joinCuttingPaths,
             cncMachine: String(sheet.cnc_machine || ""),
             sheetStops: sheet.sheet_stops && sheet.sheet_stops.width_stop_side ? {
                 width_stop_side: String(sheet.sheet_stops.width_stop_side || ""),
@@ -425,6 +442,7 @@
             cutPathSequence: Array.isArray(state.cutPathSequence) ? state.cutPathSequence.slice() : [],
             perimeterEarlyConfirmed: Boolean(state.perimeterEarlyConfirmed)
                 && sheetPerimeterPrecedesMilling(state.order),
+            joinCuttingPaths: normalizeJoinCuttingPaths(state.joinCuttingPaths),
             cncMachine: String(state.cncMachine || ""),
             sheetStops: state.sheetStops || null,
             stopDraft: state.stopDraft || null,
@@ -1162,8 +1180,16 @@
         return `${pathDisplayLabel(path)} · ${operationLabel(path.operation_key)} · ${presetLabel(workspace, effectivePreset(state, path))}`;
     }
 
+    function normalizeJoinCuttingPaths(value) {
+        const token = String(value || "").trim().toLowerCase();
+        if (!token || token === "no" || token === "0" || token === "false" || token === "off") return "no";
+        if (token === "yes" || token === "1" || token === "true" || token === "on") return "yes";
+        return "no";
+    }
+
     function perimeterJoinControlsMarkup(state, canPrepare) {
         const joinMode = normalizePerimeterJoinMode(state.perimeterJoinMode);
+        const joinCuts = normalizeJoinCuttingPaths(state.joinCuttingPaths);
         const disabled = canPrepare ? "" : " disabled";
         const early = joinMode === "connected" && sheetPerimeterPrecedesMilling(state.order);
         const warning = early
@@ -1183,6 +1209,17 @@
                 <span>${escapeHtml(translate("Connected perimeter"))}</span>
             </label>
             ${warning}
+        </fieldset>
+        <fieldset class="dco-operational-perimeter" data-join-cutting-paths>
+            <legend>${escapeHtml(translate("Join Cutting Paths"))}</legend>
+            <label class="dco-operational-perimeter__option">
+                <input type="radio" name="join_cutting_paths" value="no" data-join-cutting-paths="no"${joinCuts === "no" ? " checked" : ""}${disabled}>
+                <span>${escapeHtml(translate("No"))}</span>
+            </label>
+            <label class="dco-operational-perimeter__option">
+                <input type="radio" name="join_cutting_paths" value="yes" data-join-cutting-paths="yes"${joinCuts === "yes" ? " checked" : ""}${disabled}>
+                <span>${escapeHtml(translate("Yes"))}</span>
+            </label>
         </fieldset>`;
     }
 
@@ -1512,6 +1549,14 @@
                 const live = liveContext();
                 const target = event.target;
                 if (!live || !live.state || !target || typeof target.getAttribute !== "function") return;
+                const joinCutsMode = target.getAttribute("data-join-cutting-paths");
+                if (joinCutsMode) {
+                    if (!target.checked) return;
+                    live.state.joinCuttingPaths = normalizeJoinCuttingPaths(joinCutsMode);
+                    syncSheetFooter(dialog, live.workspace, live.sheet, live.state);
+                    requestSheetProgramPreview(live.frm, dialog, live.workspace, live.sheet, live.state);
+                    return;
+                }
                 const joinMode = target.getAttribute("data-perimeter-join-mode");
                 if (joinMode) {
                     if (!target.checked) return;
@@ -2129,6 +2174,7 @@
             if (state.overrides[key]) overrides[key] = state.overrides[key];
         });
         const joinMode = normalizePerimeterJoinMode(state.perimeterJoinMode);
+        const joinCuts = normalizeJoinCuttingPaths(state.joinCuttingPaths);
         const args = {
             order_name: frm.doc.name,
             sheet_no: sheet.sheet_no,
@@ -2145,6 +2191,7 @@
             perimeter_cut_early_confirmed: joinMode === "connected"
                 && sheetPerimeterPrecedesMilling(state.order)
                 && state.perimeterEarlyConfirmed ? 1 : 0,
+            join_cutting_paths: joinCuts,
             cnc_machine: String(state.cncMachine || ""),
             base_revision: Number(state.settingsRevision || sheet.settings_revision || 0),
         };
@@ -2179,6 +2226,7 @@
             perimeter_components_disconnected: translate("Join the separate outer cut components, or keep separate cut paths."),
             perimeter_geometry_invalid: translate("Keep the approved cut geometry unchanged, or keep separate cut paths."),
             perimeter_join_mode_invalid: translate("Choose either a separate or a connected sheet perimeter."),
+            join_cutting_paths_invalid: translate("Choose whether to join cutting paths."),
             cut_path_sequence_invalid: translate("Restore a valid CUT_PATH order that includes every cut path on this sheet."),
             perimeter_cut_early_unconfirmed: translate("Confirm the warning before cutting the sheet perimeter before liner, recessed handle, or rear groove."),
             cnc_machine_required: translate(PLACEMENT_MESSAGES.cnc_machine_required),
@@ -4718,6 +4766,7 @@
                     perimeter_join_mode: args.perimeter_join_mode,
                     cut_path_sequence: args.cut_path_sequence,
                     perimeter_cut_early_confirmed: args.perimeter_cut_early_confirmed,
+                    join_cutting_paths: args.join_cutting_paths,
                 },
                 callback(response) {
                     resolve((response && response.message) || null);
@@ -4892,6 +4941,7 @@
         SHEET_PERIMETER_OPERATION_KEY,
         CUT_PATH_INTERNAL_SEQUENCE_KEY,
         normalizePerimeterJoinMode,
+        normalizeJoinCuttingPaths,
         deriveCutPathSequenceFromOrder,
         normalizeCutPathSequence,
         perimeterIsEarly,

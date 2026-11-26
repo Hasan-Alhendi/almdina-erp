@@ -3403,6 +3403,8 @@ Preparing the simulation NC file...,جاري تجهيز ملف NC التجريب
 Sheet perimeter cut method,طريقة قص محيط اللوح
 Disconnected perimeter,محيط غير متصل
 Connected perimeter,محيط متصل
+Join Cutting Paths,دمج مسارات القص
+Choose whether to join cutting paths.,اختر ما إذا كان يجب دمج مسارات القص.
 Sheet perimeter — Perimeter Cut,محيط اللوح — Perimeter Cut
 Sheet Perimeter Cut,قص محيط اللوح
 Inherited from Cut between pieces,موروث من القص بين الدرفات

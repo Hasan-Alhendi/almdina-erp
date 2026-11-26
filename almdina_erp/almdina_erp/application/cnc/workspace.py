@@ -357,6 +357,10 @@ def build_operational_workspace(
         PERIMETER_JOIN_CONNECTED,
         normalize_perimeter_join_mode,
     )
+    from almdina_erp.almdina_erp.domain.cnc.join_cutting_paths import (
+        JOIN_CUTTING_PATHS_NO,
+        normalize_join_cutting_paths,
+    )
 
     for sheet_no in _sheet_numbers(pieces):
         saved = _saved_for(
@@ -366,6 +370,7 @@ def build_operational_workspace(
             sheet_no=sheet_no,
         )
         join_mode = normalize_perimeter_join_mode((saved or {}).get("perimeter_join_mode"))
+        join_cuts = normalize_join_cutting_paths((saved or {}).get("join_cutting_paths"))
         catalog = catalog_sheet(
             sheet_no,
             pieces,
@@ -474,6 +479,7 @@ def build_operational_workspace(
                 perimeter_join_mode=join_mode,
                 cut_path_sequence=sequence,
                 perimeter_cut_early_confirmed=perimeter_early,
+                join_cutting_paths=join_cuts,
                 sheet_placement=placement_fp,
                 toolpath_snapshots=list((saved or {}).get("toolpath_snapshots") or ()),
                 vector_associations=list((saved or {}).get("vector_associations") or ()),
@@ -517,6 +523,7 @@ def build_operational_workspace(
                 "perimeter_join_mode": join_mode,
                 "cut_path_sequence": list(sequence),
                 "perimeter_cut_early_confirmed": perimeter_early,
+                "join_cutting_paths": join_cuts,
                 "cnc_machine": str((saved or {}).get("cnc_machine") or ""),
                 "sheet_stops": _stored_sheet_stops(saved),
                 "offset_left_cm": float(effective_left or 0) if saved is not None else 0.0,
@@ -649,6 +656,7 @@ def prepare_sheet_settings(
     perimeter_join_mode: str | None = None,
     cut_path_sequence: Sequence[str] | None = None,
     perimeter_cut_early_confirmed: bool | None = None,
+    join_cutting_paths: str | None = None,
     cnc_machine: str | None = None,
     offset_left_cm: Any = None,
     offset_bottom_cm: Any = None,
@@ -675,6 +683,10 @@ def prepare_sheet_settings(
         PERIMETER_JOIN_SEPARATE,
         normalize_perimeter_join_mode,
     )
+    from almdina_erp.almdina_erp.domain.cnc.join_cutting_paths import (
+        JOIN_CUTTING_PATHS_NO,
+        normalize_join_cutting_paths,
+    )
 
     plan = assess_approved_plan(approved_plan, current=plan_is_current)
     if int(sheet_no) not in _sheet_numbers(pieces):
@@ -683,6 +695,10 @@ def prepare_sheet_settings(
         join_mode = normalize_perimeter_join_mode((existing or {}).get("perimeter_join_mode"))
     else:
         join_mode = normalize_perimeter_join_mode(perimeter_join_mode)
+    if join_cutting_paths is None:
+        join_cuts = normalize_join_cutting_paths((existing or {}).get("join_cutting_paths"))
+    else:
+        join_cuts = normalize_join_cutting_paths(join_cutting_paths)
     catalog = catalog_sheet(
         int(sheet_no),
         pieces,
@@ -790,6 +806,7 @@ def prepare_sheet_settings(
         perimeter_join_mode=join_mode,
         cut_path_sequence=sequence,
         perimeter_cut_early_confirmed=perimeter_early,
+        join_cutting_paths=join_cuts,
         sheet_placement=placement_fp,
         toolpath_snapshots=list((existing or {}).get("toolpath_snapshots") or ())
         if toolpath_snapshots is None
@@ -816,6 +833,7 @@ def prepare_sheet_settings(
         "perimeter_join_mode": join_mode if join_mode == PERIMETER_JOIN_CONNECTED else PERIMETER_JOIN_SEPARATE,
         "cut_path_sequence": list(sequence),
         "perimeter_cut_early_confirmed": perimeter_early,
+        "join_cutting_paths": join_cuts if join_cuts == "yes" else JOIN_CUTTING_PATHS_NO,
         "cnc_machine": placement.machine_name if placement else "",
         "sheet_stops": sheet_stops_payload(placement) if placement is not None and chosen_stops is not None else None,
         "offset_left_cm": placement.offset_left_cm if placement else 0.0,

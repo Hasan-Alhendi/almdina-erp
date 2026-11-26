@@ -195,6 +195,7 @@ _MESSAGES = {
     "sheet_settings_required": "Save the sheet settings before reversing a machining path.",
     "sheet_settings_required_for_nc": "Save the sheet settings before generating the NC file.",
     "perimeter_join_mode_invalid": "The sheet perimeter join mode is not valid.",
+    "join_cutting_paths_invalid": "Choose whether to join cutting paths.",
     "perimeter_unavailable": "A connected sheet perimeter could not be formed from the approved cut network.",
     "perimeter_not_closed": "The outer cut network is not a closed perimeter.",
     "perimeter_geometry_ambiguous": "The outer cut network has branches that prevent one safe perimeter.",
@@ -499,6 +500,7 @@ def save_cnc_operational_sheet(
     perimeter_join_mode: str | None = None,
     cut_path_sequence: str | list[Any] | None = None,
     perimeter_cut_early_confirmed: int | str | bool | None = None,
+    join_cutting_paths: str | None = None,
     cnc_machine: str | None = None,
     offset_left_cm: float | int | str | None = None,
     offset_bottom_cm: float | int | str | None = None,
@@ -562,6 +564,7 @@ def save_cnc_operational_sheet(
             },
             "factory_defaults": factory_operation_defaults(),
             "perimeter_join_mode": perimeter_join_mode,
+            "join_cutting_paths": join_cutting_paths,
             "cut_path_sequence": parsed_sequence,
             "perimeter_cut_early_confirmed": (
                 None
@@ -620,6 +623,7 @@ def save_cnc_operational_sheet(
                 perimeter_join_mode=str(prepared.get("perimeter_join_mode") or "separate"),
                 cut_path_sequence=list(prepared.get("cut_path_sequence") or []),
                 perimeter_cut_early_confirmed=bool(prepared.get("perimeter_cut_early_confirmed")),
+                join_cutting_paths=str(prepared.get("join_cutting_paths") or "no"),
                 known_presets=base_known,
             )
             source_catalog = catalog_rows_from_program(source_program)
@@ -688,6 +692,7 @@ def calculate_cnc_association_toolpath(
     perimeter_join_mode: str | None = None,
     cut_path_sequence: str | list[Any] | None = None,
     perimeter_cut_early_confirmed: int | str | bool | None = None,
+    join_cutting_paths: str | None = None,
     cnc_machine: str | None = None,
     offset_left_cm: float | int | str | None = None,
     offset_bottom_cm: float | int | str | None = None,
@@ -736,11 +741,12 @@ def calculate_cnc_association_toolpath(
             join_mode,
             sequence,
             perimeter_early,
+            join_cuts,
         ) = _settings_from_saved(saved, factory_operation_defaults())
     else:
         operations, paths, order_keys = {}, {}, []
         confirmed = False
-        join_mode, sequence, perimeter_early = "separate", None, False
+        join_mode, sequence, perimeter_early, join_cuts = "separate", None, False, "no"
     if operation_presets is not None:
         operations = frappe.parse_json(operation_presets) if isinstance(operation_presets, str) else dict(operation_presets or {})
     if path_overrides is not None:
@@ -755,6 +761,8 @@ def calculate_cnc_association_toolpath(
         sequence = _parse_optional_sequence(cut_path_sequence)
     if perimeter_cut_early_confirmed is not None:
         perimeter_early = bool(cint(perimeter_cut_early_confirmed))
+    if join_cutting_paths is not None:
+        join_cuts = str(join_cutting_paths or "no")
     try:
         base_known = known_tool_presets()
         _plan, source_program, _presets = _compile_authorized_program(
@@ -768,6 +776,7 @@ def calculate_cnc_association_toolpath(
             perimeter_join_mode=join_mode,
             cut_path_sequence=sequence,
             perimeter_cut_early_confirmed=perimeter_early,
+            join_cutting_paths=join_cuts,
             known_presets=base_known,
         )
         source_catalog = catalog_rows_from_program(source_program)
@@ -807,6 +816,7 @@ def calculate_cnc_association_toolpath(
             perimeter_join_mode=join_mode,
             cut_path_sequence=sequence,
             perimeter_cut_early_confirmed=perimeter_early,
+            join_cutting_paths=join_cuts,
             known_presets=known,
             extra_path_overrides=overrides,
         )
@@ -841,6 +851,7 @@ def calculate_cnc_association_toolpath(
             perimeter_join_mode=join_mode,
             cut_path_sequence=sequence,
             perimeter_cut_early_confirmed=perimeter_early,
+            join_cutting_paths=join_cuts,
             cnc_machine=(saved or {}).get("cnc_machine") if cnc_machine is None else cnc_machine,
             offset_left_cm=(saved or {}).get("offset_left_cm") if offset_left_cm is None else offset_left_cm,
             offset_bottom_cm=(saved or {}).get("offset_bottom_cm") if offset_bottom_cm is None else offset_bottom_cm,
@@ -919,6 +930,7 @@ def delete_cnc_association(
             join_mode,
             sequence,
             perimeter_early,
+            join_cuts,
         ) = _settings_from_saved(saved, factory_operation_defaults())
         restamped = prepare_sheet_settings(
             order_name=str(order.name),
@@ -937,6 +949,7 @@ def delete_cnc_association(
             perimeter_join_mode=join_mode,
             cut_path_sequence=sequence,
             perimeter_cut_early_confirmed=perimeter_early,
+            join_cutting_paths=join_cuts,
             cnc_machine=saved.get("cnc_machine"),
             offset_left_cm=saved.get("offset_left_cm"),
             offset_bottom_cm=saved.get("offset_bottom_cm"),
@@ -1133,6 +1146,7 @@ def _reconciled_direction_records(
         perimeter_join_mode=str(prepared.get("perimeter_join_mode") or "separate"),
         cut_path_sequence=list(prepared.get("cut_path_sequence") or ()),
         perimeter_cut_early_confirmed=bool(prepared.get("perimeter_cut_early_confirmed")),
+        join_cutting_paths=str(prepared.get("join_cutting_paths") or "no"),
     )
     direction_program = unreversed_operational_program(
         program,
@@ -1157,6 +1171,7 @@ def get_cnc_sheet_program(
     perimeter_join_mode: str | None = None,
     cut_path_sequence: str | list[Any] | None = None,
     perimeter_cut_early_confirmed: int | str | bool = 0,
+    join_cutting_paths: str | None = None,
     machining_profiles: str | list[Any] | None = None,
     vector_associations: str | list[Any] | None = None,
 ) -> dict[str, Any]:
@@ -1191,6 +1206,7 @@ def get_cnc_sheet_program(
             "perimeter_join_mode": str(perimeter_join_mode or "separate"),
             "cut_path_sequence": parsed_sequence,
             "perimeter_cut_early_confirmed": bool(cint(perimeter_cut_early_confirmed)),
+            "join_cutting_paths": str(join_cutting_paths or "no"),
         }
         saved = _existing_sheet(str(order.name), plan, cint(sheet_no))
         effective_associations = None
@@ -1258,6 +1274,7 @@ def set_cnc_path_direction(
     perimeter_join_mode: str | None = None,
     cut_path_sequence: str | list[Any] | None = None,
     perimeter_cut_early_confirmed: int | str | bool = 0,
+    join_cutting_paths: str | None = None,
     cnc_machine: str | None = None,
     offset_left_cm: float | int | str | None = None,
     offset_bottom_cm: float | int | str | None = None,
@@ -1292,6 +1309,7 @@ def set_cnc_path_direction(
         join_mode,
         sequence,
         perimeter_early,
+        join_cuts,
     ) = _settings_from_saved(saved, factory_operation_defaults())
     probe_operations = operations
     probe_paths = paths
@@ -1301,6 +1319,7 @@ def set_cnc_path_direction(
     probe_join = join_mode
     probe_sequence = sequence
     probe_early = perimeter_early
+    probe_join_cuts = join_cuts
     if operation_presets is not None:
         parsed_operations = frappe.parse_json(operation_presets) if isinstance(operation_presets, str) else dict(operation_presets or {})
         if isinstance(parsed_operations, dict):
@@ -1327,6 +1346,8 @@ def set_cnc_path_direction(
         probe_early = bool(cint(perimeter_cut_early_confirmed))
         if operation_order is None:
             probe_confirmed = bool(cint(cut_path_early_confirmed))
+    if join_cutting_paths is not None:
+        probe_join_cuts = str(join_cutting_paths or "no")
     snapshots = list((saved or {}).get("toolpath_snapshots") or [])
     associations = list((saved or {}).get("vector_associations") or [])
     try:
@@ -1341,6 +1362,7 @@ def set_cnc_path_direction(
             perimeter_join_mode=probe_join,
             cut_path_sequence=probe_sequence,
             perimeter_cut_early_confirmed=probe_early,
+            join_cutting_paths=probe_join_cuts,
         )
     except OperationalFileError as exc:
         frappe.throw(_message(exc.code), frappe.ValidationError)
@@ -1387,6 +1409,7 @@ def set_cnc_path_direction(
             perimeter_join_mode=probe_join,
             cut_path_sequence=probe_sequence,
             perimeter_cut_early_confirmed=probe_early,
+            join_cutting_paths=probe_join_cuts,
             cnc_machine=(saved or {}).get("cnc_machine") if cnc_machine is None else cnc_machine,
             offset_left_cm=(saved or {}).get("offset_left_cm") if offset_left_cm is None else offset_left_cm,
             offset_bottom_cm=(saved or {}).get("offset_bottom_cm") if offset_bottom_cm is None else offset_bottom_cm,
@@ -1433,6 +1456,7 @@ def _compile_authorized_program(
     perimeter_join_mode: str = "separate",
     cut_path_sequence: Sequence[str] | None = None,
     perimeter_cut_early_confirmed: bool = False,
+    join_cutting_paths: str = "no",
     known_presets: Mapping[str, Mapping[str, Any]] | None = None,
     extra_path_overrides: Mapping[str, str] | None = None,
 ) -> tuple[Any, dict[str, Any], dict[str, Any]]:
@@ -1458,6 +1482,7 @@ def _compile_authorized_program(
         perimeter_join_mode=str(perimeter_join_mode or "separate"),
         cut_path_sequence=cut_path_sequence,
         perimeter_cut_early_confirmed=bool(perimeter_cut_early_confirmed),
+        join_cutting_paths=str(join_cutting_paths or "no"),
     )
     return plan, payload, presets
 
@@ -1485,7 +1510,7 @@ def _parse_sheet_settings(
 def _settings_from_saved(
     saved: Mapping[str, Any] | None,
     factory_defaults: Mapping[str, Any] | None = None,
-) -> tuple[dict[str, str], dict[str, str], list[str], bool, dict[str, str], str, list[str], bool]:
+) -> tuple[dict[str, str], dict[str, str], list[str], bool, dict[str, str], str, list[str], bool, str]:
     defaults = dict(factory_defaults or {})
     rows = list((saved or {}).get("operations") or [])
     operations: dict[str, str] = {}
@@ -1518,6 +1543,7 @@ def _settings_from_saved(
         str((saved or {}).get("perimeter_join_mode") or "separate"),
         sequence,
         bool((saved or {}).get("perimeter_cut_early_confirmed")),
+        str((saved or {}).get("join_cutting_paths") or "no"),
     )
 
 
@@ -1534,6 +1560,7 @@ def generate_cnc_sheet_nc(
     perimeter_join_mode: str | None = None,
     cut_path_sequence: str | list[Any] | None = None,
     perimeter_cut_early_confirmed: int | str | bool | None = None,
+    join_cutting_paths: str | None = None,
     cnc_machine: str | None = None,
     offset_left_cm: float | int | str | None = None,
     offset_bottom_cm: float | int | str | None = None,
@@ -1617,6 +1644,7 @@ def generate_cnc_sheet_nc(
                 saved_join,
                 saved_sequence,
                 saved_perimeter_early,
+                saved_join_cuts,
             ) = _settings_from_saved(existing, factory_operation_defaults())
             # Ignore every client machining override for view-only downloads.
             del (
@@ -1628,6 +1656,7 @@ def generate_cnc_sheet_nc(
                 perimeter_join_mode,
                 cut_path_sequence,
                 perimeter_cut_early_confirmed,
+                join_cutting_paths,
                 cnc_machine,
                 offset_left_cm,
                 offset_bottom_cm,
@@ -1653,6 +1682,7 @@ def generate_cnc_sheet_nc(
                 "operation_sources": saved_sources,
                 "factory_defaults": factory_operation_defaults(),
                 "perimeter_join_mode": saved_join,
+                "join_cutting_paths": saved_join_cuts,
                 "cut_path_sequence": saved_sequence,
                 "perimeter_cut_early_confirmed": saved_perimeter_early,
                 "cnc_machine": existing.get("cnc_machine"),
@@ -1692,6 +1722,7 @@ def generate_cnc_sheet_nc(
         join_mode,
         sequence,
         perimeter_early,
+        join_cuts,
     ) = _settings_from_saved(
         prepared,
         factory_operation_defaults(),
@@ -1708,6 +1739,7 @@ def generate_cnc_sheet_nc(
             perimeter_join_mode=join_mode,
             cut_path_sequence=sequence,
             perimeter_cut_early_confirmed=perimeter_early,
+            join_cutting_paths=join_cuts,
         )
         program = _effective_sheet_program(
             program,

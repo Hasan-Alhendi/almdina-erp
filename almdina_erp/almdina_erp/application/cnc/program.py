@@ -508,6 +508,7 @@ def compile_sheet_program(
     perimeter_join_mode: str = "separate",
     cut_path_sequence: Sequence[str] | None = None,
     perimeter_cut_early_confirmed: bool = False,
+    join_cutting_paths: str = "no",
 ) -> dict[str, Any]:
     """Return the JSON program for one sheet. Nothing is stored."""
 
@@ -802,6 +803,17 @@ def compile_sheet_program(
             item["path_key"] == SHEET_PERIMETER_PATH_KEY for item in blocked
         ):
             blocked_path("perimeter_unavailable", SHEET_PERIMETER_PATH_KEY)
+    from almdina_erp.almdina_erp.domain.cnc.join_cutting_paths import (
+        join_cut_path_entities,
+        join_cutting_paths_enabled,
+    )
+
+    if join_cutting_paths_enabled(join_cutting_paths):
+        entities, _join_summary = join_cut_path_entities(
+            entities,
+            operation_presets=operation_presets,
+            path_overrides=path_overrides,
+        )
     # Legacy cut_path_sequence is ignored for execution; operation_order wins.
     _ = cut_path_sequence
     _ = perimeter_cut_early_confirmed
