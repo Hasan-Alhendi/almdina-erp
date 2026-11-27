@@ -502,6 +502,18 @@ def test_dxf_replacement_preserves_classification_only_by_exact_identity(monkeyp
     monkeypatch.setattr(cutting_plan_command_service, "initialize_draft_plan_cost_snapshot", lambda *_args: False)
     monkeypatch.setattr(
         cutting_plan_command_service,
+        "manufacturing_plan_settings",
+        lambda _order: SimpleNamespace(
+            optimization_mode="smart",
+            machine_type="Auto",
+            optimization_time_limit_sec=10,
+            kerf_mm=5.0,
+            preferred_trim_mm=0.0,
+            deduct_edge_thickness=False,
+        ),
+    )
+    monkeypatch.setattr(
+        cutting_plan_command_service,
         "apply_validated_dxf_snapshot",
         lambda _order, _plan, snapshot: captured.update(snapshot),
     )

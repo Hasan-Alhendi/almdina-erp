@@ -152,6 +152,102 @@ def revision_from_approved(
     )
 
 
+def revision_from_lineage_source(
+    *,
+    current_name: str,
+    current_revision: int,
+    current_status: str,
+    source_type: str,
+    next_revision_number: int | None = None,
+) -> CuttingPlanRevision:
+    """Build a Draft revision from an Approved tip or a Cancelled recovery source.
+
+    Normal cancel-reapprove copies while the tip is still Approved. Historical
+    orders that were cancelled before that copy existed may recover from the
+    Cancelled revision without mutating it. ``next_revision_number`` must be the
+    order-wide tip (``next_revision``), not merely ``current_revision + 1``.
+    """
+
+    normalized = str(current_status or "").strip()
+    if normalized not in {APPROVED, CANCELLED}:
+        raise CuttingPlanLifecycleError("revision_source_must_be_approved_or_cancelled")
+    if normalized == APPROVED and next_revision_number is None:
+        return revision_from_approved(
+            current_name=current_name,
+            current_revision=current_revision,
+            current_status=normalized,
+            source_type=source_type,
+        )
+    revision = (
+        max(1, int(next_revision_number or 0))
+        if next_revision_number is not None
+        else max(1, int(current_revision or 1)) + 1
+    )
+    if revision <= int(current_revision or 0):
+        raise CuttingPlanLifecycleError("revision_must_be_newer_than_source")
+    return CuttingPlanRevision(
+        revision=revision,
+        status=DRAFT,
+        source_type=normalize_source_type(source_type),
+        based_on_plan=str(current_name or "").strip() or None,
+    )
+
+
+def select_newer_draft_of_source(
+    rows: list[Any] | tuple[Any, ...],
+    *,
+    source_type: str,
+    min_revision: int,
+) -> Any | None:
+    """Return the tip Draft of ``source_type`` when it is already newer than ``min_revision``."""
+
+    wanted = normalize_source_type(source_type)
+    floor = max(0, int(min_revision or 0))
+    candidates: list[Any] = []
+    for row in rows or ():
+        if isinstance(row, dict):
+            row_source = row.get("source_type")
+            row_status = row.get("status")
+            row_revision = row.get("revision")
+        else:
+            row_source = getattr(row, "source_type", None)
+            row_status = getattr(row, "status", None)
+            row_revision = getattr(row, "revision", None)
+        if str(row_source or "").strip() != wanted:
+            continue
+        if str(row_status or "").strip() != DRAFT:
+            continue
+        if int(row_revision or 0) <= floor:
+            continue
+        candidates.append(row)
+    if not candidates:
+        return None
+
+    def _sort_key(row: Any) -> tuple[int, str, str]:
+        if isinstance(row, dict):
+            return (
+                int(row.get("revision") or 0),
+                str(row.get("modified") or ""),
+                str(row.get("name") or ""),
+            )
+        return (
+            int(getattr(row, "revision", 0) or 0),
+            str(getattr(row, "modified", "") or ""),
+            str(getattr(row, "name", "") or ""),
+        )
+
+    return max(candidates, key=_sort_key)
+
+
+def prefer_plan_tab_for_source(source_type: str | None) -> str:
+    normalized = str(source_type or SYSTEM).strip() or SYSTEM
+    if normalized == UPLOADED_DXF:
+        return "Custom"
+    if normalized == BOARD_EDITOR:
+        return "BoardEditor"
+    return "System"
+
+
 def approval_transition(status: str | None) -> tuple[str, str]:
     ensure_draft_editable(status)
     return DRAFT, APPROVED
@@ -200,7 +296,10 @@ __all__ = [
     "manufacturing_actions_allowed",
     "next_revision",
     "normalize_source_type",
+    "prefer_plan_tab_for_source",
     "revision_from_approved",
+    "revision_from_lineage_source",
     "select_board_editor_surface_plan",
+    "select_newer_draft_of_source",
     "supersede_transition",
 ]

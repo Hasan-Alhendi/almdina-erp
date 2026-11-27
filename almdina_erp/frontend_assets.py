@@ -12,8 +12,8 @@ app_include_css = [
     "/assets/almdina_erp/css/almdina_components.css?v=3",
     "/assets/almdina_erp/css/almdina_patterns.css",
     "/assets/almdina_erp/css/almdina_page_templates.css?v=1",
-    "/assets/almdina_erp/css/almdina_desk_theme.css?v=2",
-    "/assets/almdina_erp/css/almdina_desk_sidebar.css?v=2",
+    "/assets/almdina_erp/css/almdina_desk_theme.css?v=4",
+    "/assets/almdina_erp/css/almdina_desk_sidebar.css?v=4",
     "/assets/almdina_erp/css/almdina_workspace_home.css?v=12",
     "/assets/almdina_erp/css/almdina_list_table.css?v=1",
     "/assets/almdina_erp/css/edge_banding_type_form.css?v=4",
@@ -42,8 +42,9 @@ app_include_css = [
 
 app_include_js = [
     "/assets/almdina_erp/js/almdina_locale.js",
-    "/assets/almdina_erp/js/cnc/cnc_field_labels.js?v=5",
-    "/assets/almdina_erp/js/cnc/cnc_tool_picker.js",
+    "/assets/almdina_erp/js/cnc/cnc_field_labels.js?v=6",
+    "/assets/almdina_erp/js/cnc/cnc_tool_picker.js?v=3",
+    "/assets/almdina_erp/js/cnc/cnc_profile_tool_binding.js?v=1",
     # Desk app-name menu language item. Loads after locale; binds sidebar_setup.
     "/assets/almdina_erp/js/almdina_language_switcher.js",
     "/assets/almdina_erp/js/permission_context.js",

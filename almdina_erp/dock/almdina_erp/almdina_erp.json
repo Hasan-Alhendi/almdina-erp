@@ -1,0 +1,31 @@
+{
+ "app": "almdina_erp",
+ "creation": "2026-11-25 00:00:00.000000",
+ "docstatus": 0,
+ "doctype": "Dock",
+ "idx": 0,
+ "items": [
+  {
+   "added": 0,
+   "hidden": 0,
+   "icon": "tool",
+   "link_to": "Almdina ERP",
+   "link_type": "Sidebar",
+   "title": "Almdina ERP"
+  },
+  {
+   "added": 0,
+   "hidden": 0,
+   "icon": "chart",
+   "link_to": "Almdina Reports",
+   "link_type": "Sidebar",
+   "title": "Almdina Reports"
+  }
+ ],
+ "modified": "2026-11-25 00:00:00.000000",
+ "modified_by": "Administrator",
+ "name": "almdina_erp",
+ "owner": "Administrator",
+ "standard": 1,
+ "user": ""
+}

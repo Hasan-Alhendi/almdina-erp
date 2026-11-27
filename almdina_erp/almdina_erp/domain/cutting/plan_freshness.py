@@ -99,6 +99,47 @@ def decide_uploaded_plan_mismatch(
     return PlanFreshnessDecision(True, "order_requirements_changed")
 
 
+def manufacturing_trim_matches(
+    uploaded_trim_mm: Any,
+    manufacturing_trim_mm: Any,
+    *,
+    tolerance: float = 1e-6,
+) -> bool:
+    """Compare preferred trim values without treating float noise as a change."""
+
+    try:
+        uploaded = float(uploaded_trim_mm)
+        manufacturing = float(manufacturing_trim_mm)
+    except (TypeError, ValueError):
+        return False
+    return abs(uploaded - manufacturing) <= tolerance
+
+
+def decide_uploaded_manufacturing_trim_mismatch(
+    *,
+    source_type: str,
+    status: str,
+    uploaded_trim_mm: Any,
+    manufacturing_trim_mm: Any,
+) -> PlanFreshnessDecision:
+    """Decide whether an Uploaded DXF Draft no longer matches manufacturing trim.
+
+    Fingerprints for an uploaded revision include that revision's own trim, so a
+    later System trim edit does not stale the uploaded fingerprint. This gate
+    compares manufacturing (System) trim to the trim stored on the Uploaded
+    Draft — the value used when that DXF was validated — without rewriting the
+    uploaded snapshot. Approved/historical revisions stay immutable here.
+    """
+
+    if str(source_type or "") != UPLOADED_DXF:
+        return PlanFreshnessDecision(False, "not_uploaded")
+    if str(status or "") != DRAFT:
+        return PlanFreshnessDecision(False, "immutable_revision")
+    if manufacturing_trim_matches(uploaded_trim_mm, manufacturing_trim_mm):
+        return PlanFreshnessDecision(False, "fresh")
+    return PlanFreshnessDecision(True, "trim_margin_changed")
+
+
 def select_uploaded_workspace_plan(
     rows: Sequence[Mapping[str, Any]],
 ) -> Mapping[str, Any] | None:
@@ -125,7 +166,9 @@ __all__ = [
     "PlanFreshnessDecision",
     "decide_approved_plan_freshness",
     "decide_draft_plan_freshness",
+    "decide_uploaded_manufacturing_trim_mismatch",
     "decide_uploaded_plan_mismatch",
+    "manufacturing_trim_matches",
     "matching_freshness_fingerprint",
     "select_uploaded_workspace_plan",
 ]

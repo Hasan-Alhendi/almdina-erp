@@ -450,12 +450,25 @@
             if (workspaceEditing(frm)) {
                 frappe.msgprint(translate("Save or cancel the plan settings edit before approval."));
             } else if (row && row.validation && row.validation.needs_recalculation) {
+                const alignment = row.settings_alignment;
+                const trimMismatch = source === "Custom"
+                    && row.validation
+                    && row.validation.freshness_reason === "trim_margin_changed"
+                    && alignment;
                 frappe.msgprint(translate(
-                    source === "Custom"
-                        ? "The order data changed. Upload a new DXF that matches the current measurements, then approve the plan."
-                        : source === "BoardEditor"
-                            ? "The order data changed. Re-apply the board-editor layout before approving the edited plan."
-                            : "Recalculate the cutting plan and review the new result before approval."
+                    trimMismatch
+                        ? "The trim margin changed. Current margin is {0} mm; this uploaded plan was validated with {1} mm. Upload a new DXF that matches the current margin before approval."
+                        : source === "Custom"
+                            ? "The order data changed. Upload a new DXF that matches the current measurements, then approve the plan."
+                            : source === "BoardEditor"
+                                ? "The order data changed. Re-apply the board-editor layout before approving the edited plan."
+                                : "Recalculate the cutting plan and review the new result before approval.",
+                    trimMismatch
+                        ? [
+                            String(alignment.manufacturing_trim_margin_mm),
+                            String(alignment.validated_trim_margin_mm),
+                        ]
+                        : undefined
                 ));
             } else if (!can(frm, "approve_dxf")) {
                 frappe.msgprint(translate("You do not have permission to approve the cutting plan."));

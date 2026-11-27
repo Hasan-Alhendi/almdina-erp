@@ -608,7 +608,26 @@ def _plan_to_export_snapshot(plan: Any) -> dict[str, Any]:
     for piece in plan.placed_pieces or []:
         pieces_by_sheet.setdefault(int(piece.sheet_no), []).append(piece)
 
-    for source in sorted(plan.sources or [], key=lambda row: int(row.sheet_no)):
+    # Print/preview iterate snapshot sheet order (shop-floor reverse keeps
+    # fill-order sheet_no values). Sorting sources by sheet_no here used to
+    # put fill-order board 1 in the first DXF slot while print Board 1 was
+    # the last-filled sheet — a full content reversal versus print.
+    sources_by_no = {int(row.sheet_no): row for row in (plan.sources or [])}
+    snapshot_sheet_nos = [
+        int(sheet.get("sheet_no") or 0)
+        for sheet in (snapshot.get("sheets") or [])
+        if isinstance(sheet, dict) and int(sheet.get("sheet_no") or 0) > 0
+    ]
+    if (
+        snapshot_sheet_nos
+        and len(snapshot_sheet_nos) == len(sources_by_no)
+        and set(snapshot_sheet_nos) == set(sources_by_no)
+    ):
+        ordered_sources = [sources_by_no[sheet_no] for sheet_no in snapshot_sheet_nos]
+    else:
+        ordered_sources = list(plan.sources or [])
+
+    for source in ordered_sources:
         sheet_no = int(source.sheet_no)
         sheet_pieces: list[dict[str, Any]] = []
         for piece in pieces_by_sheet.get(sheet_no, []):

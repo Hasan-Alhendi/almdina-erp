@@ -93,14 +93,16 @@ class CuttingPlan(Document):
                     _("A board editor cutting plan copy must reference a valid source plan.")
                 )
         else:
-            # Creating a revision is allowed only from the currently Approved plan;
-            # that invariant is also enforced by the application create-revision use
-            # case. After the child exists, its immutable lineage remains valid when
-            # the parent later becomes Superseded or Cancelled as part of normal
-            # approval replacement/cancellation. Re-validating an existing child must
-            # therefore accept all immutable historical parent states.
-            if self.is_new() and parent.status != APPROVED:
-                frappe.throw(_("A new Cutting Plan revision must be based on an approved plan."))
+            # Creating a revision is allowed from the currently Approved tip, or
+            # from a Cancelled tip when recovering a working Draft after an older
+            # cancellation that did not spawn a geometry-preserving copy. After the
+            # child exists, its immutable lineage remains valid when the parent
+            # later becomes Superseded or Cancelled. Re-validating an existing child
+            # must therefore accept all immutable historical parent states.
+            if self.is_new() and parent.status not in {APPROVED, CANCELLED}:
+                frappe.throw(
+                    _("A new Cutting Plan revision must be based on an approved or cancelled plan.")
+                )
             if not self.is_new() and parent.status not in IMMUTABLE_STATUSES:
                 frappe.throw(
                     _("A Cutting Plan revision must reference an immutable historical plan.")

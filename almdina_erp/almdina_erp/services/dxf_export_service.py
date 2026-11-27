@@ -726,7 +726,7 @@ def _normalized_dxf_filename(order_name: str | None) -> str:
         character if character.isalnum() or character in "-_" else "_"
         for character in str(order_name or "door_cutting_order")
     )
-    return f"cutting_plan_{safe_order}_AutoCAD2011_2026.dxf"
+    return f"{safe_order}.dxf"
 
 
 

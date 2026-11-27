@@ -152,6 +152,23 @@
         return Math.max(6, Math.min(16, size * 0.08));
     }
 
+    function printRowSizes(count) {
+        if (count <= 0) return [];
+        if (count <= 6) return [count];
+        if (count === 7) return [4, 3];
+        if (count === 8) return [4, 4];
+        if (count === 9) return [5, 4];
+        return [5, count - 5];
+    }
+
+    function sheetPrintRows(count) {
+        const rows = [];
+        for (let start = 0; start < count; start += 10) {
+            rows.push(...printRowSizes(Math.min(10, count - start)));
+        }
+        return rows;
+    }
+
     function extraAddonFlags(piece) {
         return {
             double: Boolean(Number(piece && piece.extra_double)),
@@ -940,15 +957,23 @@
         if (cutterMm && cutterMm.linerExport) throw cutterMm;
         const layerDiameters = layerDiametersMm(plan, cutterMm);
         assertRequiredGlassOpenings(plan);
+        // Sheets must already be in print presentation order (snapshot order).
+        // Do not re-sort by sheet_no: shop-floor packing keeps fill-order
+        // numbers while reversing the list so the last-filled board prints first.
         const sheets = plan.sheets || [];
-        const perRow = 2;
+        const rowSizes = sheetPrintRows(sheets.length);
+        const maxColumns = Math.max(0, ...rowSizes);
         const gapMm = 200;
+        const rightToLeft = String((document.documentElement && document.documentElement.dir) || "").toLowerCase() === "rtl";
         const maxWidth = Math.max(0, ...sheets.map(sheet => num(sheet.full_width_cm || plan.full_board_width_cm) * 10));
         const maxHeight = Math.max(0, ...sheets.map(sheet => num(sheet.full_length_cm || plan.full_board_length_cm) * 10));
         let entities = "";
         let extmaxX = 0;
         let extmaxY = 0;
         let textOutlineLayer = false;
+        let rowIndex = 0;
+        let columnIndex = 0;
+        let boardNumber = 0;
 
         function textOutlineEntities(piece, placement) {
             const rings = piece && piece.approved_text_outlines;
@@ -1062,16 +1087,35 @@
             return lwpolyline(overlay.layer, points);
         }
 
-        sheets.forEach((sheet, index) => {
+        sheets.forEach(sheet => {
             const fullWidth = num(sheet.full_width_cm || plan.full_board_width_cm) * 10;
             const fullHeight = num(sheet.full_length_cm || plan.full_board_length_cm) * 10;
-            const offsetX = (index % perRow) * (maxWidth + gapMm);
-            const offsetY = Math.floor(index / perRow) * (maxHeight + gapMm);
+            const rowSize = rowSizes[rowIndex];
+            // Print order is top-to-bottom; horizontal order follows the page.
+            // DXF Y increases upwards, so the first row needs the largest Y.
+            const offsetX = (maxColumns - rowSize) * (maxWidth + gapMm) / 2
+                + (rightToLeft ? rowSize - 1 - columnIndex : columnIndex) * (maxWidth + gapMm);
+            const offsetY = (rowSizes.length - 1 - rowIndex) * (maxHeight + gapMm);
+            columnIndex += 1;
+            if (columnIndex === rowSize) {
+                rowIndex += 1;
+                columnIndex = 0;
+            }
             const appliedTrim = appliedTrimMm(plan, sheet);
             extmaxX = Math.max(extmaxX, offsetX + fullWidth);
-            extmaxY = Math.max(extmaxY, offsetY + fullHeight);
+            const labelY = offsetY + fullHeight + 40;
+            extmaxY = Math.max(extmaxY, labelY + 25);
 
             entities += rectangle("SHEET_OUTLINE", offsetX, offsetY, fullWidth, fullHeight);
+            const isOffcut = String(sheet.resource_kind || "FULL_BOARD").toUpperCase() === "OFFCUT";
+            if (!isOffcut) boardNumber += 1;
+            entities += textEntity(
+                TEXT_LABEL_LAYER,
+                offsetX + fullWidth / 2,
+                labelY,
+                25,
+                isOffcut ? dxfAsciiText(translate("Offcut")) : String(boardNumber)
+            );
             const placement = { offsetX, offsetY, fullHeight, appliedTrim };
             const shapes = [];
 

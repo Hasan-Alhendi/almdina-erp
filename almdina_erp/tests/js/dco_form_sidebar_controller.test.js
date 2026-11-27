@@ -51,6 +51,8 @@ class FakeJQuery {
     }
     is(selector) { return selector === ":visible" && this.target.visible; }
     hasClass(value) { return this.target.classList.has(value); }
+    show() { this.target.visible = true; return this; }
+    hide() { this.target.visible = false; return this; }
     toggle() { this.target.visible = !this.target.visible; return this; }
     on(event, handler) {
         this.target.events ||= {};
@@ -262,6 +264,12 @@ assert.equal([...runtime.body.events["toggleSidebar.almdinaDcoFormSidebar"]].len
 
 const other = { doctype: "Customer", page: second.page };
 assert.equal(runtime.controller.mount(other), null, "other doctypes must not be affected");
+
+// A form chrome rebuild without a native side section must not block readiness.
+const orphan = makeForm(runtime, "DCO-ORPHAN", true);
+orphan.sidebar = null;
+assert.equal(runtime.controller.mount(orphan) !== null, true);
+assert.equal(runtime.controller.isPreferenceApplied(orphan), true, "missing native sidebar is treated as applied");
 
 // Mobile delegates to native overlay and does not overwrite desktop preference.
 runtime.setWidth(500);

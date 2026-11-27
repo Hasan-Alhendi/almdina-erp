@@ -1645,6 +1645,7 @@ Cutting plan,خطة القص
 Cutting plan - {0},خطة قص - {0}
 Plan name,اسم الخطة
 Cutting plan approval was cancelled and its history was kept.,تم إلغاء اعتماد خطة القص مع الاحتفاظ بسجلها.
+Cutting plan approval was cancelled. A matching draft is ready for review and re-approval.,تم إلغاء اعتماد خطة القص. أصبحت مسودة مطابقة جاهزة للمراجعة وإعادة الاعتماد.
 Cutting plan commands,أوامر خطة القص
 Cutting plan engine,محرك خطة القص
 Cutting plan source,مصدر خطة القص
@@ -1702,6 +1703,7 @@ The DXF file was replaced and validated.,تم استبدال ملف DXF والت
 The DXF file was uploaded and validated.,تم رفع ملف DXF والتحقق منه.
 The browser blocked the print window. Allow pop-ups and try again.,المتصفح منع فتح نافذة الطباعة. اسمح بالنوافذ المنبثقة ثم جرّب مرة أخرى.
 The current production plan approval will be cancelled and kept in the revision history. The old plan will not become an editable draft. Do you want to continue?,سيتم إلغاء اعتماد خطة الإنتاج الحالية مع الاحتفاظ بها في سجل المراجعات، ولن تتحول الخطة القديمة إلى مسودة قابلة للتعديل. هل تريد المتابعة؟
+The current production plan approval will be cancelled and kept in the revision history. A matching draft copy will be prepared for re-approval without recalculation. Do you want to continue?,سيتم إلغاء اعتماد خطة الإنتاج الحالية مع الاحتفاظ بها في سجل المراجعات، وسيتم تجهيز نسخة مسودة مطابقة لإعادة الاعتماد دون إعادة الحساب. هل تريد المتابعة؟
 The direct result after applying the current cutting plan settings.,النتيجة المباشرة بعد تطبيق إعدادات خطة القص الحالية.
 The drawing approval was updated and replaced the previous approved plan.,تم تحديث اعتماد الرسم واستبدال الخطة المعتمدة السابقة.
 The drawing was approved for production.,تم اعتماد الرسم للإنتاج.
@@ -3920,6 +3922,7 @@ No profiles yet.,لا توجد بروفايلات بعد.
 Profile name,اسم البروفايل
 Tool,الريشة
 Choose,اختر
+Choose vectors,اختر
 Vector Association,ربط المتجهات
 Vectors,المتجهات
 Selected Vectors,المتجهات المحددة
@@ -4421,3 +4424,6 @@ The rear groove cutter would cut {0} outside the requested width,ريشة فرز
 "Edit sheet settings, associations, toolpaths, and path direction, then save them. Downloading NC still uses the view permission and the saved settings.",تعديل إعدادات اللوح والارتباطات ومسارات الأدوات واتجاه المسارات ثم حفظها. يبقى تحميل NC بصلاحية العرض والإعدادات المحفوظة.
 Edit factory default tool presets for operational layers and the sample machine profile. Does not change operational files that were already saved.,تعديل إعدادات الريش الافتراضية لطبقات التشغيل ومعاينة الماكينة. لا يغيّر الملفات التشغيلية المحفوظة مسبقًا.
 Save the sheet settings before generating the NC file.,احفظ إعدادات اللوح قبل توليد ملف NC.
+"The trim margin changed. Current margin is {0} mm; this uploaded plan was validated with {1} mm. Upload a new DXF that matches the current margin before approval.","تغير هامش التشذيب. الهامش الحالي {0} مم؛ تم التحقق من هذه الخطة المرفوعة بهامش {1} مم. ارفع DXF جديدًا يطابق الهامش الحالي قبل الاعتماد."
+"Uploaded plan was validated with {0} mm trim margin.","تم التحقق من الخطة المرفوعة بهامش تشذيب {0} مم."
+"The uploaded plan trim margin ({0} mm) does not match the current manufacturing trim ({1} mm). Upload a new DXF that matches the current margin before approval.","هامش التشذيب في الخطة المرفوعة ({0} مم) لا يطابق هامش التصنيع الحالي ({1} مم). ارفع DXF جديدًا يطابق الهامش الحالي قبل الاعتماد."

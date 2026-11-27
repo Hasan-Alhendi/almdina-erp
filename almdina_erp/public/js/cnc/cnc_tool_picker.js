@@ -69,8 +69,31 @@
 
     const pickerRoots = new Set();
 
+    function prunePickerRoots() {
+        Array.from(pickerRoots).forEach(host => {
+            if (!host) {
+                pickerRoots.delete(host);
+                return;
+            }
+            // Drop hosts from closed Quick Entry modals / detached form wrappers.
+            if (typeof host.isConnected === "boolean" && !host.isConnected) {
+                pickerRoots.delete(host);
+                return;
+            }
+            if (host.ownerDocument && host.ownerDocument.body && typeof host.ownerDocument.body.contains === "function") {
+                if (!host.ownerDocument.body.contains(host)) pickerRoots.delete(host);
+            }
+        });
+    }
+
     function bind(root) {
-        if (!root || root.dataset.toolPickerBound === "1") return;
+        if (!root) return;
+        // Event delegation stays on the host for the lifetime of that host.
+        // Remount replaces innerHTML only; it must never stack another click listener.
+        if (root.dataset.toolPickerBound === "1") {
+            pickerRoots.add(root);
+            return;
+        }
         root.dataset.toolPickerBound = "1";
         pickerRoots.add(root);
         root.addEventListener("click", event => {
@@ -89,6 +112,7 @@
         if (doc && typeof doc.addEventListener === "function" && !doc.__almdinaToolPickerOutside) {
             doc.__almdinaToolPickerOutside = true;
             doc.addEventListener("mousedown", event => {
+                prunePickerRoots();
                 pickerRoots.forEach(host => {
                     if (host.ownerDocument && host.ownerDocument !== doc) return;
                     host.querySelectorAll("[data-tool-picker]").forEach(picker => {
@@ -101,6 +125,25 @@
 
     function pickerRoot(container) {
         return container && container.querySelector ? container.querySelector("[data-tool-picker]") : null;
+    }
+
+    function wireFieldHandlers(container, spec) {
+        const select = container.querySelector("[data-tool-picker-select]");
+        if (select && typeof spec.onToolChange === "function") {
+            select.addEventListener("change", () => {
+                const value = String(select.value || "");
+                if (value === String(spec.selected || "")) return;
+                spec.selected = value;
+                spec.onToolChange(value);
+            });
+        }
+        container.querySelectorAll("[data-tool-picker-settings] input").forEach(input => {
+            input.addEventListener("input", () => {
+                if (typeof spec.onFieldInput !== "function") return;
+                const name = input.getAttribute("data-field") || input.getAttribute("data-profile-tool") || "";
+                spec.onFieldInput(name, input.value);
+            });
+        });
     }
 
     function controllerFor(container) {
@@ -123,11 +166,17 @@
                 });
                 return { tool: select ? select.value : "", fields };
             },
-            setTools(tools) {
+            setTools(tools, selected, options) {
                 const select = container.querySelector("[data-tool-picker-select]");
                 if (!select || !select.ownerDocument) return;
-                const current = select.value;
-                const emptyLabel = select.getAttribute("data-empty-label") || "";
+                const settings = options || {};
+                const emptyLabel = settings.emptyLabel != null
+                    ? String(settings.emptyLabel)
+                    : (select.getAttribute("data-empty-label") || "");
+                if (emptyLabel) select.setAttribute("data-empty-label", emptyLabel);
+                // Capture before rebuilding options. After innerHTML clear the
+                // browser may report an empty value even when a tool was selected.
+                const preserved = String(select.value || "");
                 const rows = [{ value: "", label: emptyLabel }].concat(Array.isArray(tools) ? tools : []);
                 select.innerHTML = "";
                 rows.forEach(row => {
@@ -136,7 +185,38 @@
                     option.textContent = String(row.label || row.value || "");
                     select.appendChild(option);
                 });
-                select.value = current;
+                // Explicit selected (including "") is document truth. Otherwise keep
+                // the previous selection for callers that only refresh the catalog.
+                const nextSelected = selected !== undefined
+                    ? String(selected || "")
+                    : preserved;
+                select.value = nextSelected;
+                const face = container.querySelector(".dco-tool-picker__value");
+                if (face) {
+                    if (!nextSelected) {
+                        face.textContent = emptyLabel;
+                    } else if (settings.selectedLabel != null && String(settings.selectedLabel)) {
+                        face.textContent = String(settings.selectedLabel);
+                    } else {
+                        const match = rows.find(row => String(row.value || "") === nextSelected);
+                        face.textContent = match ? String(match.label || nextSelected) : nextSelected;
+                    }
+                }
+            },
+            clearSelection(emptyLabel) {
+                this.setTools(
+                    Array.from(container.querySelectorAll("[data-tool-picker-select] option"))
+                        .filter(option => option.value)
+                        .map(option => ({ value: option.value, label: option.textContent })),
+                    "",
+                    { emptyLabel: emptyLabel || "" }
+                );
+                const settings = container.querySelector("[data-tool-picker-settings]");
+                if (settings) {
+                    settings.innerHTML = "";
+                    settings.hidden = true;
+                }
+                setOpen(pickerRoot(container), false);
             },
             setState(next) {
                 const state = next || {};
@@ -152,24 +232,14 @@
 
     function mount(container, spec) {
         if (!container) return null;
-        container.innerHTML = markup(spec);
+        const options = spec || {};
+        // Replace markup only. Keep one delegated click/keydown listener on the host.
+        container.innerHTML = markup(options);
         bind(container);
+        prunePickerRoots();
         const select = container.querySelector("[data-tool-picker-select]");
-        if (select && typeof spec.onToolChange === "function") {
-            select.addEventListener("change", () => {
-                const value = String(select.value || "");
-                if (value === String(spec.selected || "")) return;
-                spec.selected = value;
-                spec.onToolChange(value);
-            });
-        }
-        container.querySelectorAll("[data-tool-picker-settings] input").forEach(input => {
-            input.addEventListener("input", () => {
-                if (typeof spec.onFieldInput !== "function") return;
-                const name = input.getAttribute("data-field") || input.getAttribute("data-profile-tool") || "";
-                spec.onFieldInput(name, input.value);
-            });
-        });
+        if (select) select.value = String(options.selected || "");
+        wireFieldHandlers(container, options);
         return controllerFor(container);
     }
 
@@ -177,5 +247,8 @@
         markup,
         bind,
         mount,
+        // Test/diagnostic seam for remount listener regressions.
+        _pickerRoots: pickerRoots,
+        _prunePickerRoots: prunePickerRoots,
     });
 })();

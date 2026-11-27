@@ -1,5 +1,9 @@
 frappe.listview_settings["CNC Machining Profile"] = {
     onload(listview) {
+        const labelsApi = window.AlmdinaCncLabels;
+        if (labelsApi && typeof labelsApi.installQuickEntryForms === "function") {
+            labelsApi.installQuickEntryForms();
+        }
         const labels = {
             profile_id: "Profile ID",
             profile_name: "Profile Name",

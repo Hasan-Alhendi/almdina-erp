@@ -70,14 +70,18 @@ def test_verified_download_uses_the_same_nc_bytes_once():
 
 def test_export_filename_is_nc_and_does_not_imply_a_stored_copy():
     name = nc_export_filename(
-        order_name="DCO-1",
+        order_name="26-00335",
         cutting_plan="PLAN-1",
         plan_revision=3,
         sheet_no=2,
         content_sha256=nc_content_sha256("G90\nM30\n"),
     )
+    assert name == "26-00335(2).nc"
     assert name.endswith(".nc")
     assert not name.endswith(".sim.nc")
+    assert "PLAN-1" not in name
+    assert "sheet" not in name
+    assert "_" not in name
 
 
 def test_generate_returns_content_without_saving_a_file_or_settings():

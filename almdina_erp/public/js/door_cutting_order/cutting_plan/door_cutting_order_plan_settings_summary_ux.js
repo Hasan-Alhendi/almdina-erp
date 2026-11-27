@@ -109,6 +109,17 @@
         if (operational && Object.prototype.hasOwnProperty.call(operational, "deduct_edge_thickness")) {
             settings.deduct_edge_thickness = operational.deduct_edge_thickness;
         }
+        // Cutting settings show the current manufacturing trim. Uploaded rows keep
+        // their validated trim separately for the alignment note.
+        const alignment = row && row.settings_alignment;
+        if (
+            alignment
+            && Object.prototype.hasOwnProperty.call(alignment, "manufacturing_trim_margin_mm")
+        ) {
+            settings.trim_margin_mm = alignment.manufacturing_trim_margin_mm;
+            settings.validated_trim_margin_mm = alignment.validated_trim_margin_mm;
+            settings.trim_matches = alignment.trim_matches;
+        }
         return settings;
     }
 
@@ -218,6 +229,14 @@
                 display:flex !important;
                 flex-wrap:wrap !important;
                 width:100% !important;
+            }
+            .${SUMMARY_CLASS} .dco-plan-settings-readonly__trim-note {
+                width:100% !important;
+                margin:0 !important;
+                padding:0 2px !important;
+                font-size:11px !important;
+                line-height:1.35 !important;
+                color:var(--text-muted,#667085) !important;
             }
             .${SUMMARY_CLASS} .dco-plan-settings-readonly__lead {
                 display:none !important;
@@ -373,6 +392,24 @@
         }).join("");
     }
 
+    function validatedTrimNote(settings) {
+        if (!settings || settings.trim_matches !== false) return "";
+        if (
+            settings.validated_trim_margin_mm == null
+            || settings.validated_trim_margin_mm === ""
+        ) {
+            return "";
+        }
+        return `
+            <div class="dco-plan-settings-readonly__trim-note" role="status">
+                ${frappe.utils.escape_html(translate(
+                    "Uploaded plan was validated with {0} mm trim margin.",
+                    [String(settings.validated_trim_margin_mm)]
+                ))}
+            </div>
+        `;
+    }
+
     function summaryMarkup(frm, settings) {
         const groups = groupSettingSpecs(settingSpecs(frm, settings));
         return `
@@ -380,6 +417,7 @@
                 <div class="dco-plan-settings-readonly__strip" data-settings-group="plan" role="group" aria-label="${frappe.utils.escape_html(translate("Plan settings"))}">
                     ${summaryFields(groups.plan, settings)}
                 </div>
+                ${validatedTrimNote(settings)}
                 <div class="dco-plan-settings-readonly__strip dco-plan-settings-readonly__tool-row" data-settings-group="tools" role="group" aria-label="${frappe.utils.escape_html(translate("Tool diameters"))}">
                     ${summaryFields(groups.tools, settings)}
                 </div>

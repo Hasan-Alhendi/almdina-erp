@@ -82,6 +82,8 @@ class TestWorkspaceServerVisibility(unittest.TestCase):
     def test_boot_filters_frappe_v16_sidebar_pages_and_workspace_content(self) -> None:
         source = (ROOT / "boot.py").read_text(encoding="utf-8")
         self.assertIn('"sidebar_pages"', source)
+        self.assertIn("_filter_module_sidebars", source)
+        self.assertIn("module_sidebars", source)
         self.assertIn("workspace_item_allowed", source)
         self.assertIn("project_workspace_page", source)
         self.assertIn("Unknown child links inside the Almdina shell fail closed", source)

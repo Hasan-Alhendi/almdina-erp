@@ -226,7 +226,14 @@
         ].forEach(eventName => {
             window.addEventListener(eventName, event => {
                 const frm = (event && event.detail && event.detail.frm) || window.cur_frm;
-                if (frm && frm.doctype === DOCTYPE && frm._dco_presentation_active && window.cur_frm === frm) recover(frm);
+                if (!(frm && frm.doctype === DOCTYPE && frm._dco_presentation_active && window.cur_frm === frm)) {
+                    return;
+                }
+                // surfaces-settled already means every registered surface reported
+                // ready. Re-running recover unconditionally re-entered mount/toggle
+                // work and could fight Frappe 16.60 form chrome rebuilds.
+                if (eventName === "almdina:surfaces-settled" && isReady(frm)) return;
+                recover(frm);
             });
         });
     }

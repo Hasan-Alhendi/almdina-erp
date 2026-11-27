@@ -45,3 +45,4 @@ almdina_erp.patches.v1_0.configure_cnc_machine_work_zero
 almdina_erp.patches.v1_0.configure_cnc_machine_corner_stops
 almdina_erp.patches.v1_0.configure_cnc_machine_post_processor
 almdina_erp.patches.v1_0.configure_cnc_machine_stop_sides
+almdina_erp.patches.v1_0.reset_almdina_site_dock_layers

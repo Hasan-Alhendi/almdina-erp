@@ -32,14 +32,15 @@ assert.ok(typeof ux.sheetSettingsUrl === "function");
 assert.ok(panel.includes("openSheetSettingsTab("));
 assert.ok(!panel.includes("openSheetDialog("));
 assert.ok(!panel.includes("dco-operational-sheet-dialog"));
-assert.ok(pageSource.includes('"/assets/almdina_erp/js/cnc/artcam_machining_ux.js"'));
-assert.ok(pageSource.includes('"/assets/almdina_erp/js/door_cutting_order/cnc/door_cutting_order_operational_files_ux.js"'));
-assert.equal(pageSource.includes("artcam_machining_ux.js?"), false);
-assert.equal(pageSource.includes("door_cutting_order_operational_files_ux.js?"), false);
+assert.ok(pageSource.includes('"/assets/almdina_erp/js/cnc/artcam_machining_ux.js?v=3"'));
+assert.ok(pageSource.includes('"/assets/almdina_erp/js/door_cutting_order/cnc/door_cutting_order_operational_files_ux.js?v=1"'));
+assert.ok(pageSource.includes('door_cutting_order_operational_files.css?v=23'));
+assert.ok(pageSource.includes("frappe.assets.load_asset(path, new URL(asset, window.location.origin).toString())"));
 assert.ok(pageSource.includes('PAGE_ROUTE = "cnc-sheet-settings"'));
 assert.ok(pageSource.includes("frappe.pages[PAGE_ROUTE]"));
 assert.ok(pageSource.includes("mountSheetSettingsPage"));
 assert.ok(css.includes(".dco-cnc-sheet-page"));
+assert.ok(css.includes(".dco-operational-sheet .dco-artcam-readonly"));
 assert.ok(css.includes("font-size: 14px"));
 assert.ok(translations.includes("العودة إلى الطلب"));
 assert.ok(translations.includes("إعدادات لوح CNC"));
@@ -401,6 +402,16 @@ assert.equal(ux.finishSheetMutation(mutationState, firstMutation), true);
 const secondMutation = ux.beginSheetMutation(mutationState);
 assert.equal(secondMutation, 2);
 assert.equal(ux.sheetMutationIsCurrent(mutationState, firstMutation), false);
+windowObject.AlmdinaArtcamMachining = {
+    markup() { return '<form data-artcam-editor><input data-field="name"><select data-field="source"></select><select data-field="profile_id"></select></form>'; },
+};
+const viewOnlyMarkup = ux.dialogMarkup(
+    { can_prepare: false, cutting_plan: "PLAN", plan_revision: 3, cnc_machines: [] },
+    { sheet_no: 1, status: "Settings Saved", machining: { associations: [], profiles: [] } },
+    {},
+    { exportBar: true }
+);
+assert.match(viewOnlyMarkup, /data-sheet-section="associations"[^]*?<fieldset class="dco-artcam-readonly" disabled><form data-artcam-editor>[^]*?<\/form><\/fieldset>/);
 const pageMarkup = ux.dialogMarkup(
     {
         can_prepare: true,
@@ -413,6 +424,7 @@ const pageMarkup = ux.dialogMarkup(
     unset,
     { exportBar: true }
 );
+assert.ok(!pageMarkup.includes('class="dco-artcam-readonly"'));
 const settingsMarkup = pageMarkup.slice(pageMarkup.indexOf("dco-operational-sheet__settings"));
 assert.ok(settingsMarkup.includes("dco-cnc-sheet-page__identity"));
 assert.ok(settingsMarkup.indexOf("dco-cnc-sheet-page__identity") < settingsMarkup.indexOf('data-sheet-section="placement"'));
@@ -470,6 +482,11 @@ assert.ok(css.includes("100dvh - var(--navbar-height, 48px) - 0.85rem"));
 assert.ok(css.includes(".dco-cnc-sheet-page .dco-cnc-cut-preview__viewport > .dco-cnc-cut-preview__zoom"));
 assert.ok(css.includes(".dco-cnc-sheet-page .dco-cnc-cut-preview__piece"));
 assert.ok(translations.includes("Download cutting file,تحميل ملف القص"));
+const ncErrorHandler = panel.split("method: `${METHOD}.generate_cnc_sheet_nc`", 2)[1]
+    .split("silent: true", 1)[0];
+assert.ok(ncErrorHandler.includes("frontend.normalizeError(err, { fallback }).message"));
+assert.ok(!ncErrorHandler.includes("err.exc"));
+assert.ok(!ncErrorHandler.includes("err._server_messages"));
 assert.ok(panel.includes("relocatePageZoomControls"));
 assert.ok(translations.includes("Machine placement,تموضع اللوح على الماكينة"));
 assert.ok(translations.includes("Vector Associations,ربط المتجهات"));
