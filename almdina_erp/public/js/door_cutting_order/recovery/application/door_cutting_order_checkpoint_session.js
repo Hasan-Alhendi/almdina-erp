@@ -75,6 +75,28 @@
         let officialSaveAttemptedAt = options.officialSaveAttemptedAt == null
             ? null
             : required(options.officialSaveAttemptedAt, "official_save_attempted_at");
+        let officialSaveAttemptRevision = options.officialSaveAttemptRevision == null
+            ? null
+            : Number(options.officialSaveAttemptRevision);
+        if (
+            officialSaveAttemptRevision !== null
+            && (
+                !Number.isSafeInteger(officialSaveAttemptRevision)
+                || officialSaveAttemptRevision < 1
+            )
+        ) {
+            throw new CheckpointSessionError(
+                "invalid_session",
+                "Official Save attempt revision is invalid"
+            );
+        }
+        if (
+            officialSaveState === OFFICIAL_SAVE_STATES.PENDING_RECONCILIATION
+            && officialSaveAttemptRevision == null
+            && savedRevision > 0
+        ) {
+            officialSaveAttemptRevision = savedRevision;
+        }
         if (
             !Number.isSafeInteger(revision)
             || !Number.isSafeInteger(savedRevision)
@@ -114,6 +136,7 @@
                 dirty_scope: dirtyScope,
                 official_save_state: officialSaveState,
                 official_save_attempted_at: officialSaveAttemptedAt,
+                official_save_attempt_revision: officialSaveAttemptRevision,
                 error: lastError,
             });
         }
@@ -238,6 +261,18 @@
             ) {
                 officialSaveState = storedOfficialSaveState;
                 officialSaveAttemptedAt = result.value.official_save_attempted_at || null;
+                if (result.value.official_save_attempt_revision != null) {
+                    officialSaveAttemptRevision = Number(
+                        result.value.official_save_attempt_revision
+                    );
+                } else if (
+                    storedOfficialSaveState === OFFICIAL_SAVE_STATES.PENDING_RECONCILIATION
+                    && officialSaveAttemptRevision == null
+                ) {
+                    officialSaveAttemptRevision = Number(
+                        result.value.recovery_revision || captureRevision
+                    );
+                }
             }
             savedRevision = Math.max(savedRevision, captureRevision);
             if (revision === captureRevision) {
@@ -296,6 +331,9 @@
             if (disposed) return { ...result, disposed: true };
             officialSaveState = OFFICIAL_SAVE_STATES.PENDING_RECONCILIATION;
             officialSaveAttemptedAt = result.value.official_save_attempted_at;
+            officialSaveAttemptRevision = result.value.official_save_attempt_revision != null
+                ? Number(result.value.official_save_attempt_revision)
+                : revision;
             transition(STATES.OFFICIAL_SAVING);
             return result;
         }
@@ -303,6 +341,9 @@
         function markPendingReconciliation() {
             if (disposed || mode !== "NEW") return false;
             officialSaveState = OFFICIAL_SAVE_STATES.PENDING_RECONCILIATION;
+            if (officialSaveAttemptRevision == null && savedRevision > 0) {
+                officialSaveAttemptRevision = savedRevision;
+            }
             transition(STATES.PENDING_RECONCILIATION);
             return true;
         }
@@ -326,6 +367,9 @@
             officialSaveAttemptedAt = result.value
                 ? result.value.official_save_attempted_at || null
                 : reconciledAttempt;
+            if (result.value && result.value.official_save_attempt_revision != null) {
+                officialSaveAttemptRevision = Number(result.value.official_save_attempt_revision);
+            }
             transition(savedRevision >= revision ? STATES.LOCAL_SAVED : STATES.DIRTY);
             return true;
         }
@@ -344,6 +388,9 @@
             dirtyScope = null;
             officialSaveState = OFFICIAL_SAVE_STATES.ACTIVE;
             officialSaveAttemptedAt = record.official_save_attempted_at || null;
+            if (record.official_save_attempt_revision != null) {
+                officialSaveAttemptRevision = Number(record.official_save_attempt_revision);
+            }
             transition(STATES.LOCAL_SAVED);
             return true;
         }

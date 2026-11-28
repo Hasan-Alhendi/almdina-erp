@@ -358,7 +358,11 @@ class TestDcoLocalRecoveryArchitecture(unittest.TestCase):
             repository,
         )
         self.assertIn(
-            "Recovery checkpoint cannot advance while official Save is pending",
+            "official_save_attempt_revision",
+            repository,
+        )
+        self.assertIn(
+            "Newer local input may advance under a pending attempt",
             repository,
         )
         self.assertIn(
@@ -405,9 +409,14 @@ class TestDcoLocalRecoveryArchitecture(unittest.TestCase):
             '["stale_revision", "revision_conflict", "save_attempt_conflict"].includes(code)',
             presentation,
         )
-        self.assertIn("expectedRevision: operation.attemptedRevision", presentation)
+        self.assertIn("expectedRevision: attemptRevision", presentation)
         self.assertIn("expectedAttemptedAt: operation.cleanupAttemptedAt", presentation)
-        self.assertIn("expectedRevision: reconciledSnapshot.recovery_revision", presentation)
+        self.assertIn("provesAcknowledgedOfficialInsert", presentation)
+        self.assertIn("markObservedSaveAcknowledged", presentation)
+        self.assertIn("retainUnconfirmedOfficialSave", presentation)
+        self.assertIn("Your entries are saved locally, but the official save did not complete.", presentation)
+        self.assertIn("officialSaveAttemptRevision(", presentation)
+        self.assertIn("operation.acknowledgedInsert === true", presentation)
         self.assertIn(
             "saveOperation.cleanupAttemptedAt = preAttempt.official_save_attempted_at",
             presentation,

@@ -107,20 +107,28 @@ unused token.
 |---|---|
 | Client/server validation or definite responded failure | Return to `ACTIVE`; retain the draft. |
 | Transport failure with unknown outcome | Remain `PENDING_RECONCILIATION`; do not retry or delete. |
+| `frm.save()` Promise settles without acknowledged insert proof | Treat as unknown outcome: retain the draft, stay/mark `PENDING_RECONCILIATION`, and never delete. Promise resolution alone is not success. |
 | Reconciliation says `NOT_FOUND` | Server has proved absence; return to `ACTIVE`; the next explicit Save may reuse the same token. |
-| Acknowledged insert or reconciliation says `CREATED` | Enter `COMPLETED`, then delete the local draft/assets, and use the server-returned permanent DCO. |
+| Acknowledged insert or reconciliation says `CREATED` | Enter `COMPLETED`, then delete only the local revision that matches the save-attempt fence, and use the server-returned permanent DCO. |
 | Reconciliation unavailable | Do not hydrate a pending draft and do not retry insert; retain local state. |
 
 Cleanup ordering is server proof, `COMPLETED`, then local delete. A failed local
 delete leaves a discoverable pending record that resolves idempotently next time.
-An exact same-revision retry preserves a stored `PENDING_RECONCILIATION` marker;
-higher checkpoint revisions are refused while that insert attempt is pending, so
-the attempted payload cannot move underneath an acknowledged result. Only the
-explicit server-proven `NOT_FOUND` transition may return the record to `ACTIVE`.
-That transition is compare-and-set against both the recovery revision and the exact
-`official_save_attempted_at` it reconciled. The timestamp is retained as the last
-attempt fence while `ACTIVE`, and each later attempt advances it monotonically, so
-a late `NOT_FOUND` cannot clear a newer pending attempt from another tab.
+Frappe's native `frm.save()` Promise can resolve on transport failure and even run
+`after_save` when the XHR has no `exc`; therefore local cleanup requires positive
+proof: a synced permanent DCO name plus matching `recovery_creation_token`, or
+server reconciliation `CREATED`. An exact same-revision retry preserves a stored
+`PENDING_RECONCILIATION` marker. Newer local input may advance the checkpoint
+revision while that insert attempt is pending, but must preserve
+`official_save_state`, `official_save_attempted_at`, and
+`official_save_attempt_revision`. Confirmed cleanup compares against that attempt
+revision fence, so a successful older insert cannot delete newer unsaved local
+edits. Only the explicit server-proven `NOT_FOUND` transition may return the
+record to `ACTIVE`. That transition is compare-and-set against both the recovery
+revision and the exact `official_save_attempted_at` it reconciled. The timestamp
+is retained as the last attempt fence while `ACTIVE`, and each later attempt
+advances it monotonically, so a late `NOT_FOUND` cannot clear a newer pending
+attempt from another tab.
 Pending reconciliation and hydration also retain the source DocumentContext token,
 and require `AlmdinaDocumentContext.isCurrent`, so a late response cannot mutate a
 departed form, change global Save validation, delete its checkpoint, or route the

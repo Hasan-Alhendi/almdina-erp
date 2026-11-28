@@ -462,6 +462,15 @@
                 officialSaveAttemptedAt: recovered
                     ? recovered.official_save_attempted_at || null
                     : null,
+                officialSaveAttemptRevision: recovered
+                    && recovered.official_save_attempt_revision != null
+                    ? Number(recovered.official_save_attempt_revision)
+                    : (
+                        recovered
+                        && String(recovered.official_save_state || "") === "PENDING_RECONCILIATION"
+                            ? Number(recovered.recovery_revision)
+                            : null
+                    ),
                 capture: ({ dirtyScope }) => workspaceProjection(frm, state, dirtyScope),
                 onStateChange: (snapshot) => {
                     const previous = state.statusElement && state.statusElement.dataset.recoveryState;
@@ -732,13 +741,16 @@
             if (reconciliation.status === "CREATED") {
                 const temporary = createState(frm, { record });
                 if (!temporary) throw new Error("Recovery session is unavailable");
+                const attemptRevision = record.official_save_attempt_revision != null
+                    ? Number(record.official_save_attempt_revision)
+                    : Number(record.recovery_revision);
                 await cleanupConfirmedNewDraft(
                     frm,
                     temporary,
                     reconciliation.door_cutting_order,
                     {
                         isCurrent,
-                        expectedRevision: record.recovery_revision,
+                        expectedRevision: attemptRevision,
                         expectedAttemptedAt: record.official_save_attempted_at,
                     }
                 );
@@ -1199,6 +1211,82 @@
         );
     }
 
+    function permanentDocumentName(frm) {
+        const name = String(frm && frm.doc && frm.doc.name || "").trim();
+        if (!name || /^new-/i.test(name)) return "";
+        return name;
+    }
+
+    function provesAcknowledgedOfficialInsert(frm, operation) {
+        if (!frm || !frm.doc || !operation) return false;
+        if (
+            !operation.saveWasNew
+            || operation.nativeInsertAllowed !== true
+            || !operation.state
+            || operation.state.mode !== "NEW"
+        ) return false;
+        // Frappe native Save promises resolve on transport failure too. Only a
+        // synced permanent identity plus matching creation token is proof that
+        // savedocs created the order; Promise settlement alone never is.
+        if (isNew(frm)) return false;
+        const permanentName = permanentDocumentName(frm);
+        if (!permanentName) return false;
+        const token = String(frm.doc.recovery_creation_token || "").trim();
+        const draftId = String(
+            operation.state.session
+            && operation.state.session.snapshot().draft_id
+            || ""
+        ).trim();
+        if (!token || !draftId || token !== draftId) return false;
+        return true;
+    }
+
+    function draftStillLocallyProtected(state) {
+        if (!state || !state.session) return false;
+        const snapshot = state.session.snapshot();
+        if (snapshot.state === root.CheckpointSession.STATES.DISPOSED) return false;
+        if (snapshot.state === root.CheckpointSession.STATES.ERROR) return false;
+        return Number(snapshot.saved_revision || 0) > 0;
+    }
+
+    function notifyUnconfirmedOfficialSave(frm, state) {
+        const locallyProtected = draftStillLocallyProtected(state);
+        const message = locallyProtected
+            ? translate("Your entries are saved locally, but the official save did not complete. Check your connection and press Save again.")
+            : translate("The official save did not complete, and a local recovery copy could not be confirmed. Keep this page open and try again.");
+        if (typeof frappe.show_alert === "function") {
+            frappe.show_alert({
+                message,
+                indicator: locallyProtected ? "orange" : "red",
+            });
+        } else if (typeof frappe.msgprint === "function") {
+            frappe.msgprint({
+                title: translate("Official save did not complete"),
+                message,
+                indicator: locallyProtected ? "orange" : "red",
+            });
+        }
+        if (state) {
+            renderCheckpointStatus(frm, state, state.session.snapshot());
+        }
+    }
+
+    async function retainUnconfirmedOfficialSave(operation) {
+        const state = operation && operation.state;
+        const attemptedAt = String(operation && operation.attemptedAt || "").trim();
+        if (!state || !operation.saveWasNew || state.mode !== "NEW") return false;
+        if (!attemptedAt) return false;
+        const snapshot = state.session.snapshot();
+        if (
+            snapshot.official_save_attempted_at === attemptedAt
+            && snapshot.state !== root.CheckpointSession.STATES.DISPOSED
+        ) {
+            state.session.markPendingReconciliation();
+            return true;
+        }
+        return false;
+    }
+
     async function handleOfficialSaveFailure(operation, error) {
         const state = operation && operation.state;
         const attemptedAt = String(operation && operation.attemptedAt || "").trim();
@@ -1217,26 +1305,55 @@
             ) state.session.markPendingReconciliation();
             return;
         }
-        const snapshot = state.session.snapshot();
+        await retainUnconfirmedOfficialSave(operation);
+        notifyUnconfirmedOfficialSave(operation.frm || null, state);
+    }
+
+    function markObservedSaveAcknowledged(frm, state) {
+        const operations = observedSaveOperations.get(frm);
+        if (!operations || !state) return false;
+        let marked = false;
+        const permanentName = permanentDocumentName(frm);
+        const token = String(frm && frm.doc && frm.doc.recovery_creation_token || "").trim();
+        const draftId = String(state.session.snapshot().draft_id || "").trim();
         if (
-            attemptedAt
-            && snapshot.official_save_attempted_at === attemptedAt
-            && snapshot.state !== root.CheckpointSession.STATES.DISPOSED
-        ) state.session.markPendingReconciliation();
+            isNew(frm)
+            || !permanentName
+            || !token
+            || !draftId
+            || token !== draftId
+        ) return false;
+        for (const operation of operations) {
+            if (operation.state !== state || operation.saveWasNew !== true) continue;
+            operation.acknowledgedInsert = true;
+            operation.acknowledgedName = permanentName;
+            marked = true;
+        }
+        return marked;
     }
 
     async function handleOfficialSaveSuccess(frm, operation) {
         const state = operation && operation.state;
-        if (
-            !state
-            || !operation.saveWasNew
-            || operation.nativeInsertAllowed !== true
-            || state.mode !== "NEW"
-        ) return;
-        await cleanupConfirmedNewDraft(frm, state, null, {
-            expectedRevision: operation.attemptedRevision,
-            expectedAttemptedAt: operation.cleanupAttemptedAt,
-        });
+        if (!state || !operation.saveWasNew || state.mode !== "NEW") return;
+        const acknowledged = operation.acknowledgedInsert === true
+            || provesAcknowledgedOfficialInsert(frm, operation);
+        if (!acknowledged) {
+            await retainUnconfirmedOfficialSave(operation);
+            notifyUnconfirmedOfficialSave(frm, state);
+            return;
+        }
+        const attemptRevision = Number.isInteger(Number(operation.attemptedRevision))
+            ? Number(operation.attemptedRevision)
+            : state.session.snapshot().official_save_attempt_revision;
+        await cleanupConfirmedNewDraft(
+            frm,
+            state,
+            operation.acknowledgedName || permanentDocumentName(frm) || null,
+            {
+                expectedRevision: attemptRevision,
+                expectedAttemptedAt: operation.cleanupAttemptedAt,
+            }
+        );
     }
 
     function bindObservedSaveOperation(frm, state) {
@@ -1260,6 +1377,7 @@
             const state = currentState(frm);
             const snapshot = state && state.session.snapshot();
             const operation = {
+                frm,
                 state,
                 saveWasNew: Boolean(
                     state
@@ -1274,7 +1392,11 @@
                     ? snapshot.official_save_attempted_at
                     : null,
                 attemptedRevision: snapshot && snapshot.state === root.CheckpointSession.STATES.OFFICIAL_SAVING
-                    ? snapshot.recovery_revision
+                    ? (
+                        snapshot.official_save_attempt_revision != null
+                            ? Number(snapshot.official_save_attempt_revision)
+                            : snapshot.recovery_revision
+                    )
                     : null,
                 beforeSaveBound: Boolean(
                     snapshot && snapshot.state === root.CheckpointSession.STATES.OFFICIAL_SAVING
@@ -1328,9 +1450,27 @@
         return true;
     }
 
+    function officialSaveAttemptRevision(snapshot, fallbackRevision = null) {
+        if (
+            snapshot
+            && snapshot.official_save_attempt_revision != null
+            && Number.isInteger(Number(snapshot.official_save_attempt_revision))
+        ) {
+            return Number(snapshot.official_save_attempt_revision);
+        }
+        if (fallbackRevision != null && Number.isInteger(Number(fallbackRevision))) {
+            return Number(fallbackRevision);
+        }
+        return snapshot ? Number(snapshot.recovery_revision) : null;
+    }
+
     async function reconcilePendingState(frm, state, isCurrent) {
         const reconciledSnapshot = state.session.snapshot();
         const reconciledAttempt = reconciledSnapshot.official_save_attempted_at;
+        const attemptRevision = officialSaveAttemptRevision(
+            reconciledSnapshot,
+            reconciledSnapshot.saved_revision
+        );
         const result = await root.ServerReconciliation.reconcileNewCreation(
             state.session.snapshot().draft_id
         );
@@ -1347,7 +1487,7 @@
                 result.door_cutting_order,
                 {
                     isCurrent,
-                    expectedRevision: reconciledSnapshot.recovery_revision,
+                    expectedRevision: attemptRevision,
                     expectedAttemptedAt: reconciledAttempt,
                 }
             );
@@ -1442,7 +1582,12 @@
             saveOperation.attemptedAt = started.value && started.value.official_save_attempted_at;
             saveOperation.cleanupAttemptedAt = saveOperation.attemptedAt;
             saveOperation.attemptedRevision = Number(
-                started.value && started.value.recovery_revision
+                started.value
+                && (
+                    started.value.official_save_attempt_revision != null
+                        ? started.value.official_save_attempt_revision
+                        : started.value.recovery_revision
+                )
             );
         }
         if (!isCurrent()) {
@@ -1481,12 +1626,34 @@
             const operations = observedSaveOperations.get(frm);
             if (operations && [...operations].some((operation) => (
                 operation.state === state && operation.saveWasNew
-            ))) return;
-            const permanentName = String(frm.doc && frm.doc.name || "").trim();
-            if (!isNew(frm) && permanentName) {
-                await cleanupConfirmedNewDraft(frm, state, null);
+            ))) {
+                // Native Frappe after_save can observe a synced permanent doc
+                // before the Save Promise settles. Capture that proof on the
+                // in-flight operation so later Promise resolution can clean up
+                // safely even if the form object was reused afterward.
+                markObservedSaveAcknowledged(frm, state);
+                return;
+            }
+            const snapshot = state.session.snapshot();
+            const permanentName = permanentDocumentName(frm);
+            const token = String(frm.doc && frm.doc.recovery_creation_token || "").trim();
+            const acknowledged = Boolean(
+                !isNew(frm)
+                && permanentName
+                && token
+                && token === String(snapshot.draft_id || "").trim()
+            );
+            if (acknowledged) {
+                await cleanupConfirmedNewDraft(frm, state, permanentName, {
+                    expectedRevision: officialSaveAttemptRevision(
+                        snapshot,
+                        snapshot.saved_revision
+                    ),
+                    expectedAttemptedAt: snapshot.official_save_attempted_at,
+                });
             } else {
                 state.session.markPendingReconciliation();
+                notifyUnconfirmedOfficialSave(frm, state);
             }
             return;
         }

@@ -76,10 +76,11 @@ exact current revision. Repeating the same revision and payload hash remains
 idempotent even after the first attempt committed; the same revision with different
 content is a conflict. This prevents both a late completion and a stale tab that
 batched several local mutations from replacing a newer checkpoint.
-Once a NEW record is `PENDING_RECONCILIATION`, only an exact same-revision retry is
-idempotent; a higher checkpoint write is rejected with `save_attempt_conflict`.
-The pending revision is therefore the immutable payload boundary for that insert
-attempt.
+Once a NEW record is `PENDING_RECONCILIATION`, an exact same-revision retry remains
+idempotent. Newer local input may advance the checkpoint revision while preserving
+`official_save_state`, `official_save_attempted_at`, and
+`official_save_attempt_revision`. That attempt revision remains the immutable
+cleanup fence for the insert that was already sent.
 
 ### `dco_recovery_assets`
 
@@ -174,9 +175,11 @@ record pending before the existing explicit Frappe Save proceeds. A hidden uniqu
 technical creation token on the DCO is the atomic binding; acknowledged or
 server-reconciled success completes and then removes the local record only through a
 compare-and-delete on the attempted recovery revision and exact attempt timestamp.
-A higher checkpoint cannot be accepted while the attempt is pending, and any
-cleanup mismatch retains the local record/assets. An unknown transport outcome
-retains them for reconciliation. If persisting a new pending marker fails and the
+Newer local checkpoints may advance under a pending attempt while preserving that
+fence, and any cleanup mismatch retains the local record/assets. An unknown
+transport outcome — including a Frappe Save Promise that settles without
+acknowledged insert proof — retains them for reconciliation. If persisting a new
+pending marker fails and the
 existing fail-safe native Save proceeds, its operation keeps the ACTIVE record's
 persisted `saved_revision`/timestamp fence for acknowledged-success cleanup; an
 unpersisted higher in-memory revision is never used as the delete fence, and a

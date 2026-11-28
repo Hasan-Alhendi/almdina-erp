@@ -84,9 +84,6 @@ const repository = {
                 ? { ok: true, value: structuredClone(current) }
                 : { ok: false, error: { code: "revision_conflict" } };
         }
-        if (current && current.official_save_state === "PENDING_RECONCILIATION") {
-            return { ok: false, error: { code: "save_attempt_conflict" } };
-        }
         if (!current && expectedRevision !== 0) {
             return { ok: false, error: { code: "stale_revision" } };
         }
@@ -98,7 +95,19 @@ const repository = {
         const next = {
             ...(current || {}),
             ...recordInput,
-            official_save_state: input.official_save_state || (current && current.official_save_state) || "ACTIVE",
+            official_save_state: (current && current.official_save_state) || "ACTIVE",
+            official_save_attempted_at: current ? current.official_save_attempted_at || null : null,
+            official_save_attempt_revision: current
+                ? (
+                    current.official_save_attempt_revision == null
+                        ? (
+                            current.official_save_state === "PENDING_RECONCILIATION"
+                                ? Number(current.recovery_revision)
+                                : null
+                        )
+                        : Number(current.official_save_attempt_revision)
+                )
+                : null,
             created_at: (current && current.created_at) || "2026-08-29T09:00:00.000Z",
             captured_at: "2026-08-29T10:00:00.000Z",
         };
@@ -141,6 +150,13 @@ const repository = {
             ...current,
             official_save_state: state,
             official_save_attempted_at: attemptedAt,
+            official_save_attempt_revision: state === "PENDING_RECONCILIATION"
+                ? Number(current.recovery_revision)
+                : (
+                    current.official_save_attempt_revision == null
+                        ? null
+                        : Number(current.official_save_attempt_revision)
+                ),
         };
         records.set(identity.draft_id, next);
         saveStates.push({ draft_id: identity.draft_id, state, attempted_at: attemptedAt });
@@ -818,6 +834,11 @@ function runCleanups(frm) {
     failOpenForm.save = async function saveAfterRecoveryHook() {
         await handlers["Door Cutting Order"].before_save(this);
         nativeSaveCalls += 1;
+        this.doc.name = "DCO-2026-FAIL-OPEN";
+        this.doc.__islocal = 0;
+        this.doc.recovery_creation_token = failOpenId;
+        await handlers["Door Cutting Order"].after_save(this);
+        return undefined;
     };
     fakeWindow.cur_frm = failOpenForm;
     await Recovery.LocalCheckpoint.continueDraft(failOpenForm, failOpenRecord);
@@ -838,6 +859,11 @@ function runCleanups(frm) {
         await handlers["Door Cutting Order"].before_save(this);
         nativeSaveCalls += 1;
         if (nativeFailure) throw nativeFailure;
+        this.doc.name = "DCO-2026-VALIDATION-FAIL-OPEN";
+        this.doc.__islocal = 0;
+        this.doc.recovery_creation_token = validationFailOpenId;
+        await handlers["Door Cutting Order"].after_save(this);
+        return undefined;
     };
     fakeWindow.cur_frm = validationFailOpenForm;
     await Recovery.LocalCheckpoint.continueDraft(
@@ -873,6 +899,11 @@ function runCleanups(frm) {
     checkpointFailOpenForm.save = async function saveAfterRecoveryHook() {
         await handlers["Door Cutting Order"].before_save(this);
         nativeSaveCalls += 1;
+        this.doc.name = "DCO-2026-CHECKPOINT-FAIL-OPEN";
+        this.doc.__islocal = 0;
+        this.doc.recovery_creation_token = checkpointFailOpenId;
+        await handlers["Door Cutting Order"].after_save(this);
+        return undefined;
     };
     fakeWindow.cur_frm = checkpointFailOpenForm;
     await Recovery.LocalCheckpoint.continueDraft(
@@ -1105,6 +1136,10 @@ function runCleanups(frm) {
     await handlers["Door Cutting Order"].before_save(reusedSuccessForm);
     nativeSaveDeferred = deferred();
     const oldSuccessfulSave = reusedSuccessForm.save();
+    reusedSuccessForm.doc.name = "DCO-2026-REUSED-SUCCESS";
+    reusedSuccessForm.doc.__islocal = 0;
+    reusedSuccessForm.doc.recovery_creation_token = reusedSuccessId;
+    await handlers["Door Cutting Order"].after_save(reusedSuccessForm);
     runCleanups(reusedSuccessForm);
     documentGeneration += 1;
     reusedSuccessForm.doc = {
@@ -1117,7 +1152,6 @@ function runCleanups(frm) {
     const replacementSuccessId = Recovery.LocalCheckpoint.snapshot(reusedSuccessForm).draft_id;
     await handlers["Door Cutting Order"].before_save(reusedSuccessForm);
     const replacementSuccessAttempt = records.get(replacementSuccessId).official_save_attempted_at;
-    await handlers["Door Cutting Order"].after_save(reusedSuccessForm);
     nativeSaveDeferred.resolve();
     await oldSuccessfulSave;
     assert.equal(records.has(reusedSuccessId), false, "old success cleans only its originating draft");
@@ -1140,6 +1174,10 @@ function runCleanups(frm) {
     const cleanupRaceSave = cleanupRaceForm.save();
     deleteDeferred = deferred();
     deleteEntered = deferred();
+    cleanupRaceForm.doc.name = "DCO-2026-CLEANUP-RACE";
+    cleanupRaceForm.doc.__islocal = 0;
+    cleanupRaceForm.doc.recovery_creation_token = cleanupRaceId;
+    await handlers["Door Cutting Order"].after_save(cleanupRaceForm);
     nativeSaveDeferred.resolve();
     await deleteEntered.promise;
     runCleanups(cleanupRaceForm);
@@ -1253,26 +1291,39 @@ function runCleanups(frm) {
     await Recovery.LocalCheckpoint.flush(cleanupStaleForm);
     assert.equal(
         records.get(cleanupFenceId).recovery_revision,
-        cleanupFenceRecord.recovery_revision,
-        "a pending insert fences out a stale tab's higher checkpoint"
+        cleanupFenceRecord.recovery_revision + 1,
+        "newer local input may advance under a pending attempt"
     );
     assert.equal(
-        Recovery.LocalCheckpoint.markDirty(cleanupStaleForm, "DCO"),
-        false,
-        "the rejected post-attempt checkpoint quarantines the stale tab"
+        records.get(cleanupFenceId).official_save_state,
+        "PENDING_RECONCILIATION",
+        "advancing local input preserves the pending official Save fence"
     );
-    records.set(cleanupFenceId, {
-        ...records.get(cleanupFenceId),
-        recovery_revision: cleanupFenceRecord.recovery_revision + 1,
-        official_save_attempted_at: cleanupAttempt,
-    });
+    assert.equal(
+        records.get(cleanupFenceId).official_save_attempted_at,
+        cleanupAttempt,
+        "advancing local input preserves the exact pending attempt timestamp"
+    );
+    assert.equal(
+        records.get(cleanupFenceId).official_save_attempt_revision,
+        cleanupFenceRecord.recovery_revision,
+        "the original attempt revision remains the cleanup fence"
+    );
     fakeWindow.cur_frm = cleanupOwnerForm;
-    await cleanupOwnerForm.save();
+    cleanupOwnerForm.doc.name = "DCO-2026-CLEANUP-FENCE";
+    cleanupOwnerForm.doc.__islocal = 0;
+    cleanupOwnerForm.doc.recovery_creation_token = cleanupFenceId;
+    await handlers["Door Cutting Order"].after_save(cleanupOwnerForm);
     assert.equal(records.has(cleanupFenceId), true);
     assert.equal(
         records.get(cleanupFenceId).recovery_revision,
         cleanupFenceRecord.recovery_revision + 1,
         "acknowledged revision-R success cannot delete a raced revision R+1 checkpoint"
+    );
+    assert.equal(
+        records.get(cleanupFenceId).official_save_attempted_at,
+        cleanupAttempt,
+        "the pending attempt fence survives a mismatched acknowledged cleanup"
     );
 
     const staleTabId = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";

@@ -92,6 +92,9 @@
             captured_at: record.captured_at,
             official_save_state: record.official_save_state,
             official_save_attempted_at: record.official_save_attempted_at,
+            official_save_attempt_revision: record.official_save_attempt_revision == null
+                ? null
+                : Number(record.official_save_attempt_revision),
             payload_hash: record.payload_hash,
             payload: record.payload,
             asset_refs: Object.freeze([...(record.asset_refs || [])]),
@@ -133,6 +136,9 @@
                 recovery_revision: record.recovery_revision,
                 official_save_state: record.official_save_state,
                 official_save_attempted_at: record.official_save_attempted_at,
+                official_save_attempt_revision: record.official_save_attempt_revision == null
+                    ? null
+                    : Number(record.official_save_attempt_revision),
                 payload_hash: record.payload_hash,
                 asset_refs: record.asset_refs || [],
             });
@@ -173,6 +179,13 @@
             const officialSaveAttemptedAt = Number(record.schema_version) === LEGACY_RECORD_SCHEMA_VERSION
                 ? null
                 : record.official_save_attempted_at;
+            let officialSaveAttemptRevision = Number(record.schema_version) === LEGACY_RECORD_SCHEMA_VERSION
+                ? null
+                : (
+                    record.official_save_attempt_revision == null
+                        ? null
+                        : Number(record.official_save_attempt_revision)
+                );
             if (!Object.values(OFFICIAL_SAVE_STATES).includes(officialSaveState)) {
                 throw new LocalDraftRepositoryError("corrupt_record", "Recovery official Save state is invalid");
             }
@@ -187,6 +200,27 @@
                     "corrupt_record",
                     "Pending recovery is missing its official Save attempt"
                 );
+            }
+            if (
+                officialSaveAttemptRevision !== null
+                && (
+                    !Number.isSafeInteger(officialSaveAttemptRevision)
+                    || officialSaveAttemptRevision < 1
+                )
+            ) {
+                throw new LocalDraftRepositoryError(
+                    "corrupt_record",
+                    "Recovery official Save attempt revision is invalid"
+                );
+            }
+            if (
+                officialSaveState === OFFICIAL_SAVE_STATES.PENDING_RECONCILIATION
+                && officialSaveAttemptRevision == null
+                && Number.isSafeInteger(record.recovery_revision)
+            ) {
+                // Pre-ALMADINA-129 offline-fix drafts could not advance while
+                // pending, so the stored recovery_revision is the attempt fence.
+                officialSaveAttemptRevision = Number(record.recovery_revision);
             }
             const namespace = namespaceOf(record);
             if (expectedNamespace && namespace.namespace_key !== expectedNamespace) {
@@ -240,6 +274,7 @@
                 ...record,
                 official_save_state: officialSaveState,
                 official_save_attempted_at: officialSaveAttemptedAt,
+                official_save_attempt_revision: officialSaveAttemptRevision,
                 payload,
             };
         }
@@ -318,6 +353,7 @@
                     captured_at: now,
                     official_save_state: OFFICIAL_SAVE_STATES.ACTIVE,
                     official_save_attempted_at: null,
+                    official_save_attempt_revision: null,
                     payload_hash: payloadHash,
                     payload,
                     asset_refs: [...new Set((input.asset_refs || []).map((item) => required(item, "asset_id")))].sort(),
@@ -329,10 +365,21 @@
                         const drafts = stores[indexed.DRAFT_STORE];
                         const current = await request(drafts.get(key));
                         if (current) {
+                            // Newer local input may advance under a pending attempt,
+                            // but the attempt fence itself stays immutable until
+                            // server-proven ACTIVE/CREATED reconciliation.
                             next.official_save_state = String(
                                 current.official_save_state || OFFICIAL_SAVE_STATES.ACTIVE
                             );
                             next.official_save_attempted_at = current.official_save_attempted_at || null;
+                            next.official_save_attempt_revision = current.official_save_attempt_revision == null
+                                ? (
+                                    String(current.official_save_state || "")
+                                        === OFFICIAL_SAVE_STATES.PENDING_RECONCILIATION
+                                        ? Number(current.recovery_revision)
+                                        : null
+                                )
+                                : Number(current.official_save_attempt_revision);
                         }
                         if (current && Number(current.recovery_revision) > revision) {
                             throw new LocalDraftRepositoryError("stale_revision", "A newer local checkpoint already exists");
@@ -340,16 +387,6 @@
                         if (current && Number(current.recovery_revision) === revision) {
                             if (sameRevisionContent(current, next)) return current;
                             throw new LocalDraftRepositoryError("revision_conflict", "Recovery revision has different content");
-                        }
-                        if (
-                            current
-                            && String(current.official_save_state || OFFICIAL_SAVE_STATES.ACTIVE)
-                                === OFFICIAL_SAVE_STATES.PENDING_RECONCILIATION
-                        ) {
-                            throw new LocalDraftRepositoryError(
-                                "save_attempt_conflict",
-                                "Recovery checkpoint cannot advance while official Save is pending"
-                            );
                         }
                         if (!current && expectedRevision !== 0) {
                             throw new LocalDraftRepositoryError("stale_revision", "Recovery draft base no longer exists");
@@ -484,11 +521,19 @@
                         const attemptedAt = resolvedState === OFFICIAL_SAVE_STATES.PENDING_RECONCILIATION
                             ? nextSaveAttemptTimestamp(currentAttempt)
                             : currentAttempt;
+                        const attemptRevision = resolvedState === OFFICIAL_SAVE_STATES.PENDING_RECONCILIATION
+                            ? Number(current.recovery_revision)
+                            : (
+                                current.official_save_attempt_revision == null
+                                    ? null
+                                    : Number(current.official_save_attempt_revision)
+                            );
                         const next = {
                             ...current,
                             schema_version: RECORD_SCHEMA_VERSION,
                             official_save_state: resolvedState,
                             official_save_attempted_at: attemptedAt,
+                            official_save_attempt_revision: attemptRevision,
                         };
                         await request(drafts.put(next));
                         return next;
