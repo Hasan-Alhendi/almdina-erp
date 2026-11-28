@@ -18,6 +18,7 @@ const handlers = {};
 const records = new Map();
 const deleted = [];
 const alerts = [];
+const messages = [];
 const routes = [];
 const cleanupCallbacks = new WeakMap();
 let uuidSequence = 0;
@@ -218,7 +219,7 @@ const fakeFrappe = {
         },
     },
     set_route(...args) { routes.push(args); },
-    msgprint() {},
+    msgprint(payload) { messages.push(payload); },
     show_alert(payload) { alerts.push(payload); },
     confirm(message, callback) { callback(); },
 };
@@ -327,6 +328,7 @@ function acknowledgeNativeInsert(frm, permanentName) {
     deleted.length = 0;
     records.clear();
     routes.length = 0;
+    messages.length = 0;
 
     // T01 — offline typing keeps local checkpoints
     const typingForm = form("new-door-cutting-order-t01");
@@ -349,10 +351,12 @@ function acknowledgeNativeInsert(frm, permanentName) {
         "PENDING_RECONCILIATION",
         "T07 unresolved Promise success stays pending"
     );
-    assert.ok(
-        alerts.some((item) => String(item.message || "").includes("saved locally")),
-        "T02 shows the local-only official-save message"
+    assert.equal(
+        alerts.filter((item) => String(item.message || "").includes("Order data was saved locally.")).length,
+        1,
+        "T02 shows one non-blocking local-save Toast"
     );
+    assert.equal(messages.length, 0, "T02 does not open a Recovery modal");
 
     // T03 — reconnect Save retries without refresh
     nativeSaveImpl = null;
@@ -432,6 +436,7 @@ function acknowledgeNativeInsert(frm, permanentName) {
     // T06 — validation failure keeps draft and returns ACTIVE
     const validationForm = form("new-door-cutting-order-t06");
     const validationSnapshot = await startNewOrder(validationForm, { customer: "CUST-T06" });
+    const feedbackBeforeValidation = alerts.length;
     nativeSaveImpl = async () => {
         const error = {
             status: 417,
@@ -447,6 +452,11 @@ function acknowledgeNativeInsert(frm, permanentName) {
         Recovery.LocalCheckpoint.snapshot(validationForm).official_save_state,
         "ACTIVE",
         "T06 definite validation returns ACTIVE"
+    );
+    assert.equal(
+        alerts.length,
+        feedbackBeforeValidation,
+        "T06 keeps the real Frappe validation error without an extra Recovery Toast"
     );
 
     // T08 — Promise rejection from network keeps draft and frees save state
@@ -576,11 +586,39 @@ function acknowledgeNativeInsert(frm, permanentName) {
     await storageForm.save();
     writeFailure = null;
     assert.ok(
-        alerts.some((item) => String(item.message || "").includes("could not be confirmed"))
+        alerts.some((item) => String(item.message || "").includes("not all current changes could be confirmed locally"))
             || Recovery.LocalCheckpoint.snapshot(storageForm) === null
             || Number(Recovery.LocalCheckpoint.snapshot(storageForm).saved_revision || 0) === 0,
         "T15 does not claim durable local protection after storage failure"
     );
+
+    // T19 — each offline Save owns one Toast, including failed verification on a retry
+    const retryForm = form("new-door-cutting-order-t19");
+    await startNewOrder(retryForm, { customer: "CUST-T19" });
+    alerts.length = 0;
+    messages.length = 0;
+    nativeSaveImpl = async (frm) => {
+        fakeFrappe.validated = true;
+        await handlers["Door Cutting Order"].before_save(frm);
+        if (!fakeFrappe.validated) return undefined;
+        await handlers["Door Cutting Order"].after_save(frm);
+        return undefined;
+    };
+    await retryForm.save();
+    assert.equal(alerts.length, 1, "T19 first offline Save shows one Recovery Toast");
+    assert.equal(
+        alerts[0].message,
+        "Order data was saved locally. Please check your internet connection and try again."
+    );
+    reconciliationFailure = new Error("endpoint offline");
+    await retryForm.save();
+    reconciliationFailure = null;
+    assert.equal(alerts.length, 2, "T19 retry verification adds only one Recovery Toast");
+    assert.equal(
+        alerts[1].message,
+        "Order data was saved locally. Please check your internet connection and try again."
+    );
+    assert.equal(messages.length, 0, "T19 never opens the restore-error modal for Save feedback");
 
     // T16 — navigating away does not mutate the replacement form
     const oldForm = form("new-door-cutting-order-t16-old");

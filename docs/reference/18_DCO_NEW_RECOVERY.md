@@ -112,6 +112,14 @@ unused token.
 | Acknowledged insert or reconciliation says `CREATED` | Enter `COMPLETED`, then delete only the local revision that matches the save-attempt fence, and use the server-returned permanent DCO. |
 | Reconciliation unavailable | Do not hydrate a pending draft and do not retry insert; retain local state. |
 
+An offline or otherwise unverified explicit Save uses one non-blocking Frappe
+Toast for that Save operation; it does not open the draft-restore error dialog.
+The Toast confirms local protection only when the latest recovery revision is the
+acknowledged locally saved revision. Otherwise it warns the operator to keep the
+page open because not all current changes are confirmed locally. Definite server
+validation failures keep their native Frappe error feedback and do not add a
+second Recovery message.
+
 Cleanup ordering is server proof, `COMPLETED`, then local delete. A failed local
 delete leaves a discoverable pending record that resolves idempotently next time.
 Frappe's native `frm.save()` Promise can resolve on transport failure and even run

@@ -1241,34 +1241,34 @@
         return true;
     }
 
-    function draftStillLocallyProtected(state) {
+    function allCurrentInputsSavedLocally(state) {
         if (!state || !state.session) return false;
         const snapshot = state.session.snapshot();
-        if (snapshot.state === root.CheckpointSession.STATES.DISPOSED) return false;
-        if (snapshot.state === root.CheckpointSession.STATES.ERROR) return false;
-        return Number(snapshot.saved_revision || 0) > 0;
+        if ([
+            root.CheckpointSession.STATES.DIRTY,
+            root.CheckpointSession.STATES.LOCAL_SAVING,
+            root.CheckpointSession.STATES.ERROR,
+            root.CheckpointSession.STATES.DISPOSED,
+        ].includes(snapshot.state)) return false;
+        const recoveryRevision = Number(snapshot.recovery_revision || 0);
+        const savedRevision = Number(snapshot.saved_revision || 0);
+        return recoveryRevision > 0 && savedRevision === recoveryRevision;
     }
 
-    function notifyUnconfirmedOfficialSave(frm, state) {
-        const locallyProtected = draftStillLocallyProtected(state);
+    function notifyUnconfirmedOfficialSave(state, operation = null) {
+        if (operation && operation.recoveryFeedbackShown === true) return false;
+        if (operation) operation.recoveryFeedbackShown = true;
+        const locallyProtected = allCurrentInputsSavedLocally(state);
         const message = locallyProtected
-            ? translate("Your entries are saved locally, but the official save did not complete. Check your connection and press Save again.")
-            : translate("The official save did not complete, and a local recovery copy could not be confirmed. Keep this page open and try again.");
+            ? translate("Order data was saved locally. Please check your internet connection and try again.")
+            : translate("The order was not saved, and not all current changes could be confirmed locally. Please keep this page open and try again.");
         if (typeof frappe.show_alert === "function") {
             frappe.show_alert({
                 message,
                 indicator: locallyProtected ? "orange" : "red",
             });
-        } else if (typeof frappe.msgprint === "function") {
-            frappe.msgprint({
-                title: translate("Official save did not complete"),
-                message,
-                indicator: locallyProtected ? "orange" : "red",
-            });
         }
-        if (state) {
-            renderCheckpointStatus(frm, state, state.session.snapshot());
-        }
+        return true;
     }
 
     async function retainUnconfirmedOfficialSave(operation) {
@@ -1306,7 +1306,7 @@
             return;
         }
         await retainUnconfirmedOfficialSave(operation);
-        notifyUnconfirmedOfficialSave(operation.frm || null, state);
+        notifyUnconfirmedOfficialSave(state, operation);
     }
 
     function markObservedSaveAcknowledged(frm, state) {
@@ -1339,7 +1339,7 @@
             || provesAcknowledgedOfficialInsert(frm, operation);
         if (!acknowledged) {
             await retainUnconfirmedOfficialSave(operation);
-            notifyUnconfirmedOfficialSave(frm, state);
+            notifyUnconfirmedOfficialSave(state, operation);
             return;
         }
         const attemptRevision = Number.isInteger(Number(operation.attemptedRevision))
@@ -1567,7 +1567,7 @@
                 if (error && error.code === INACTIVE_SAVE_ERROR) throw error;
                 if (!isCurrent()) abortInactiveSave();
                 frappe.validated = false;
-                showRecoveryError(translate("Could not verify the previous save attempt. The insert was not retried."));
+                notifyUnconfirmedOfficialSave(state, saveOperation);
                 return;
             }
         }
@@ -1653,7 +1653,7 @@
                 });
             } else {
                 state.session.markPendingReconciliation();
-                notifyUnconfirmedOfficialSave(frm, state);
+                notifyUnconfirmedOfficialSave(state);
             }
             return;
         }

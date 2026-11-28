@@ -1997,8 +1997,8 @@ Saving a local recovery copy…,جارٍ حفظ نسخة الاسترداد مح
 A local recovery copy is saved; the order has not been officially saved on the server.,تم تأكيد حفظ نسخة محلية؛ لم يُحفظ الطلب رسميًا على الخادم.
 Saving the order officially on the server…,جارٍ حفظ الطلب رسميًا على الخادم…
 The official save was sent. Its result is being verified before recovery can continue.,أُرسل الحفظ الرسمي، ويجري التحقق من نتيجته قبل متابعة الاسترداد.
-Your entries are saved locally, but the official save did not complete. Check your connection and press Save again.,تم حفظ مدخلاتك محليًا، لكن الحفظ الرسمي لم يكتمل. تحقق من الاتصال ثم اضغط حفظ مرة أخرى.
-The official save did not complete, and a local recovery copy could not be confirmed. Keep this page open and try again.,لم يكتمل الحفظ الرسمي، وتعذر تأكيد نسخة الاسترداد المحلية. أبقِ هذه الصفحة مفتوحة ثم حاول مرة أخرى.
+"Order data was saved locally. Please check your internet connection and try again.",تم حفظ بيانات الطلب محلياً. يرجى التحقق من الاتصال بالإنترنت والمحاولة مجدداً.
+"The order was not saved, and not all current changes could be confirmed locally. Please keep this page open and try again.",لم يكتمل حفظ الطلب، وتعذر تأكيد حفظ جميع التعديلات محلياً. يرجى إبقاء الصفحة مفتوحة والمحاولة مجدداً.
 Official save did not complete,لم يكتمل الحفظ الرسمي
 Restoring the local draft…,جارٍ استعادة المسودة المحلية…
 The order was officially saved.,اكتمل الحفظ الرسمي للطلب.

@@ -414,7 +414,12 @@ class TestDcoLocalRecoveryArchitecture(unittest.TestCase):
         self.assertIn("provesAcknowledgedOfficialInsert", presentation)
         self.assertIn("markObservedSaveAcknowledged", presentation)
         self.assertIn("retainUnconfirmedOfficialSave", presentation)
-        self.assertIn("Your entries are saved locally, but the official save did not complete.", presentation)
+        self.assertIn(
+            "Order data was saved locally. Please check your internet connection and try again.",
+            presentation,
+        )
+        self.assertIn("allCurrentInputsSavedLocally", presentation)
+        self.assertIn("operation.recoveryFeedbackShown", presentation)
         self.assertIn("officialSaveAttemptRevision(", presentation)
         self.assertIn("operation.acknowledgedInsert === true", presentation)
         self.assertIn(
