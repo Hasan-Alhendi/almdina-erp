@@ -2202,6 +2202,7 @@ def _validate_sheet_contours(
     *,
     expected_width_mm: float,
     expected_height_mm: float,
+    annotations: Sequence[dict[str, Any]] = (),
 ) -> list[dict[str, Any]]:
     if not contours:
         raise DxfImportError(
@@ -2271,7 +2272,39 @@ def _validate_sheet_contours(
         )
     if issues:
         raise DxfImportError(issues=issues)
-    sheets.sort(key=lambda row: (row["offset_y_mm"], row["offset_x_mm"]))
+    # Generated DXF displays the first print row at the top of the drawing.
+    # Its numeric TEXT labels sit just above each sheet, outside door geometry.
+    # Use a complete, unambiguous set of labels; older/unlabeled uploads keep
+    # their historical bottom-to-top ordering.
+    numbered: dict[int, int] = {}
+    conflicting_labels = False
+    for item in annotations:
+        if not matches_text_label_layer(item.get("layer")):
+            continue
+        label = str(item.get("text") or "").strip()
+        if (not label.isascii() or not label.isdecimal() or label.startswith("0")
+                or len(label) > len(str(len(sheets)))):
+            continue
+        try:
+            x, y = float(item["x"]), float(item["y"])
+        except (TypeError, ValueError, KeyError):
+            continue
+        hosts = [
+            sheet for sheet in sheets
+            if sheet["offset_x_mm"] <= x <= sheet["offset_x_mm"] + sheet["full_width_mm"]
+            and sheet["offset_y_mm"] + sheet["full_height_mm"] < y
+            <= sheet["offset_y_mm"] + sheet["full_height_mm"] + 100
+        ]
+        if len(hosts) == 1:
+            key = id(hosts[0])
+            if key in numbered:
+                conflicting_labels = True
+            numbered[key] = int(label)
+    if (not conflicting_labels and len(numbered) == len(sheets)
+            and set(numbered.values()) == set(range(1, len(sheets) + 1))):
+        sheets.sort(key=lambda row: numbered[id(row)])
+    else:
+        sheets.sort(key=lambda row: (row["offset_y_mm"], row["offset_x_mm"]))
     for sheet_no, sheet in enumerate(sheets, start=1):
         sheet["sheet_no"] = sheet_no
     return sheets
@@ -3717,6 +3750,7 @@ def parse_production_dxf(
         sheet_contours,
         expected_width_mm=full_board_width_cm * 10.0,
         expected_height_mm=full_board_length_cm * 10.0,
+        annotations=annotations,
     )
     cut_contours = assemble_contours(cut_segments, CONNECTIVITY_TOLERANCE_MM)
     # Finished doors on GEOMETRY must not be reported as CUT_PATH failures.

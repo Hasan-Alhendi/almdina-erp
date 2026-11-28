@@ -70,14 +70,18 @@ def test_verified_download_uses_the_same_nc_bytes_once():
 
 def test_export_filename_is_nc_and_does_not_imply_a_stored_copy():
     name = nc_export_filename(
-        order_name="DCO-1",
+        order_name="26-00335",
         cutting_plan="PLAN-1",
         plan_revision=3,
         sheet_no=2,
         content_sha256=nc_content_sha256("G90\nM30\n"),
     )
+    assert name == "26-00335(2).nc"
     assert name.endswith(".nc")
     assert not name.endswith(".sim.nc")
+    assert "PLAN-1" not in name
+    assert "sheet" not in name
+    assert "_" not in name
 
 
 def test_generate_returns_content_without_saving_a_file_or_settings():
@@ -104,7 +108,8 @@ def test_generate_returns_content_without_saving_a_file_or_settings():
         "workspace",
     ):
         assert retired not in generate
-    assert "Capability.PREPARE_CNC_OPERATIONAL_FILES" in download
+    assert "Capability.VIEW_CNC_OPERATIONAL_FILES" in download
+    assert "Capability.PREPARE_CNC_OPERATIONAL_FILES" not in download
     assert "stored_nc_unavailable" in download
     assert "filecontent" not in download
     assert "save_file" not in repo
@@ -131,6 +136,9 @@ def test_mutations_use_revision_while_fingerprint_stays_a_manufacturing_identity
     assert "base_revision" in calculate
     assert "post_processor" in calculate
     assert "post_processor=post_processor" in calculate
+    assert "width_stop_side" in calculate
+    assert "width_stop_side=width_stop_side" in calculate
+    assert "length_stop_cm=length_stop_cm" in calculate
     assert "expected_revision=_revision(base_revision)" in calculate
     assert "base_fingerprint" not in service
     assert "_snapshot_for_request" in calculate

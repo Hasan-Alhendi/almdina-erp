@@ -467,17 +467,17 @@
         if (frm._dcoToolbarObserver) frm._dcoToolbarObserver.disconnect();
         let scheduled = false;
         const observer = new MutationObserver(() => {
-            const revision = window.AlmdinaOrderRevisionUX;
-            if (revision && typeof revision.syncPrimaryAction === "function") {
-                // MutationObserver callbacks run before the browser paints. If
-                // Frappe recreates its native Save button, restore the one owned
-                // by RevisionUX in the same frame.
-                revision.syncPrimaryAction(frm);
-            }
             if (scheduled) return;
             scheduled = true;
             scheduleFrame(frm, "toolbar-observer-frame", () => {
                 scheduled = false;
+                // Updating the primary action can change the observed head.
+                // Doing that inside the MutationObserver callback can starve
+                // rendering when Frappe rebuilds its form chrome.
+                const revision = window.AlmdinaOrderRevisionUX;
+                if (revision && typeof revision.syncPrimaryAction === "function") {
+                    revision.syncPrimaryAction(frm);
+                }
                 reconcile(frm, frm._dco_presentation_head);
             });
         });

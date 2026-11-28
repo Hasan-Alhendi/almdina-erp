@@ -216,11 +216,29 @@ assert.ok(denied.includes("dco-operational-sheet__preview"));
 assert.ok(ux.generateNcControlState({ canPrepare: false }).reason.includes("Preparing operational files is not available for your current permissions."));
 assert.ok(panel.includes("Generate NC file"));
 assert.equal(ux.generateNcControlState({ canPrepare: false }).disabled, true);
+assert.equal(
+    ux.generateNcControlState({
+        canPrepare: false,
+        canGenerateNc: true,
+        sheet: { status: "Not Generated", persisted: false },
+    }).disabled,
+    true
+);
+assert.equal(
+    ux.generateNcControlState({
+        canPrepare: false,
+        canGenerateNc: true,
+        sheet: { status: "Settings Saved", persisted: true },
+    }).disabled,
+    false
+);
 assert.equal(ux.generateNcControlState({ canPrepare: true, geometryReady: false, previewPending: true }).disabled, false);
 assert.ok(
     ux.generateNcControlState({ canPrepare: true }).reason
         .includes("Generate NC file")
 );
+assert.ok(panel.includes("can_generate_nc"));
+assert.ok(panel.includes("sheetHasTrustedNcSettings"));
 assert.ok(!panel.includes("not approved for a workshop machine"));
 
 assert.ok(css.includes("grid-template-columns: minmax(0, 390px) minmax(16rem, 1fr)"));

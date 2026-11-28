@@ -129,6 +129,8 @@ def test_invalidation_service_is_focused_and_never_runs_optimizer() -> None:
     assert "decide_draft_plan_freshness" in text
     assert "decide_approved_plan_freshness" in text
     assert "decide_uploaded_plan_mismatch" in text
+    assert "decide_uploaded_manufacturing_trim_mismatch" in text
+    assert "sync_uploaded_draft_manufacturing_trim" in text
     assert "cancel_approval_transition" in text
     assert '"plan_needs_recalculation"' in text
     assert "frappe.db.set_value" in text

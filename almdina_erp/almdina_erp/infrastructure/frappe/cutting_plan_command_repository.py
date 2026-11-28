@@ -14,9 +14,14 @@ from almdina_erp.almdina_erp.application.cutting.plan_revisions import (
 from almdina_erp.almdina_erp.domain.cutting.plan_settings import settings_for_system_search
 from almdina_erp.almdina_erp.domain.cutting.plan_lifecycle import (
     APPROVED,
+    BOARD_EDITOR,
+    CANCELLED,
     DRAFT,
     SYSTEM,
     UPLOADED_DXF,
+    next_revision,
+    revision_from_lineage_source,
+    select_newer_draft_of_source,
 )
 from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_command_context import (
     PLAN_COMMAND_FLAG,
@@ -301,11 +306,11 @@ class FrappeCuttingPlanCommandRepository:
             plan_kind="Order",
             status=APPROVED,
         )
-        next_revision = (cint(latest_any.get("revision")) + 1) if latest_any else 1
+        next_revision_number = (cint(latest_any.get("revision")) + 1) if latest_any else 1
         based_on = latest_approved["name"] if latest_approved else None
         created = self.create_draft(
             order_name=order.name,
-            revision=next_revision,
+            revision=next_revision_number,
             status=DRAFT,
             source_type=UPLOADED_DXF,
             based_on_plan=based_on,
@@ -314,6 +319,221 @@ class FrappeCuttingPlanCommandRepository:
             settings=manufacturing_plan_settings(order.name),
         )
         return self.get_document(created.name)
+
+    def _order_plan_rows(self, order_name: str) -> list[dict[str, Any]]:
+        return frappe.get_all(
+            "Cutting Plan",
+            filters={"door_cutting_order": order_name, "plan_kind": "Order"},
+            fields=["name", "revision", "status", "source_type", "modified"],
+            order_by="revision desc, modified desc",
+        )
+
+    def find_newer_draft(
+        self,
+        order_name: str,
+        *,
+        source_type: str,
+        min_revision: int,
+    ) -> Any | None:
+        newer = select_newer_draft_of_source(
+            self._order_plan_rows(order_name),
+            source_type=source_type,
+            min_revision=min_revision,
+        )
+        if not newer:
+            return None
+        name = str(newer.get("name") if isinstance(newer, dict) else getattr(newer, "name", "") or "")
+        return self.get_document(name) if name else None
+
+    def latest_cancelled_document(
+        self,
+        order_name: str,
+        *,
+        source_type: str,
+    ) -> Any | None:
+        row = self._latest_plan_row(
+            order_name,
+            plan_kind="Order",
+            source_type=source_type,
+            status=CANCELLED,
+        )
+        return self.get_document(row["name"]) if row else None
+
+    def create_geometry_preserving_draft(
+        self,
+        source_plan: Any,
+        *,
+        order: Any | None = None,
+    ) -> Any:
+        """Copy one immutable tip into a new Draft without rerunning the engine.
+
+        The source revision stays untouched. Geometry, fingerprints, DXF metadata,
+        child tables, and the trusted cost snapshot are preserved. Freshness is
+        re-checked against the current order so a drifted tip is marked stale and
+        cannot be re-approved until the operator recalculates or re-uploads.
+        """
+
+        source_name = str(getattr(source_plan, "name", None) or "").strip()
+        order_name = str(getattr(source_plan, "door_cutting_order", None) or "").strip()
+        source_type = str(getattr(source_plan, "source_type", None) or SYSTEM).strip() or SYSTEM
+        source_status = str(getattr(source_plan, "status", None) or "").strip()
+        source_revision = cint(getattr(source_plan, "revision", 0))
+        if not source_name or not order_name:
+            raise ValueError("geometry_copy_requires_named_plan")
+
+        existing = self.find_newer_draft(
+            order_name,
+            source_type=source_type,
+            min_revision=source_revision,
+        )
+        if existing:
+            return existing
+
+        rows = self._order_plan_rows(order_name)
+        tip_revision = next_revision(
+            [cint(row.get("revision")) for row in rows if cint(row.get("revision"))]
+        )
+        lineage = revision_from_lineage_source(
+            current_name=source_name,
+            current_revision=source_revision,
+            current_status=source_status,
+            source_type=source_type,
+            next_revision_number=tip_revision,
+        )
+
+        draft = frappe.copy_doc(source_plan)
+        draft.status = DRAFT
+        draft.revision = lineage.revision
+        draft.based_on_plan = lineage.based_on_plan
+        draft.source_type = lineage.source_type
+        draft.approved_by = None
+        draft.approved_on = None
+        # Keep stored fingerprints/geometry. Freshness below may mark stale.
+        draft.plan_needs_recalculation = cint(
+            getattr(source_plan, "plan_needs_recalculation", 0)
+        )
+        self._run_persist(draft, "insert")
+
+        if lineage.source_type == BOARD_EDITOR:
+            self._copy_board_editor_drawings(
+                order_name=order_name,
+                source_plan_name=source_name,
+                target_plan_name=draft.name,
+                source_input_fingerprint=str(
+                    getattr(source_plan, "input_fingerprint", None) or ""
+                ),
+                source_content_revision=str(getattr(source_plan, "revision", "") or ""),
+            )
+
+        # Re-apply the copied cost snapshot through the costing boundary so
+        # permlevel-1 fields survive insert for operators without financial edit.
+        if cint(getattr(draft, "cost_snapshot_version", 0)) >= COST_SNAPSHOT_VERSION:
+            persist_plan_cost_snapshot(draft)
+
+        self._apply_post_copy_freshness(order or order_name, draft)
+        return self.get_document(draft.name)
+
+    def ensure_geometry_draft_from_cancelled(
+        self,
+        order: Any,
+        *,
+        source_type: str,
+    ) -> Any | None:
+        """Recover one working Draft from the latest Cancelled tip of ``source_type``."""
+
+        current = self.latest_document(
+            order.name,
+            source_type=source_type,
+            status=DRAFT,
+        )
+        if current:
+            return current
+        cancelled = self.latest_cancelled_document(order.name, source_type=source_type)
+        if not cancelled:
+            return None
+        return self.create_geometry_preserving_draft(cancelled, order=order)
+
+    def _apply_post_copy_freshness(self, order: Any | str, plan: Any) -> None:
+        from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_workspace import (
+            plan_fingerprint_compatibility,
+        )
+
+        order_doc = (
+            order
+            if not isinstance(order, str)
+            else frappe.get_doc("Door Cutting Order", order)
+        )
+        stored = str(getattr(plan, "input_fingerprint", None) or "")
+        decision = plan_fingerprint_compatibility(order_doc, plan, stored)
+        needs_recalculation = bool(
+            cint(getattr(plan, "plan_needs_recalculation", 0)) or not decision.compatible
+        )
+        if bool(cint(getattr(plan, "plan_needs_recalculation", 0))) == needs_recalculation:
+            return
+        plan.plan_needs_recalculation = 1 if needs_recalculation else 0
+        frappe.db.set_value(
+            "Cutting Plan",
+            plan.name,
+            "plan_needs_recalculation",
+            plan.plan_needs_recalculation,
+            update_modified=False,
+        )
+
+    @staticmethod
+    def _copy_board_editor_drawings(
+        *,
+        order_name: str,
+        source_plan_name: str,
+        target_plan_name: str,
+        source_input_fingerprint: str,
+        source_content_revision: str,
+    ) -> None:
+        from almdina_erp.almdina_erp.domain.cutting.board_editor_drawing import (
+            DrawingDocumentError,
+            document_fingerprint,
+        )
+        from almdina_erp.almdina_erp.domain.cutting.board_editor_drawing_copy import (
+            clone_drawing_document,
+        )
+        from almdina_erp.almdina_erp.domain.cutting.board_editor_drawing_persistence import (
+            drawing_key,
+        )
+        from almdina_erp.almdina_erp.infrastructure.frappe.board_editor_drawing_store import (
+            FrappeBoardEditorDrawingStore,
+            drawing_storage_ready,
+        )
+
+        if not drawing_storage_ready():
+            return
+        store = FrappeBoardEditorDrawingStore()
+        records = store.read_for_plan(order_name, source_plan_name)
+        if not records:
+            return
+        for record in records:
+            piece_id = str(record.get("piece_instance_id") or "").strip()
+            document = record.get("drawing_json")
+            if not piece_id or not isinstance(document, dict):
+                continue
+            try:
+                cloned = clone_drawing_document(document, piece_id)
+            except DrawingDocumentError:
+                continue
+            store.insert(
+                {
+                    "drawing_key": drawing_key(order_name, target_plan_name, piece_id),
+                    "door_cutting_order": order_name,
+                    "source_plan": target_plan_name,
+                    "piece_instance_id": piece_id,
+                    "source_input_fingerprint": source_input_fingerprint
+                    or str(record.get("source_input_fingerprint") or ""),
+                    "source_content_revision": source_content_revision
+                    or str(record.get("source_content_revision") or ""),
+                    "drawing_version": 1,
+                    "document_fingerprint": document_fingerprint(cloned),
+                    "drawing_json": cloned,
+                    "prior_drawing_archive_json": [],
+                }
+            )
 
 
 __all__ = ["FrappeCuttingPlanCommandRepository"]

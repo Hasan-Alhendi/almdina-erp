@@ -411,19 +411,32 @@
         const owner = window.AlmdinaPlanWorkspaceState;
         const row = owner && typeof owner.planForTab === "function" ? owner.planForTab(frm, tab) : null;
         const state = row && row.validation && row.validation.freshness_state;
+        const reason = row && row.validation && row.validation.freshness_reason;
+        const alignment = row && row.settings_alignment;
         const review = state === "REVIEW_REQUIRED" || state === "PERSISTED_STALE";
         const title = review ? "Plan matching requires review" : "The plan does not match the order";
-        const summary = state === "PERSISTED_STALE"
-            ? "The plan is marked as out of date. Review it before starting new manufacturing."
-            : review
-                ? "Plan compatibility could not be confirmed after the system update. Review the plan before starting new manufacturing."
-                : "This order was changed and the plan no longer matches";
+        let summary;
+        if (reason === "trim_margin_changed" && alignment) {
+            summary = translate(
+                "The trim margin changed. Current margin is {0} mm; this uploaded plan was validated with {1} mm. Upload a new DXF that matches the current margin before approval.",
+                [
+                    String(alignment.manufacturing_trim_margin_mm),
+                    String(alignment.validated_trim_margin_mm),
+                ]
+            );
+        } else if (state === "PERSISTED_STALE") {
+            summary = translate("The plan is marked as out of date. Review it before starting new manufacturing.");
+        } else if (review) {
+            summary = translate("Plan compatibility could not be confirmed after the system update. Review the plan before starting new manufacturing.");
+        } else {
+            summary = translate("This order was changed and the plan no longer matches");
+        }
 		return `
 			<div class="dco-uploaded-plan-mismatch-banner" role="alert" aria-live="assertive">
 				<span class="dco-uploaded-plan-mismatch-banner__icon" aria-hidden="true">⚠</span>
 				<div class="dco-uploaded-plan-mismatch-banner__body">
 					<strong class="dco-uploaded-plan-mismatch-banner__title">${frappe.utils.escape_html(translate(title))}</strong>
-					<span class="dco-uploaded-plan-mismatch-banner__summary">${frappe.utils.escape_html(translate(summary))}</span>
+					<span class="dco-uploaded-plan-mismatch-banner__summary">${frappe.utils.escape_html(summary)}</span>
 				</div>
 			</div>
 		`;

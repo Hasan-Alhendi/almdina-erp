@@ -585,6 +585,11 @@ html[dir="rtl"] .dco-operational-sheet-dialog .dco-operational-sheet__preview {
     stroke: var(--alm-text-strong, #101828);
     stroke-width: 1.5;
 }
+.dco-cnc-sheet-page .dco-cnc-cut-preview__machine-bed {
+    /* One shade darker than page/canvas greys so the solid machine bed reads apart from the hatched sheet. */
+    fill: #e4e8ef;
+    pointer-events: none;
+}
 .dco-cnc-sheet-page .dco-cnc-cut-preview__void {
     fill: none;
     pointer-events: none;
@@ -603,6 +608,9 @@ html[dir="rtl"] .dco-operational-sheet-dialog .dco-operational-sheet__preview {
 }
 [data-theme="dark"] .dco-cnc-sheet-page .dco-cnc-cut-preview__viewport {
     background-color: #121821;
+}
+[data-theme="dark"] .dco-cnc-sheet-page .dco-cnc-cut-preview__machine-bed {
+    fill: #121821;
 }
 [data-theme="dark"] .dco-cnc-sheet-page .dco-cnc-cut-preview__zero-label {
     color: var(--alm-status-danger-fg, #f87171);
@@ -1125,6 +1133,14 @@ body.dco-cnc-sheet-settings-active .layout-main-section {
 .dco-operational-sheet .dco-artcam-editor {
     display: grid;
     gap: 8px;
+}
+.dco-operational-sheet .dco-artcam-readonly {
+    display: grid;
+    gap: 8px;
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
 }
 .dco-operational-sheet .dco-artcam-row {
     display: grid;

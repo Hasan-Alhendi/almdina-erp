@@ -193,6 +193,7 @@ _MESSAGES = {
     "path_reverse_missing": "A saved path direction no longer matches a path on this sheet, so the NC file was not created.",
     "path_reverse_ambiguous": "A saved path direction matches more than one path, so the NC file was not created. Restore the direction, then set it again on the path you want.",
     "sheet_settings_required": "Save the sheet settings before reversing a machining path.",
+    "sheet_settings_required_for_nc": "Save the sheet settings before generating the NC file.",
     "perimeter_join_mode_invalid": "The sheet perimeter join mode is not valid.",
     "perimeter_unavailable": "A connected sheet perimeter could not be formed from the approved cut network.",
     "perimeter_not_closed": "The outer cut network is not a closed perimeter.",
@@ -365,7 +366,7 @@ def _authorized_order(order_name: str, capability: str) -> Any:
     return order
 
 
-def _workspace_for(order: Any, *, can_prepare: bool) -> dict[str, Any]:
+def _workspace_for(order: Any, *, can_prepare: bool, can_generate_nc: bool = True) -> dict[str, Any]:
     plan = approved_plan_ref(order)
     try:
         pieces = placed_piece_views(order) if plan is not None else []
@@ -380,6 +381,7 @@ def _workspace_for(order: Any, *, can_prepare: bool) -> dict[str, Any]:
             known_presets=known_tool_presets(),
             machine_profile=machine_profile_view(),
             can_prepare=can_prepare,
+            can_generate_nc=can_generate_nc,
             cnc_machines=list_cnc_machines(),
             plan_snapshot=snapshot,
         )
@@ -425,7 +427,11 @@ def get_cnc_operational_workspace(order_name: str) -> dict[str, Any]:
         order,
         Capability.PREPARE_CNC_OPERATIONAL_FILES,
     )
-    return _workspace_for(order, can_prepare=can_prepare)
+    return _workspace_for(
+        order,
+        can_prepare=can_prepare,
+        can_generate_nc=True,
+    )
 
 
 def _revision(value: Any) -> int:
@@ -685,6 +691,10 @@ def calculate_cnc_association_toolpath(
     cnc_machine: str | None = None,
     offset_left_cm: float | int | str | None = None,
     offset_bottom_cm: float | int | str | None = None,
+    width_stop_side: str | None = None,
+    width_stop_cm: float | int | str | None = None,
+    length_stop_side: str | None = None,
+    length_stop_cm: float | int | str | None = None,
     machining_profiles: str | list[Any] | None = None,
     vector_associations: str | list[Any] | None = None,
     calculation_request_id: str | None = None,
@@ -834,6 +844,10 @@ def calculate_cnc_association_toolpath(
             cnc_machine=(saved or {}).get("cnc_machine") if cnc_machine is None else cnc_machine,
             offset_left_cm=(saved or {}).get("offset_left_cm") if offset_left_cm is None else offset_left_cm,
             offset_bottom_cm=(saved or {}).get("offset_bottom_cm") if offset_bottom_cm is None else offset_bottom_cm,
+            width_stop_side=width_stop_side,
+            width_stop_cm=width_stop_cm,
+            length_stop_side=length_stop_side,
+            length_stop_cm=length_stop_cm,
             machine_catalog=list_cnc_machines(),
             plan_snapshot=approved_plan_snapshot(order),
             toolpath_snapshots=snapshots,
@@ -1240,22 +1254,31 @@ def set_cnc_path_direction(
     path_overrides: str | dict[str, Any] | None = None,
     operation_order: str | list[Any] | None = None,
     cut_path_early_confirmed: int | str | bool = 0,
+    operation_sources: str | dict[str, Any] | None = None,
     perimeter_join_mode: str | None = None,
     cut_path_sequence: str | list[Any] | None = None,
     perimeter_cut_early_confirmed: int | str | bool = 0,
     cnc_machine: str | None = None,
     offset_left_cm: float | int | str | None = None,
     offset_bottom_cm: float | int | str | None = None,
+    width_stop_side: str | None = None,
+    width_stop_cm: float | int | str | None = None,
+    length_stop_side: str | None = None,
+    length_stop_cm: float | int | str | None = None,
     post_processor: str | None = None,
     base_revision: int | str | None = None,
 ) -> dict[str, Any]:
-    """Toggle one path direction and persist the exact geometry settings used."""
+    """Toggle one path direction and persist the current sheet settings with it.
+
+    A prior sheet save is not required. The request carries the settings the
+    operator currently sees; validation runs first, then one ``save_sheet``
+    writes settings and the new direction together. A failure before that
+    write leaves no partial sheet row.
+    """
 
     order = _authorized_order(order_name, Capability.PREPARE_CNC_OPERATIONAL_FILES)
     plan = approved_plan_ref(order)
     saved = _existing_sheet(str(order.name), plan, cint(sheet_no))
-    if not saved or not saved.get("name"):
-        frappe.throw(_message("sheet_settings_required"), frappe.ValidationError)
     _reject_stale_sheet(saved, base_revision)
     key = str(path_key or "").strip()
     if not key:
@@ -1285,6 +1308,10 @@ def set_cnc_path_direction(
             for item, value in probe_operations.items():
                 if str(value or "").strip() != str(operations.get(item) or "").strip():
                     probe_sources[item] = "sheet"
+    if operation_sources is not None:
+        parsed_sources = frappe.parse_json(operation_sources) if isinstance(operation_sources, str) else dict(operation_sources or {})
+        if isinstance(parsed_sources, dict):
+            probe_sources = {str(item): value for item, value in parsed_sources.items()}
     if path_overrides is not None:
         parsed_paths = frappe.parse_json(path_overrides) if isinstance(path_overrides, str) else dict(path_overrides or {})
         if isinstance(parsed_paths, dict):
@@ -1293,11 +1320,15 @@ def set_cnc_path_direction(
         parsed_order = frappe.parse_json(operation_order) if isinstance(operation_order, str) else list(operation_order or [])
         if isinstance(parsed_order, list):
             probe_order = [str(item) for item in parsed_order]
+            probe_confirmed = bool(cint(cut_path_early_confirmed))
     if perimeter_join_mode is not None:
         probe_join = str(perimeter_join_mode or join_mode)
         probe_sequence = _parse_optional_sequence(cut_path_sequence)
         probe_early = bool(cint(perimeter_cut_early_confirmed))
-        probe_confirmed = bool(cint(cut_path_early_confirmed))
+        if operation_order is None:
+            probe_confirmed = bool(cint(cut_path_early_confirmed))
+    snapshots = list((saved or {}).get("toolpath_snapshots") or [])
+    associations = list((saved or {}).get("vector_associations") or [])
     try:
         _plan, program, _presets = _compile_authorized_program(
             order,
@@ -1316,12 +1347,12 @@ def set_cnc_path_direction(
     try:
         direction_program = unreversed_operational_program(
             program,
-            snapshots=list(saved.get("toolpath_snapshots") or []),
-            associations=list(saved.get("vector_associations") or []),
+            snapshots=snapshots,
+            associations=associations,
         )
         current_records = clear_reversed_direction_conflicts(
             direction_program,
-            saved.get("reversed_path_keys"),
+            (saved or {}).get("reversed_path_keys"),
         )
         records = toggle_reversed_path(
             current_records,
@@ -1356,18 +1387,24 @@ def set_cnc_path_direction(
             perimeter_join_mode=probe_join,
             cut_path_sequence=probe_sequence,
             perimeter_cut_early_confirmed=probe_early,
-            cnc_machine=saved.get("cnc_machine") if cnc_machine is None else cnc_machine,
-            offset_left_cm=saved.get("offset_left_cm") if offset_left_cm is None else offset_left_cm,
-            offset_bottom_cm=saved.get("offset_bottom_cm") if offset_bottom_cm is None else offset_bottom_cm,
+            cnc_machine=(saved or {}).get("cnc_machine") if cnc_machine is None else cnc_machine,
+            offset_left_cm=(saved or {}).get("offset_left_cm") if offset_left_cm is None else offset_left_cm,
+            offset_bottom_cm=(saved or {}).get("offset_bottom_cm") if offset_bottom_cm is None else offset_bottom_cm,
+            width_stop_side=width_stop_side,
+            width_stop_cm=width_stop_cm,
+            length_stop_side=length_stop_side,
+            length_stop_cm=length_stop_cm,
             post_processor=post_processor,
             machine_catalog=list_cnc_machines(),
             plan_snapshot=approved_plan_snapshot(order),
-            toolpath_snapshots=list(saved.get("toolpath_snapshots") or []),
-            vector_associations=list(saved.get("vector_associations") or []),
+            toolpath_snapshots=snapshots,
+            vector_associations=associations,
             reversed_path_keys=records,
         )
+        # Omit machining JSON keys so existing Profiles/Associations/Snapshots
+        # stay untouched. A first save creates those fields empty.
         save_sheet(
-            str(saved.get("name") or ""),
+            str((saved or {}).get("name") or ""),
             prepared,
             expected_revision=_revision(base_revision),
         )
@@ -1506,62 +1543,126 @@ def generate_cnc_sheet_nc(
     length_stop_cm: float | int | str | None = None,
     post_processor: str | None = None,
 ) -> dict[str, Any]:
-    """Build one verified NC file from the current sheet settings and return it.
+    """Build one verified NC file and return it without storing NC text.
 
-    Sheet settings are not saved. Associations and toolpath snapshots already
-    stored by their own operations are applied in memory. No NC file is stored.
+    View permission is enough to download NC. Prepare permission may supply the
+    live sheet settings from the client. View-only callers are locked to the
+    trusted saved sheet settings and cannot override them from the browser.
     """
 
-    order = _authorized_order(order_name, Capability.PREPARE_CNC_OPERATIONAL_FILES)
-    parsed_operations, parsed_paths, parsed_order, parsed_sources = _parse_sheet_settings(
-        operation_presets,
-        path_overrides,
-        operation_order,
-        operation_sources,
+    order = _authorized_order(order_name, Capability.VIEW_CNC_OPERATIONAL_FILES)
+    can_prepare = document_has_capability(
+        order,
+        Capability.PREPARE_CNC_OPERATIONAL_FILES,
     )
-    parsed_sequence = _parse_optional_sequence(cut_path_sequence)
     plan = approved_plan_ref(order)
     if plan is None:
         frappe.throw(_message("no_approved_plan"), frappe.ValidationError)
     existing = _existing_sheet(str(order.name), plan, cint(sheet_no))
     try:
         assert_viewed_plan_token(plan, viewed_plan_token)
-        sheet_arguments = {
-            "order_name": str(order.name),
-            "approved_plan": plan,
-            "plan_is_current": True,
-            "pieces": placed_piece_views(order),
-            "sheet_no": cint(sheet_no),
-            "existing": existing,
-            "operation_presets": {str(key): value for key, value in parsed_operations.items()},
-            "path_overrides": {str(key): value for key, value in parsed_paths.items()},
-            "known_presets": known_tool_presets(),
-            "machine_profile": machine_profile_view(),
-            "operation_order": [str(item) for item in parsed_order],
-            "cut_path_early_confirmed": bool(cint(cut_path_early_confirmed)),
-            "operation_sources": None if parsed_sources is None else {
-                str(key): value for key, value in parsed_sources.items()
-            },
-            "factory_defaults": factory_operation_defaults(),
-            "perimeter_join_mode": perimeter_join_mode,
-            "cut_path_sequence": parsed_sequence,
-            "perimeter_cut_early_confirmed": (
-                None
-                if perimeter_cut_early_confirmed is None
-                else bool(cint(perimeter_cut_early_confirmed))
-            ),
-            "cnc_machine": cnc_machine,
-            "offset_left_cm": offset_left_cm,
-            "offset_bottom_cm": offset_bottom_cm,
-            "width_stop_side": width_stop_side,
-            "width_stop_cm": width_stop_cm,
-            "length_stop_side": length_stop_side,
-            "length_stop_cm": length_stop_cm,
-            "post_processor": post_processor,
-            "machine_catalog": list_cnc_machines(),
-            "plan_snapshot": approved_plan_snapshot(order),
-            "require_cnc_machine": True,
-        }
+        if can_prepare:
+            parsed_operations, parsed_paths, parsed_order, parsed_sources = _parse_sheet_settings(
+                operation_presets,
+                path_overrides,
+                operation_order,
+                operation_sources,
+            )
+            parsed_sequence = _parse_optional_sequence(cut_path_sequence)
+            sheet_arguments = {
+                "order_name": str(order.name),
+                "approved_plan": plan,
+                "plan_is_current": True,
+                "pieces": placed_piece_views(order),
+                "sheet_no": cint(sheet_no),
+                "existing": existing,
+                "operation_presets": {str(key): value for key, value in parsed_operations.items()},
+                "path_overrides": {str(key): value for key, value in parsed_paths.items()},
+                "known_presets": known_tool_presets(),
+                "machine_profile": machine_profile_view(),
+                "operation_order": [str(item) for item in parsed_order],
+                "cut_path_early_confirmed": bool(cint(cut_path_early_confirmed)),
+                "operation_sources": None if parsed_sources is None else {
+                    str(key): value for key, value in parsed_sources.items()
+                },
+                "factory_defaults": factory_operation_defaults(),
+                "perimeter_join_mode": perimeter_join_mode,
+                "cut_path_sequence": parsed_sequence,
+                "perimeter_cut_early_confirmed": (
+                    None
+                    if perimeter_cut_early_confirmed is None
+                    else bool(cint(perimeter_cut_early_confirmed))
+                ),
+                "cnc_machine": cnc_machine,
+                "offset_left_cm": offset_left_cm,
+                "offset_bottom_cm": offset_bottom_cm,
+                "width_stop_side": width_stop_side,
+                "width_stop_cm": width_stop_cm,
+                "length_stop_side": length_stop_side,
+                "length_stop_cm": length_stop_cm,
+                "post_processor": post_processor,
+                "machine_catalog": list_cnc_machines(),
+                "plan_snapshot": approved_plan_snapshot(order),
+                "require_cnc_machine": True,
+            }
+        else:
+            if not existing or not existing.get("name"):
+                frappe.throw(_message("sheet_settings_required_for_nc"), frappe.ValidationError)
+            (
+                saved_operations,
+                saved_paths,
+                saved_order,
+                saved_confirmed,
+                saved_sources,
+                saved_join,
+                saved_sequence,
+                saved_perimeter_early,
+            ) = _settings_from_saved(existing, factory_operation_defaults())
+            # Ignore every client machining override for view-only downloads.
+            del (
+                operation_presets,
+                path_overrides,
+                operation_order,
+                cut_path_early_confirmed,
+                operation_sources,
+                perimeter_join_mode,
+                cut_path_sequence,
+                perimeter_cut_early_confirmed,
+                cnc_machine,
+                offset_left_cm,
+                offset_bottom_cm,
+                width_stop_side,
+                width_stop_cm,
+                length_stop_side,
+                length_stop_cm,
+                post_processor,
+            )
+            sheet_arguments = {
+                "order_name": str(order.name),
+                "approved_plan": plan,
+                "plan_is_current": True,
+                "pieces": placed_piece_views(order),
+                "sheet_no": cint(sheet_no),
+                "existing": existing,
+                "operation_presets": saved_operations,
+                "path_overrides": saved_paths,
+                "known_presets": known_tool_presets(),
+                "machine_profile": machine_profile_view(),
+                "operation_order": saved_order,
+                "cut_path_early_confirmed": saved_confirmed,
+                "operation_sources": saved_sources,
+                "factory_defaults": factory_operation_defaults(),
+                "perimeter_join_mode": saved_join,
+                "cut_path_sequence": saved_sequence,
+                "perimeter_cut_early_confirmed": saved_perimeter_early,
+                "cnc_machine": existing.get("cnc_machine"),
+                "offset_left_cm": existing.get("offset_left_cm"),
+                "offset_bottom_cm": existing.get("offset_bottom_cm"),
+                "post_processor": existing.get("post_processor"),
+                "machine_catalog": list_cnc_machines(),
+                "plan_snapshot": approved_plan_snapshot(order),
+                "require_cnc_machine": True,
+            }
         prepared = prepare_sheet_settings(**sheet_arguments)
         direction_snapshots = list((existing or {}).get("toolpath_snapshots") or [])
         direction_associations = list((existing or {}).get("vector_associations") or [])
@@ -1690,9 +1791,9 @@ def download_cnc_sheet_nc(
     operational_file_name: str,
     file_url: str | None = None,
 ) -> None:
-    """Reject a stored NC download after generation permission and order scope checks."""
+    """Reject a stored NC download after view permission and order scope checks."""
 
-    order = _authorized_order(order_name, Capability.PREPARE_CNC_OPERATIONAL_FILES)
+    order = _authorized_order(order_name, Capability.VIEW_CNC_OPERATIONAL_FILES)
     name = str(operational_file_name or "").strip()
     if name:
         owner = frappe.db.get_value("CNC Operational File", name, "door_cutting_order")

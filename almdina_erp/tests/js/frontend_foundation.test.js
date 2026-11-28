@@ -94,6 +94,15 @@ assert.equal(Object.isFrozen(frontend), true);
     // Unexpected JavaScript exceptions are internal diagnostics, never public copy.
     assert.equal(frontend.errorMessage(new Error("broken"), "fallback"), "fallback");
     assert.equal(frontend.errorMessage({}, "fallback"), "fallback");
+    const readable = "هندسة التشغيل غير جاهزة، لذلك لم يُنشأ ملف NC.";
+    const cncFailure = {
+        exc_type: "ValidationError",
+        exc: JSON.stringify(["Traceback (most recent call last):\nprivate server frames"]),
+        _server_messages: JSON.stringify([JSON.stringify({ message: readable })]),
+    };
+    // Frappe 16.60 passes responseJSON directly to the 417 error callback.
+    assert.equal(frontend.normalizeError(cncFailure).message, readable);
+    assert.equal(frontend.normalizeError({ status: 417, responseJSON: cncFailure }).message, readable);
 
     const gate = frontend.createLatestRequestGate();
     const first = gate.begin({ mode: "first" });

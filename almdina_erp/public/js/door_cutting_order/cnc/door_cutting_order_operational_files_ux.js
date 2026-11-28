@@ -1,7 +1,8 @@
 (() => {
     "use strict";
 
-    if (window.AlmdinaOperationalFilesUX) return;
+    const ASSET_REVISION = 1;
+    if (window.AlmdinaOperationalFilesUX?.assetRevision === ASSET_REVISION) return;
 
     const METHOD = "almdina_erp.almdina_erp.services.cnc_operational_file_service";
     const SHEET_PAGE_ROUTE = "cnc-sheet-settings";
@@ -1253,9 +1254,13 @@
         return "↓";
     }
 
-    function exportControlsMarkup(workspace) {
+    function exportControlsMarkup(workspace, sheet) {
         const canPrepare = Boolean(workspace && workspace.can_prepare);
-        const control = generateNcControlState({ canPrepare });
+        const control = generateNcControlState({
+            canPrepare,
+            canGenerateNc: Boolean(workspace && workspace.can_generate_nc),
+            sheet,
+        });
         const downloadLabel = translate("Download cutting file");
         const downloadTitle = control.disabled ? (control.reason || "") : downloadLabel;
         return `<div class="dco-operational-sheet__export" data-cnc-export-bar>
@@ -1310,7 +1315,11 @@
             state._artcamSheetNo = Number(sheet && sheet.sheet_no);
         }
         if (!state.sections) state.sections = { placement: false, perimeter: false, associations: true, order: true };
-        const exportBar = options && options.exportBar ? exportControlsMarkup(workspace, state) : "";
+        const associationEditor = window.AlmdinaArtcamMachining
+            ? window.AlmdinaArtcamMachining.markup(workspace, sheet, state) : "";
+        const associationBody = canPrepare ? associationEditor
+            : `<fieldset class="dco-artcam-readonly" disabled>${associationEditor}</fieldset>`;
+        const exportBar = options && options.exportBar ? exportControlsMarkup(workspace, sheet) : "";
         const pageChrome = Boolean(exportBar);
         const previewToolbar = pageChrome
             ? `<div class="dco-cnc-preview-toolbar" dir="ltr">
@@ -1341,7 +1350,7 @@
                     ${pageChrome ? sheetIdentityMarkup(workspace, sheet) : ""}
                     ${section("placement", "Machine placement", placementControlsMarkup(workspace, state, canPrepare))}
                     ${section("perimeter", "Sheet Perimeter", perimeterJoinControlsMarkup(state, canPrepare))}
-                    ${section("associations", "Vector Associations", window.AlmdinaArtcamMachining ? window.AlmdinaArtcamMachining.markup(workspace, sheet, state) : "")}
+                    ${section("associations", "Vector Associations", associationBody)}
                     ${section("order", "Operation order", `<ol class="dco-operational-order">${orderItems || `<li class="dco-artcam-note">${escapeHtml(translate("Associations appear here after they are saved."))}</li>`}</ol>${warning}`)}
                     ${exportBar}
                 </div>
@@ -1349,11 +1358,27 @@
         </div>`;
     }
 
-    function generateNcControlState({ canPrepare }) {
-        if (!canPrepare) {
+    function sheetHasTrustedNcSettings(sheet) {
+        if (!sheet) return false;
+        if (sheet.persisted || sheet.operational_file) return true;
+        const status = String(sheet.status || "");
+        return status === "Settings Saved" || status === "Generated";
+    }
+
+    function generateNcControlState({ canPrepare, canGenerateNc, sheet }) {
+        const generateAllowed = canGenerateNc == null
+            ? Boolean(canPrepare)
+            : Boolean(canGenerateNc);
+        if (!generateAllowed) {
             return {
                 disabled: true,
                 reason: translate("You can review these settings. Preparing operational files is not available for your current permissions."),
+            };
+        }
+        if (!canPrepare && !sheetHasTrustedNcSettings(sheet)) {
+            return {
+                disabled: true,
+                reason: translate("Save the sheet settings before generating the NC file."),
             };
         }
         return {
@@ -1807,7 +1832,7 @@
                     return;
                 }
                 if (zone !== "board") return;
-                if (applyBoardVectorClick(event, body, live.state)) return;
+                if (live.workspace.can_prepare && applyBoardVectorClick(event, body, live.state)) return;
                 const preview = body.querySelector("[data-sheet-preview]");
                 const pointed = resolveBoardPointer(preview, event);
                 if (pointed && pointed.ambiguous) {
@@ -2319,7 +2344,9 @@
         if (!actions.length) return;
         actions.find("[data-cnc-footer-action]").remove();
         const canPrepare = Boolean(workspace && workspace.can_prepare);
-        const control = generateNcControlState({ canPrepare });
+        const canGenerateNc = Boolean(workspace && workspace.can_generate_nc);
+        const liveSheet = (dialog._almdinaSheet && dialog._almdinaSheet.sheet) || sheet;
+        const control = generateNcControlState({ canPrepare, canGenerateNc, sheet: liveSheet });
         const generate = $(`<button type="button" class="btn btn-default btn-sm" data-cnc-footer-action="generate" data-cnc-generate-nc title="${escapeHtml(control.reason)}"></button>`);
         generate.text(translate("Generate NC file"));
         generate.prop("disabled", Boolean(control.disabled));
@@ -2328,6 +2355,7 @@
         if (!live) return;
         bindGenerateNc(dialog, dialog.$wrapper[0], {
             canPrepare,
+            canGenerateNc,
             args: sheetGenerateArgs(live.frm, live.workspace || workspace, live.sheet || sheet, live.state || state),
             sheetNo: (live.sheet || sheet).sheet_no,
             frm: live.frm,
@@ -2387,9 +2415,10 @@
         if (!ui || !ui.root) return;
         placePageActions(ui);
         const canPrepare = Boolean(workspace && workspace.can_prepare);
+        const canGenerateNc = Boolean(workspace && workspace.can_generate_nc);
         const save = ui.root.querySelector("[data-cnc-save-sheet]");
         const generate = ui.root.querySelector("[data-cnc-generate-nc]");
-        const control = generateNcControlState({ canPrepare });
+        const control = generateNcControlState({ canPrepare, canGenerateNc, sheet });
         if (save) save.disabled = !canPrepare;
         if (generate) {
             generate.disabled = Boolean(control.disabled);
@@ -2397,6 +2426,7 @@
         }
         bindGenerateNc(ui, ui.root, {
             canPrepare,
+            canGenerateNc,
             args: sheetGenerateArgs(ui.frm, workspace, sheet, state),
             sheetNo: sheet.sheet_no,
             frm: ui.frm,
@@ -2960,9 +2990,29 @@
                 if (!finishSheetMutation(state, mutationRequest)) return;
                 state.reverseBusy = "";
                 state.directionReport = pathKey;
+                const message = (response && response.message) || {};
+                const saved = (message.sheets || []).find(item => Number(item.sheet_no) === Number(sheet.sheet_no));
+                if (saved) {
+                    // Server wrote current settings and the new direction together.
+                    const next = sheetState(saved);
+                    state.operations = next.operations;
+                    state.sources = next.sources;
+                    state.factoryPresets = next.factoryPresets;
+                    state.overrides = next.overrides;
+                    state.order = next.order;
+                    state.confirmed = next.confirmed;
+                    state.perimeterJoinMode = next.perimeterJoinMode;
+                    state.cutPathSequence = next.cutPathSequence;
+                    state.perimeterEarlyConfirmed = next.perimeterEarlyConfirmed;
+                    state.cncMachine = next.cncMachine;
+                    state.sheetStops = next.sheetStops;
+                    state.settingsRevision = next.settingsRevision;
+                    state.sheetWidthCm = next.sheetWidthCm;
+                    state.sheetLengthCm = next.sheetLengthCm;
+                }
                 const onWorkspace = dialog._almdinaOnWorkspace;
                 if (typeof onWorkspace === "function") {
-                    onWorkspace((response && response.message) || {});
+                    onWorkspace(message);
                 }
             },
             error(error) {
@@ -3861,15 +3911,15 @@
         const gridPattern = showSheetHatch
             ? `<pattern id="${escapeHtml(gridPatternId)}" data-sheet-grid-pattern patternUnits="userSpaceOnUse" patternTransform="rotate(45)" width="8" height="8"><line class="dco-cnc-cut-preview__grid-line" x1="0" y1="0" x2="0" y2="8" fill="none" stroke="rgba(71,85,105,.18)" stroke-width="1" pointer-events="none"/></pattern>`
             : "";
+        const machineBed = pageLayout && placement
+            ? `<rect class="dco-cnc-cut-preview__machine-bed" x="0" y="0" width="${formatPreviewNumber(width)}" height="${formatPreviewNumber(length)}" fill="#e4e8ef" pointer-events="none"/>`
+            : "";
         const sheetWindow = showSheetHatch
             ? `<rect class="dco-cnc-cut-preview__board-fill" data-sheet-window="1" x="${formatPreviewNumber(offsetX)}" y="${formatPreviewNumber(sheetWindowY)}" width="${formatPreviewNumber(sheetW)}" height="${formatPreviewNumber(sheetL)}" fill="#ffffff" pointer-events="none"/>
                     <rect class="dco-cnc-cut-preview__board-grid" x="${formatPreviewNumber(offsetX)}" y="${formatPreviewNumber(sheetWindowY)}" width="${formatPreviewNumber(sheetW)}" height="${formatPreviewNumber(sheetL)}" fill="url(#${escapeHtml(gridPatternId)})" pointer-events="none"/>`
             : "";
         const pieceMarkup = pageLayout ? previewBoardPiecesMarkup(options, sheetL) : "";
         const sheetGroup = `<g data-sheet-geometry transform="translate(${offsetX},${offsetY})">${pieceMarkup}${strokes}<g data-path-markers></g></g>`;
-        const placementNote = placement
-            ? `<p class="dco-operational-files__note" data-placement-caption>${escapeHtml(translate("The sheet is placed with this machine's stops. Work zero is applied only in the NC file."))}</p>`
-            : "";
 
         return `<div class="dco-cnc-cut-preview" data-marker-scope="${escapeHtml(markerScope)}" style="${previewShellStyle}">
             ${boardSurface({
@@ -3877,13 +3927,13 @@
                 extra: "",
                 overlay,
                 body: `<defs>${markers}${gridPattern}</defs>
+                    ${machineBed}
                     ${sheetWindow}
                     <g transform="translate(0,${length}) scale(1,-1)">
                         ${machineFrame}
                         ${sheetGroup}
                     </g>`,
             })}
-            ${placementNote}
             ${pageLayout ? "" : notes.map(note => `<p class="dco-operational-files__note" role="status">${escapeHtml(note)}</p>`).join("")}
         </div>`;
     }
@@ -4683,38 +4733,51 @@
     function bindGenerateNc(dialog, root, context) {
         if (!root || !context) return;
         const canPrepare = Boolean(context.canPrepare);
-        const control = generateNcControlState({ canPrepare });
+        const canGenerateNc = context.canGenerateNc == null
+            ? canPrepare
+            : Boolean(context.canGenerateNc);
+        const control = generateNcControlState({
+            canPrepare,
+            canGenerateNc,
+            sheet: context.sheet,
+        });
         const generate = applyGenerateNcControl(root, control);
         if (!generate) return;
         generate.onclick = null;
-        if (!canPrepare) return;
+        if (!canGenerateNc) return;
         generate.onclick = () => {
             if (!window.frappe || typeof frappe.call !== "function") return;
             if (dialog._cncNcInFlight) return;
-            if (cutPathIsEarly(context.state.order) && !context.state.confirmed) {
-                frappe.msgprint(translate("Cutting first may let the pieces move after they separate from the board."));
+            if (!canPrepare && !sheetHasTrustedNcSettings(context.sheet)) {
+                frappe.msgprint(translate("Save the sheet settings before generating the NC file."));
                 return;
             }
-            if (normalizePerimeterJoinMode(context.state.perimeterJoinMode) === "connected"
-                && sheetPerimeterPrecedesMilling(context.state.order)
-                && !context.state.perimeterEarlyConfirmed) {
-                frappe.msgprint(translate("Cutting the sheet perimeter before milling may let pieces move after they separate from the board."));
-                return;
-            }
-            const conflict = toolConflict(context.workspace, context.sheet, context.state);
-            if (conflict) {
-                frappe.msgprint(translate(CONFLICT_MESSAGES[conflict]));
-                return;
-            }
-            if (!reportPlacementValidation(
-                validateSheetPlacementFits(context.workspace, context.state, { requireMachine: true })
-            )) {
-                return;
-            }
-            const machine = findCncMachine(context.workspace, context.state.cncMachine);
-            if (!machine || !String(machine.post_processor || "").trim()) {
-                frappe.msgprint(translate("Complete the CNC machine settings. Choose the post processor on the machine before generating a new NC file."));
-                return;
+            if (canPrepare) {
+                if (cutPathIsEarly(context.state.order) && !context.state.confirmed) {
+                    frappe.msgprint(translate("Cutting first may let the pieces move after they separate from the board."));
+                    return;
+                }
+                if (normalizePerimeterJoinMode(context.state.perimeterJoinMode) === "connected"
+                    && sheetPerimeterPrecedesMilling(context.state.order)
+                    && !context.state.perimeterEarlyConfirmed) {
+                    frappe.msgprint(translate("Cutting the sheet perimeter before milling may let pieces move after they separate from the board."));
+                    return;
+                }
+                const conflict = toolConflict(context.workspace, context.sheet, context.state);
+                if (conflict) {
+                    frappe.msgprint(translate(CONFLICT_MESSAGES[conflict]));
+                    return;
+                }
+                if (!reportPlacementValidation(
+                    validateSheetPlacementFits(context.workspace, context.state, { requireMachine: true })
+                )) {
+                    return;
+                }
+                const machine = findCncMachine(context.workspace, context.state.cncMachine);
+                if (!machine || !String(machine.post_processor || "").trim()) {
+                    frappe.msgprint(translate("Complete the CNC machine settings. Choose the post processor on the machine before generating a new NC file."));
+                    return;
+                }
             }
             const request = (dialog._cncNcRequest || 0) + 1;
             dialog._cncNcRequest = request;
@@ -4723,19 +4786,33 @@
                 disabled: true,
                 reason: translate("Preparing the NC file..."),
             });
-            const args = sheetGenerateArgs(
-                context.frm,
-                context.workspace,
-                context.sheet,
-                context.state
-            );
+            const liveWorkspace = context.workspace || {};
+            const args = canPrepare
+                ? sheetGenerateArgs(
+                    context.frm,
+                    liveWorkspace,
+                    context.sheet,
+                    context.state
+                )
+                : {
+                    order_name: (context.frm && context.frm.doc && context.frm.doc.name)
+                        || liveWorkspace.order_name
+                        || liveWorkspace.order
+                        || "",
+                    sheet_no: context.sheetNo || (context.sheet && context.sheet.sheet_no),
+                    viewed_plan_token: `${liveWorkspace.cutting_plan || ""}::${liveWorkspace.plan_revision || ""}`,
+                };
             frappe.call({
                 method: `${METHOD}.generate_cnc_sheet_nc`,
                 args,
                 callback(response) {
                     if (dialog._cncNcRequest !== request) return;
                     dialog._cncNcInFlight = false;
-                    applyGenerateNcControl(root, generateNcControlState({ canPrepare: true }));
+                    applyGenerateNcControl(root, generateNcControlState({
+                        canPrepare,
+                        canGenerateNc,
+                        sheet: context.sheet,
+                    }));
                     const payload = (response && response.message) || {};
                     const verification = payload.verification || {};
                     if (!payload.filename || !payload.content_b64 || verification.ok !== true) {
@@ -4772,7 +4849,22 @@
                 error(err) {
                     if (dialog._cncNcRequest !== request) return;
                     dialog._cncNcInFlight = false;
-                    applyGenerateNcControl(root, generateNcControlState({ canPrepare: true }));
+                    applyGenerateNcControl(root, generateNcControlState({
+                        canPrepare,
+                        canGenerateNc,
+                        sheet: context.sheet,
+                    }));
+                    if (!canPrepare) {
+                        if (window.frappe && typeof frappe.msgprint === "function") {
+                            const fallback = translate("The NC file could not be prepared.");
+                            const frontend = window.AlmdinaFrontend;
+                            const message = frontend && typeof frontend.normalizeError === "function"
+                                ? frontend.normalizeError(err, { fallback }).message
+                                : fallback;
+                            frappe.msgprint(message);
+                        }
+                        return;
+                    }
                     loadProgramForIssues(args).then(program => {
                         if (dialog._cncNcRequest !== request) return;
                         showGenerationIssueDialog(err, program, context.sheetNo);
@@ -4784,6 +4876,7 @@
     }
 
     window.AlmdinaOperationalFilesUX = Object.freeze({
+        assetRevision: ASSET_REVISION,
         render,
         cutPathIsEarly,
         effectivePreset,

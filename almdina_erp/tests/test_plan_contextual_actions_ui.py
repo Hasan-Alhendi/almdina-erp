@@ -197,9 +197,17 @@ class TestPlanContextualActionsUI(unittest.TestCase):
         self.assertIn("_clear_order_approved_plan(order)", service)
         self.assertIn("cancelled_plan", service)
         self.assertIn('"approved_plan"', service)
+        self.assertIn("create_geometry_preserving_draft", service)
+        self.assertIn("draft_plan", service)
+        self.assertIn("prefer_plan_tab", service)
         self.assertIn("repository.save_document(plan, allow_status_transition=True)", service)
         self.assertNotIn("الخطة المعتمدة لا تتبع هذا الطلب.", service)
         self.assertNotIn("frappe.db.set_value", context)
+        self.assertIn(
+            "A matching draft copy will be prepared for re-approval without recalculation",
+            context,
+        )
+        self.assertIn("prefer_plan_tab", context)
 
     def test_domain_cancel_transition_preserves_immutable_history(self) -> None:
         self.assertEqual(cancel_approval_transition(APPROVED), (APPROVED, CANCELLED))
@@ -215,9 +223,13 @@ class TestPlanContextualActionsUI(unittest.TestCase):
         )[0]
 
         self.assertIn("IMMUTABLE_STATUSES = {APPROVED, SUPERSEDED, CANCELLED}", doctype)
-        # Approved-revision cycle stays gated; Board Editor lineage is exempt.
+        # Approved-revision cycle stays gated; Cancelled recovery and Board Editor
+        # lineage are the only additional new-parent cases.
         self.assertIn("board_editor_copy = is_board_editor_source(self.source_type)", parent_guard)
-        self.assertIn("if self.is_new() and parent.status != APPROVED:", parent_guard)
+        self.assertIn(
+            "if self.is_new() and parent.status not in {APPROVED, CANCELLED}:",
+            parent_guard,
+        )
         self.assertIn(
             "if not self.is_new() and parent.status not in IMMUTABLE_STATUSES:",
             parent_guard,

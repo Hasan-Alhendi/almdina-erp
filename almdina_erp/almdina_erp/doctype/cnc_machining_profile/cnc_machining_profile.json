@@ -27,6 +27,7 @@
       "unique": 1
     },
     {
+      "allow_in_quick_entry": 1,
       "fieldname": "profile_name",
       "fieldtype": "Data",
       "in_list_view": 1,
@@ -36,6 +37,7 @@
       "unique": 1
     },
     {
+      "allow_in_quick_entry": 1,
       "fieldname": "tool_preset",
       "fieldtype": "Link",
       "in_list_view": 1,
@@ -53,6 +55,7 @@
       "read_only": 1
     },
     {
+      "allow_in_quick_entry": 1,
       "fieldname": "final_depth_mm",
       "fieldtype": "Float",
       "in_list_view": 1,
@@ -62,6 +65,7 @@
       "reqd": 1
     },
     {
+      "allow_in_quick_entry": 1,
       "fieldname": "safe_z_mm",
       "fieldtype": "Float",
       "label": "Safe Z (mm)",
@@ -70,6 +74,7 @@
       "reqd": 1
     },
     {
+      "allow_in_quick_entry": 1,
       "fieldname": "home_x_mm",
       "fieldtype": "Float",
       "label": "Home X (mm)",
@@ -77,6 +82,7 @@
       "reqd": 1
     },
     {
+      "allow_in_quick_entry": 1,
       "fieldname": "home_y_mm",
       "fieldtype": "Float",
       "label": "Home Y (mm)",
@@ -84,6 +90,7 @@
       "reqd": 1
     },
     {
+      "allow_in_quick_entry": 1,
       "fieldname": "home_z_mm",
       "fieldtype": "Float",
       "label": "Home Z (mm)",
@@ -92,6 +99,7 @@
       "reqd": 1
     },
     {
+      "allow_in_quick_entry": 1,
       "default": "1",
       "fieldname": "enabled",
       "fieldtype": "Check",
@@ -106,6 +114,7 @@
   "name": "CNC Machining Profile",
   "naming_rule": "Random",
   "permissions": [],
+  "quick_entry": 1,
   "search_fields": "profile_name,profile_id,tool_preset",
   "show_title_field_in_link": 1,
   "sort_field": "modified",

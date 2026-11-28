@@ -1,9 +1,27 @@
 (() => {
     "use strict";
 
-    if (window.AlmdinaArtcamMachining) return;
+    const ASSET_REVISION = 3;
+    if (window.AlmdinaArtcamMachining?.assetRevision === ASSET_REVISION) return;
 
     const METHOD = "almdina_erp.almdina_erp.services.cnc_operational_file_service";
+    // Display-only English labels for the Vector Source dropdown. Values and
+    // DXF layer identities stay unchanged.
+    const VECTOR_SOURCE_LABELS = Object.freeze({
+        liner: "Liner",
+        recessed_handle_cutout: "Handle Recess",
+        back_groove: "Rear Groove",
+        cut_path: "cut path",
+        sheet_perimeter: "out",
+        selected_vectors: "Selected Vectors",
+    });
+    // Display order only. Does not change machining execution order.
+    const VECTOR_SOURCE_LAYER_ORDER = Object.freeze([
+        "liner",
+        "recessed_handle_cutout",
+        "back_groove",
+        "cut_path",
+    ]);
     const PROFILE_FIELDS = Object.freeze([
         ["final_depth_mm", "Final Depth (mm)"],
         ["safe_z_mm", "Safe Z (mm)"],
@@ -195,28 +213,47 @@
                 if (operation) ownedOperations.add(operation);
             });
         });
-        const options = [];
+        const layersByKey = new Map();
         (availability.layers || []).forEach(layer => {
             if (!layer || !layer.operation_key) return;
-            const current = form && form.source === `layer:${layer.operation_key}`;
-            if ((layer.disabled || ownedOperations.has(String(layer.operation_key))) && !current) return;
-            options.push({ value: `layer:${layer.operation_key}`, label: layer.dxf_layer || layer.operation_key });
+            layersByKey.set(String(layer.operation_key), layer);
         });
-        options.push({ value: "selected_vectors", label: "Selected Vectors" });
+        const options = [];
+        const appendLayer = key => {
+            const layer = layersByKey.get(key);
+            if (!layer) return;
+            const current = form && form.source === `layer:${key}`;
+            if ((layer.disabled || ownedOperations.has(key)) && !current) return;
+            options.push({
+                value: `layer:${key}`,
+                label: VECTOR_SOURCE_LABELS[key] || layer.dxf_layer || key,
+            });
+            layersByKey.delete(key);
+        };
+        VECTOR_SOURCE_LAYER_ORDER.forEach(appendLayer);
+        Array.from(layersByKey.keys()).forEach(appendLayer);
         const perimeter = availability.sheet_perimeter;
         const serverAvailable = Boolean(perimeter && !perimeter.disabled);
         const ready = context.state ? context.state.perimeterGeometryReady : null;
         const geometryOk = ready === true || (ready == null && serverAvailable);
         if (perimeterMode(context) === "connected" && geometryOk && !perimeterOwned) {
-            options.push({ value: "sheet_perimeter", label: "SHEET_PERIMETER" });
+            options.push({
+                value: "sheet_perimeter",
+                label: VECTOR_SOURCE_LABELS.sheet_perimeter,
+            });
         }
+        options.push({
+            value: "selected_vectors",
+            label: VECTOR_SOURCE_LABELS.selected_vectors,
+        });
         return options;
     }
 
     function sourceLabel(value, context) {
-        if (value === "sheet_perimeter") return "SHEET_PERIMETER";
-        if (value === "selected_vectors") return "Selected Vectors";
+        if (value === "sheet_perimeter") return VECTOR_SOURCE_LABELS.sheet_perimeter;
+        if (value === "selected_vectors") return VECTOR_SOURCE_LABELS.selected_vectors;
         const layer = String(value || "").startsWith("layer:") ? String(value).slice(6) : "";
+        if (VECTOR_SOURCE_LABELS[layer]) return VECTOR_SOURCE_LABELS[layer];
         const match = ((machining(context.sheet).availability || {}).layers || [])
             .find(row => row.operation_key === layer);
         return match ? (match.dxf_layer || layer) : layer;
@@ -261,9 +298,9 @@
         return translate(english);
     }
 
-    function input(name, label, value, kind) {
+    function input(name, label, value, kind, disabled) {
         return `<label class="dco-artcam-field">${escapeHtml(fieldLabel(kind || "profile", label))}
-            <input class="form-control" data-field="${escapeHtml(name)}" value="${escapeHtml(value == null ? "" : value)}">
+            <input class="form-control" data-field="${escapeHtml(name)}" value="${escapeHtml(value == null ? "" : value)}"${disabled ? " disabled" : ""}>
         </label>`;
     }
 
@@ -306,6 +343,7 @@
 
     function editorMarkup(context) {
         const form = ensureForm(context.state);
+        const canPrepare = Boolean(context.workspace && context.workspace.can_prepare);
         const profileChosen = Boolean(form.profile_id);
         const count = (context.state.vectorSelection || []).length;
         const selected = form.source === "selected_vectors";
@@ -318,44 +356,46 @@
             && (editingRow.vector_ids || []).some(id => String(id) === "cut_path:sheet_perimeter")
         );
         return `<form class="dco-artcam-editor" data-artcam-editor>
+            ${canPrepare ? "" : '<fieldset class="dco-artcam-readonly" disabled>'}
             ${editing ? `<p class="dco-artcam-note" data-artcam-editing>${escapeHtml(translate("Editing"))}: ${escapeHtml(form.name || form.association_id)}
-                <button type="button" class="btn btn-default btn-xs" data-artcam-cancel>${escapeHtml(translate("New association"))}</button>
+                <button type="button" class="btn btn-default btn-xs" data-artcam-cancel${canPrepare ? "" : " disabled"}>${escapeHtml(translate("New association"))}</button>
             </p>` : ""}
             <div class="dco-artcam-row dco-artcam-row--main">
                 <label class="dco-artcam-field">${escapeHtml(fieldLabel("profile", "Association Name"))}
-                    <input class="form-control" data-field="name" value="${escapeHtml(form.name || "")}">
+                    <input class="form-control" data-field="name" value="${escapeHtml(form.name || "")}"${canPrepare ? "" : " disabled"}>
                 </label>
                 <label class="dco-artcam-field">${escapeHtml(fieldLabel("profile", "Vector Source"))}
-                    <select class="form-control" data-field="source">
-                        <option value="">${escapeHtml(translate("Choose"))}</option>
-                        ${options.map(option => `<option value="${escapeHtml(option.value)}"${option.value === form.source ? " selected" : ""}>${escapeHtml(option.value === "sheet_perimeter" || option.value === "selected_vectors" ? translate(option.label) : option.label)}</option>`).join("")}
+                    <select class="form-control" data-field="source"${canPrepare ? "" : " disabled"}>
+                        <option value="">${escapeHtml(translate("Choose vectors"))}</option>
+                        ${options.map(option => `<option value="${escapeHtml(option.value)}"${option.value === form.source ? " selected" : ""}>${escapeHtml(option.label)}</option>`).join("")}
                     </select>
                 </label>
                 <p class="dco-artcam-note" data-perimeter-source-note${perimeterSourceNote(context, form) ? "" : " hidden"}>${escapeHtml(perimeterSourceNote(context, form))}</p>
                 <label class="dco-artcam-field">${escapeHtml(fieldLabel("profile", "Profile"))}
-                    <select class="form-control" data-field="profile_id">
+                    <select class="form-control" data-field="profile_id"${canPrepare ? "" : " disabled"}>
                         <option value="">${escapeHtml(translate("Choose"))}</option>
                         ${profilesOf(context).map(row => `<option value="${escapeHtml(row.profile_id)}"${row.profile_id === form.profile_id ? " selected" : ""}>${escapeHtml(row.name || row.profile_id)}</option>`).join("")}
                     </select>
                 </label>
             </div>
-            ${ownsSavedPerimeter ? `<label class="dco-artcam-note"><input type="checkbox" data-field="release_perimeter"> ${escapeHtml(translate("Release the sheet perimeter from this association"))}</label>` : ""}
+            ${ownsSavedPerimeter ? `<label class="dco-artcam-note"><input type="checkbox" data-field="release_perimeter"${canPrepare ? "" : " disabled"}> ${escapeHtml(translate("Release the sheet perimeter from this association"))}</label>` : ""}
             <p class="dco-artcam-note" data-vector-hint${selected ? "" : " hidden"}>${escapeHtml(translate("Shift + Click to select vectors"))}</p>
             <p class="dco-artcam-note" data-vector-count${selected ? "" : " hidden"}>${escapeHtml(translate("{0} Vectors Selected", [count]))}</p>
             ${profileChosen ? `<div class="dco-artcam-row dco-artcam-row--pair">
-                ${PROFILE_FIELDS.map(([name, label]) => input(name, label, form.fields[name], "profile")).join("")}
+                ${PROFILE_FIELDS.map(([name, label]) => input(name, label, form.fields[name], "profile", !canPrepare)).join("")}
             </div>
             <div class="dco-artcam-home">
                 <span>${escapeHtml(fieldLabel("profile", "Home Position (mm)"))}</span>
                 <div class="dco-artcam-row dco-artcam-row--home">
-                    ${HOME_FIELDS.map(([name, label]) => input(name, label, form.fields[name], "profile")).join("")}
+                    ${HOME_FIELDS.map(([name, label]) => input(name, label, form.fields[name], "profile", !canPrepare)).join("")}
                 </div>
             </div>
             ${toolPickerMarkup(context, form)}` : ""}
             <div class="dco-artcam-actions almdina-ui">
-                <button type="submit" class="btn alm-btn-primary btn-sm" data-artcam-calculate>${escapeHtml(translate("Calculate Now"))}</button>
+                <button type="submit" class="btn alm-btn-primary btn-sm" data-artcam-calculate${canPrepare ? "" : " disabled"}>${escapeHtml(translate("Calculate Now"))}</button>
             </div>
             <p class="dco-artcam-status" data-artcam-status role="status"></p>
+            ${canPrepare ? "" : "</fieldset>"}
         </form>`;
     }
 
@@ -522,6 +562,7 @@
     function bind(root, context) {
         if (!root || !context || !context.state) return;
         const host = root.querySelector("[data-artcam-root]");
+        if (!context.workspace || !context.workspace.can_prepare) return;
         if (!host || host.dataset.artcamBound === "1") return;
         host.dataset.artcamBound = "1";
         ensureForm(context.state);
@@ -622,6 +663,7 @@
     }
 
     function calculate(host, context) {
+        if (!context.workspace || !context.workspace.can_prepare) return;
         const state = context.state;
         if (state.artcamBusy) return;
         const form = readEditor(host, state);
@@ -752,12 +794,9 @@
             : null;
         if (select) {
             const current = String((state.artcamForm && state.artcamForm.source) || "");
-            select.innerHTML = `<option value="">${escapeHtml(translate("Choose"))}</option>${options.map(option => {
-                const label = option.value === "sheet_perimeter" || option.value === "selected_vectors"
-                    ? translate(option.label)
-                    : option.label;
-                return `<option value="${escapeHtml(option.value)}"${option.value === current ? " selected" : ""}>${escapeHtml(label)}</option>`;
-            }).join("")}`;
+            select.innerHTML = `<option value="">${escapeHtml(translate("Choose vectors"))}</option>${options.map(option => (
+                `<option value="${escapeHtml(option.value)}"${option.value === current ? " selected" : ""}>${escapeHtml(option.label)}</option>`
+            )).join("")}`;
             select.value = options.some(option => option.value === current) ? current : "";
             if (state.artcamForm && select.value !== current) state.artcamForm.source = select.value;
         }
@@ -771,6 +810,7 @@
     }
 
     window.AlmdinaArtcamMachining = Object.freeze({
+        assetRevision: ASSET_REVISION,
         markup,
         bind,
         ensureForm,

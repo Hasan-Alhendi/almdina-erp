@@ -13,16 +13,13 @@ from almdina_erp.almdina_erp.application.security.drawing_action_policy import (
     required_upload_capability,
     validate_assigned_drawing_action,
 )
-from almdina_erp.almdina_erp.domain.cutting.plan_lifecycle import DRAFT, UPLOADED_DXF
 from almdina_erp.almdina_erp.domain.security.authorization import Capability
 from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_authorization import (
     require_cutting_plan_capability,
 )
 from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_runtime_repository import (
-    latest_plan,
     manufacturing_plan_document,
     manufacturing_plan_settings,
-    plan_settings,
 )
 from almdina_erp.almdina_erp.infrastructure.frappe.order_tracking_repository import (
     get_order,
@@ -258,10 +255,12 @@ def mark_dxf_exported(order_name: str) -> dict[str, Any]:
 
 
 def _uploaded_dxf_import_context(order_name: str) -> tuple[Any, Any | None]:
-    """Match import validation to the settings the Uploaded DXF draft will save."""
-    uploaded = latest_plan(order_name, source_type=UPLOADED_DXF, status=DRAFT)
-    if uploaded is not None:
-        return plan_settings(uploaded), uploaded
+    """Validate Uploaded DXF against current manufacturing (System) settings.
+
+    An existing Uploaded DXF Draft may still hold stale trim/kerf from an older
+    revision. Import authority is the operator-edited System manufacturing
+    settings so validation, save, display, and later approve stay aligned.
+    """
     return manufacturing_plan_settings(order_name), manufacturing_plan_document(order_name)
 
 

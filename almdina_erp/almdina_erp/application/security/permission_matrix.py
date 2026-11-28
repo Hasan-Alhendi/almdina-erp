@@ -20,6 +20,7 @@ CATEGORY_ORDER = (
     "costing",
     "documents",
     "cutting_plan",
+    "operational_files",
     "drawing",
     "production",
     "shop_floor",
@@ -34,13 +35,18 @@ CATEGORY_PRESENTATION: dict[str, dict[str, str]] = {
     "order": {"label": "Orders", "description": "Create, review, approve, and manage the lifecycle of an order.", "icon": "file-text"},
     "costing": {"label": "Costing and pricing", "description": "View costs, edit cost settings, and approve internal prices.", "icon": "accounting"},
     "documents": {"label": "Documents and printing", "description": "Print measurements, the customer invoice, and the confidential internal report.", "icon": "printer"},
-    "cutting_plan": {"label": "Cutting plan", "description": "View the plan tabs (system / uploaded / approved), calculate plans, edit optimizer settings, approve plans, print them, and open operational files.", "icon": "organization"},
+    "cutting_plan": {"label": "Cutting plan", "description": "View the plan tabs (system / uploaded / approved), calculate plans, edit optimizer settings, approve plans, and print them.", "icon": "organization"},
+    "operational_files": {
+        "label": "Operational files",
+        "description": "View and prepare CNC operational files, download NC cutting files, and edit factory CNC defaults.",
+        "icon": "file",
+    },
     "drawing": {"label": "Drawing and DXF", "description": "Special drawing, plus exporting, uploading, and replacing DXF files.", "icon": "image-view"},
     "production": {"label": "Production and assignment", "description": "Dispatch orders, start stages, hand them off, revert them, and reassign them.", "icon": "tool"},
     "shop_floor": {"label": "Production floor", "description": "Additional view permissions within the Production floor, without granting access or any production actions by themselves.", "icon": "list"},
     "control_center": {"label": "Control center and quality", "description": "Archive plans, view and record production incidents, and manage replacement pieces.", "icon": "dashboard"},
     "workforce": {"label": "Users and workforce", "description": "View, create, edit, and enable factory accounts, and manage their roles.", "icon": "users"},
-    "factory_settings": {"label": "Factory settings", "description": "View and edit cutting, costing, production, CNC, printing, WhatsApp, and backup settings, each section independently.", "icon": "setting-gear"},
+    "factory_settings": {"label": "Factory settings", "description": "View and edit cutting, costing, production, printing, WhatsApp, and backup settings, each section independently.", "icon": "setting-gear"},
     "master_data": {"label": "Master data", "description": "Manage production routings and edge banding types, with separate view, create, edit, and delete permissions.", "icon": "database"},
     "administration": {"label": "Permission management", "description": "Edit the permission matrix for all roles.", "icon": "lock"},
 }
@@ -132,11 +138,11 @@ CAPABILITY_PRESENTATION: dict[str, dict[str, str]] = {
     Capability.ARCHIVE_APPROVED_PLAN: _presentation("Archive approved plan", "Generate and save an official PDF of the approved plan.", "sensitive"),
     Capability.VIEW_CNC_OPERATIONAL_FILES: _presentation(
         "View operational files",
-        "Open the operational files tab for an order that has a current approved cutting plan.",
+        "Open operational files for an order with a current approved cutting plan, and download the NC cutting file from the saved sheet settings.",
     ),
     Capability.PREPARE_CNC_OPERATIONAL_FILES: _presentation(
         "Prepare operational files",
-        "Choose the machining preset for each operation on a sheet of the approved plan. Does not generate an NC file.",
+        "Edit sheet settings, associations, toolpaths, and path direction, then save them. Downloading NC still uses the view permission and the saved settings.",
         "sensitive",
     ),
     Capability.VIEW_USERS: _presentation("View factory users", "View Almdina accounts only, along with their status and assigned roles."),
@@ -271,6 +277,8 @@ def normalize_capability_state(raw: Mapping[str, Any] | None) -> dict[str, bool]
         state[Capability.PRINT_CUTTING_PLAN] = True
     if state[Capability.PREPARE_CNC_OPERATIONAL_FILES]:
         state[Capability.VIEW_CNC_OPERATIONAL_FILES] = True
+    if state[Capability.EDIT_FACTORY_CNC_DEFAULTS]:
+        state[Capability.VIEW_FACTORY_SETTINGS] = True
     if state[Capability.VIEW_CUTTING_PLAN]:
         granular_supplied = any(key in supplied for key in _PLAN_TAB_VIEW_ACTIONS)
         if not granular_supplied:

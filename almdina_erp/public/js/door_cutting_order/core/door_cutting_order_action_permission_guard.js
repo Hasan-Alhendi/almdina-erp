@@ -347,17 +347,31 @@
         if (observerFrame !== null) return;
         observerFrame = requestAnimationFrame(() => {
             observerFrame = null;
-            apply(window.cur_frm);
+            const frm = window.cur_frm;
+            if (!frm || frm.doctype !== "Door Cutting Order") return;
+            apply(frm);
         });
     }
 
+    function observeFormRoot(frm) {
+        const root = formRoot(frm);
+        if (!root || typeof MutationObserver !== "function") return;
+        if (root.__almdinaActionPermissionObserver) return;
+        const observer = new MutationObserver(scheduleObserverApply);
+        observer.observe(root, { childList: true, subtree: true });
+        root.__almdinaActionPermissionObserver = observer;
+    }
+
     frappe.ui.form.on("Door Cutting Order", {
-        onload_post_render(frm) { schedule(frm); },
-        refresh(frm) { schedule(frm); },
+        onload_post_render(frm) {
+            observeFormRoot(frm);
+            schedule(frm);
+        },
+        refresh(frm) {
+            observeFormRoot(frm);
+            schedule(frm);
+        },
     });
 
     window.addEventListener("almdina:permissions-updated", () => schedule(window.cur_frm));
-
-    const observer = new MutationObserver(scheduleObserverApply);
-    observer.observe(document.documentElement, { childList: true, subtree: true });
 })();

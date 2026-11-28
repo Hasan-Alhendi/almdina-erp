@@ -120,3 +120,5 @@ def test_uploaded_tab_keeps_accepted_plan_and_warns_on_order_mismatch():
     assert "dco-uploaded-plan-mismatch-banner" in tabs
     assert "This order was changed and the plan no longer matches" in tabs
     assert "The plan does not match the order" in tabs
+    assert "trim_margin_changed" in tabs
+    assert "this uploaded plan was validated with {1} mm" in tabs

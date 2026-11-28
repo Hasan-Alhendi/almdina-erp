@@ -133,6 +133,17 @@
         enabled: "Enabled",
     });
 
+    const PROFILE_FIELDS = Object.freeze({
+        profile_name: "Profile Name",
+        tool_preset: "Tool",
+        final_depth_mm: "Final Depth (mm)",
+        safe_z_mm: "Safe Z (mm)",
+        home_x_mm: "Home X (mm)",
+        home_y_mm: "Home Y (mm)",
+        home_z_mm: "Home Z (mm)",
+        enabled: "Enabled",
+    });
+
     const POST_PROCESSOR_ID = "ima_wh_ncstudio";
     const POST_PROCESSOR_LABEL = "IMA-WH (*.nc)";
     const STOP_FIELD_NAMES = ["left_stop_cm", "right_stop_cm", "bottom_stop_cm", "top_stop_cm"];
@@ -259,6 +270,95 @@
         });
         applyDescribedFields(target, MACHINE_DESCRIPTIONS);
         applyPostProcessorChoice(target);
+    }
+
+    function applyProfileFieldLabels(target) {
+        Object.keys(PROFILE_FIELDS).forEach(fieldname => {
+            setFieldLabel(target, fieldname, profileLabel(PROFILE_FIELDS[fieldname]));
+        });
+    }
+
+    function loadProfileToolChoices() {
+        const db = window.frappe && frappe.db;
+        if (!db || typeof db.get_list !== "function") return Promise.resolve([]);
+        return db.get_list("CNC Tool Preset", {
+            fields: ["name", "tool_name"],
+            filters: { enabled: 1 },
+            limit: 500,
+        }).then(rows => rows || []).catch(() => []);
+    }
+
+    function profileToolRuntime(target) {
+        if (!target._profile_tool_runtime) {
+            const binding = window.AlmdinaCncProfileToolBinding;
+            target._profile_tool_runtime = binding
+                ? binding.createRuntimeState()
+                : {
+                    ready: false,
+                    documentKey: "",
+                    toolName: "",
+                    tool: null,
+                    toolChoices: null,
+                    loadGeneration: 0,
+                };
+        }
+        return target._profile_tool_runtime;
+    }
+
+    function writeProfileToolValue(target, field, value) {
+        const next = String(value || "");
+        if (target && target.doc) target.doc.tool_preset = next || null;
+        if (field && typeof field.set_value === "function") field.set_value(next || null);
+        else if (field && field.$input && typeof field.$input.val === "function") {
+            field.$input.val(next || "");
+        }
+    }
+
+    function remountProfileToolPicker(target, force) {
+        const binding = window.AlmdinaCncProfileToolBinding;
+        if (!binding || !target || !target.doc) return null;
+        const field = fieldOf(target, "tool_preset");
+        const host = binding.toolHost(field);
+        if (!host) return null;
+        const state = profileToolRuntime(target);
+        state.ready = true;
+        return binding.sync(host, state, target.doc, {
+            docname: binding.documentKey(target.doc, target.doc.name),
+            force: Boolean(force),
+            loadTools: loadProfileToolChoices,
+            handlers: {
+                onToolChange(value) {
+                    const next = String(value || "");
+                    if (next === String(target.doc.tool_preset || "")) return;
+                    writeProfileToolValue(target, field, next);
+                    if (!next) {
+                        state.tool = null;
+                        state.toolName = "";
+                        remountProfileToolPicker(target, true);
+                        return;
+                    }
+                    const generation = binding.beginToolLoad(state);
+                    if (!window.frappe || typeof frappe.db.get_doc !== "function") return;
+                    frappe.db.get_doc("CNC Tool Preset", next).then(doc => {
+                        if (!binding.isCurrentToolLoad(state, generation, target.doc, next)) return;
+                        state.tool = binding.toolPayloadFromPreset(doc);
+                        state.toolName = next;
+                        remountProfileToolPicker(target, true);
+                    });
+                },
+            },
+        });
+    }
+
+    function bindProfileToolPicker(target) {
+        return remountProfileToolPicker(target, false);
+    }
+
+    function captureProfileToolOverrides(target) {
+        const binding = window.AlmdinaCncProfileToolBinding;
+        if (!binding || !target) return {};
+        const host = binding.toolHost(fieldOf(target, "tool_preset"));
+        return binding.collectOverrides(host);
     }
 
     function knownWorkZero(value) {
@@ -434,15 +534,120 @@
         entry.docfields = (entry.docfields || []).map(df => Object.assign({}, df));
     }
 
+    function canMaintainFactoryCnc() {
+        const permissions = window.AlmdinaPermissions;
+        if (permissions && typeof permissions.can === "function"
+            && permissions.can("edit_factory_cnc_defaults")) {
+            return true;
+        }
+        return !!(window.frappe && frappe.session && frappe.session.user === "Administrator");
+    }
+
+    // Desk Form has the same hide_empty_read_only_fields trap as Quick Entry when
+    // Custom DocPerm write=0. Restore writable controls for maintainers; server
+    // has_permission still gates save.
+    function ensureFormFieldsWritable(frm, options) {
+        if (!frm || !canMaintainFactoryCnc()) return false;
+        const settings = options || {};
+        const keepHidden = new Set(settings.keepHidden || []);
+        const keepReadOnly = new Set(settings.keepReadOnly || []);
+        if (Array.isArray(frm.perm) && frm.perm[0]) {
+            frm.perm[0] = Object.assign({}, frm.perm[0], {
+                read: 1,
+                select: 1,
+                write: 1,
+                create: 1,
+            });
+        }
+        Object.keys(frm.fields_dict || {}).forEach(name => {
+            if (keepHidden.has(name)) return;
+            const field = frm.fields_dict[name];
+            if (!field || !field.df) return;
+            if (Number(field.df.hidden || 0) || Number(field.df.hidden_due_to_dependency || 0)) return;
+            field.df.get_status = function getFormStatus(control) {
+                const df = control && control.df ? control.df : field.df;
+                if (Number(df.hidden || 0) || Number(df.hidden_due_to_dependency || 0)) {
+                    return "None";
+                }
+                if (keepReadOnly.has(name) || Number(df.read_only || 0) || df.fieldtype === "Read Only") {
+                    return "Read";
+                }
+                return "Write";
+            };
+            if (field.df.fieldtype === "Select") field.last_options = null;
+            if (typeof field.refresh === "function") field.refresh();
+            if (field.df.fieldtype === "Select" && typeof field.set_options === "function") {
+                field.last_options = null;
+                const selected = field.doc && name in field.doc ? field.doc[name] : field.value;
+                field.set_options(selected);
+                if (selected != null && field.$input && typeof field.$input.val === "function") {
+                    field.$input.val(selected);
+                }
+            }
+        });
+        return true;
+    }
+
+    // Quick Entry attaches doctype/docname then refreshes controls. When the
+    // client-side Custom DocPerm for CNC Machine / CNC Tool Preset is
+    // read-only (write=0) and System Settings hide_empty_read_only_fields is
+    // on, empty create fields become disp_status None and disappear. Keep
+    // Quick Entry candidates writable/visible; server has_permission still
+    // gates save.
+    function ensureQuickEntryFieldsWritable(dialog) {
+        if (!dialog) return;
+        const allowed = new Set(
+            (dialog.docfields || [])
+                .map(df => (df && df.fieldname) || "")
+                .filter(Boolean)
+        );
+        Object.keys(dialog.fields_dict || {}).forEach(name => {
+            if (!allowed.has(name) || STOP_FIELD_NAMES.includes(name)) return;
+            const field = dialog.fields_dict[name];
+            if (!field || !field.df) return;
+            field.df.get_status = function getQuickEntryStatus(control) {
+                const df = control && control.df ? control.df : field.df;
+                if (Number(df.hidden || 0) || Number(df.hidden_due_to_dependency || 0)) {
+                    return "None";
+                }
+                return "Write";
+            };
+            // Select.set_options records last_options even when $input is missing
+            // (Read-only path). Later make_input skips rebuild and leaves an empty
+            // <select>. Clear the cache and force options back onto the DOM.
+            if (field.df.fieldtype === "Select") field.last_options = null;
+            if (typeof field.refresh === "function") field.refresh();
+            if (field.df.fieldtype === "Select" && typeof field.set_options === "function") {
+                field.last_options = null;
+                const selected = field.doc && name in field.doc
+                    ? field.doc[name]
+                    : field.value;
+                field.set_options(selected);
+                if (selected != null && field.$input && typeof field.$input.val === "function") {
+                    field.$input.val(selected);
+                }
+            }
+        });
+    }
+
     function finishQuickEntry(doctype, entry) {
         const dialog = entry || (window.frappe && window.frappe.quick_entry);
         if (!dialog) return;
-        if (doctype === "CNC Tool Preset") applyToolFieldLabels(dialog);
+        if (doctype === "CNC Tool Preset") {
+            applyToolFieldLabels(dialog);
+            ensureQuickEntryFieldsWritable(dialog);
+        }
         if (doctype === "CNC Machine") {
             applyMachineFieldLabels(dialog);
+            ensureQuickEntryFieldsWritable(dialog);
             applyCornerStops(dialog);
             bindMachineWorkZero(dialog);
             applyPostProcessorChoice(dialog);
+        }
+        if (doctype === "CNC Machining Profile") {
+            applyProfileFieldLabels(dialog);
+            ensureQuickEntryFieldsWritable(dialog);
+            bindProfileToolPicker(dialog);
         }
     }
 
@@ -495,6 +700,35 @@
                 }
             };
         }
+        if (!form.CNCMachiningProfileQuickEntryForm) {
+            form.CNCMachiningProfileQuickEntryForm = class CNCMachiningProfileQuickEntryForm extends form.QuickEntryForm {
+                render_dialog() {
+                    // Fresh runtime per modal so cancel/save never leaks tool state.
+                    this._profile_tool_runtime = null;
+                    copyQuickEntryFields(this);
+                    const rendered = super.render_dialog();
+                    scheduleQuickEntry(this.doctype, this);
+                    return rendered;
+                }
+
+                update_doc(data) {
+                    const values = typeof data === "undefined" ? this.get_values(true) : data;
+                    const result = super.update_doc(values);
+                    this.doc.tool_values_json = captureProfileToolOverrides(this);
+                    if (!this.doc.tool_preset) {
+                        const field = fieldOf(this, "tool_preset");
+                        const host = window.AlmdinaCncProfileToolBinding
+                            && window.AlmdinaCncProfileToolBinding.toolHost(field);
+                        const picker = host && typeof host.data === "function" ? host.data("picker") : null;
+                        if (picker && typeof picker.getValues === "function") {
+                            const selected = picker.getValues();
+                            if (selected && selected.tool) this.doc.tool_preset = selected.tool;
+                        }
+                    }
+                    return result;
+                }
+            };
+        }
         wrapMakeQuickEntry(form);
         return true;
     }
@@ -508,8 +742,13 @@
         escapeHtml,
         applyToolFieldLabels,
         applyMachineFieldLabels,
+        applyProfileFieldLabels,
         applyCornerStops,
+        ensureFormFieldsWritable,
+        canMaintainFactoryCnc,
         installQuickEntryForms,
+        bindProfileToolPicker,
+        captureProfileToolOverrides,
         POST_PROCESSOR_ID,
         POST_PROCESSOR_LABEL,
     });

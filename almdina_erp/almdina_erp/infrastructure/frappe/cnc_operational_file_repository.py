@@ -325,10 +325,16 @@ def _sheet_stops_dict(raw: Any) -> dict[str, Any] | None:
     }
 
 
-def _sheet_stops_json(raw: Any) -> str:
+def _sheet_stops_json(raw: Any) -> str | None:
+    """Encode sheet stops for a Frappe JSON column.
+
+    Unset stops stay SQL NULL. An empty string is not valid JSON and trips the
+    MariaDB/MySQL JSON constraint (errno 4025) on ``document.save()``.
+    """
+
     parsed = _sheet_stops_dict(raw)
     if not parsed:
-        return ""
+        return None
     return json.dumps(parsed, ensure_ascii=True, sort_keys=True, separators=(",", ":"))
 
 
