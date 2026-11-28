@@ -136,14 +136,21 @@ def present_target(target: DxfIssueTarget, *, params: dict[str, Any] | None = No
             # piece_index without proven identity is not a door number.
             return f"مسار القص رقم {target.piece_index}." if params.get("identity_unproven") else f"القطعة رقم {target.piece_index}."
         if piece_no is None and target.label:
-            return f"القطعة ذات المعرّف {target.label}."
+            label = f"القطعة ذات المعرّف {target.label}."
+            if target.sheet_no is not None:
+                return _("Board {0}: {1}").format(target.sheet_no, label)
+            return label
         if piece_no is None:
             return "قطعة غير محددة."
         if target.copy_no is not None and int(target.copy_no) > 1:
-            return f"الدرفة {piece_no} — النسخة {target.copy_no}."
-        if params.get("ambiguous_copy"):
-            return f"إحدى نسخ الدرفة {piece_no}."
-        return f"الدرفة {piece_no}."
+            label = f"الدرفة {piece_no} — النسخة {target.copy_no}."
+        elif params.get("ambiguous_copy"):
+            label = f"إحدى نسخ الدرفة {piece_no}."
+        else:
+            label = f"الدرفة {piece_no}."
+        if target.sheet_no is not None:
+            return _("Board {0}: {1}").format(target.sheet_no, label)
+        return label
     if kind == codes.TARGET_ORDER:
         actual = params.get("actual_count")
         expected = params.get("expected_count")
@@ -1048,6 +1055,18 @@ def present_issue(issue: DxfValidationIssue) -> PresentedDxfError:
             issue.category,
         )
     if code == codes.SPECIAL_OUTLINE_IS_RECTANGLE:
+        if issue.param("system_plan_approval"):
+            return PresentedDxfError(
+                _(
+                    "A special door cannot be approved on the system plan because its outline is rectangular and has no valid internal through-cut opening."
+                ),
+                target_text,
+                _(
+                    "Provide a non-rectangular cut outline, or add at least one internal through-cut opening. Liners, handles, rear grooves, and guide lines are not openings."
+                ),
+                code,
+                issue.category,
+            )
         return PresentedDxfError(
             _("A special door could not be matched because the rectangular contour has no internal opening."),
             target_text,

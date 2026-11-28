@@ -487,6 +487,39 @@ def is_axis_aligned_rectangle(points: Sequence[Point], tolerance: float) -> bool
     return True
 
 
+def is_rectangle(points: Sequence[Point], tolerance: float) -> bool:
+    """True for an axis-aligned or rotated rectangle.
+
+    A rotated stock rectangle is still a rectangle. Special doors require either
+    a non-rectangular outer contour or at least one internal through-cut opening.
+    """
+
+    if is_axis_aligned_rectangle(points, tolerance):
+        return True
+    polygon = simplify_polygon(points, tolerance)
+    if len(polygon) != 4 or polygon_area(polygon) <= tolerance * tolerance:
+        return False
+    edges = []
+    for index, start in enumerate(polygon):
+        end = polygon[(index + 1) % 4]
+        vector = (end[0] - start[0], end[1] - start[1])
+        length = math.hypot(vector[0], vector[1])
+        if length <= tolerance:
+            return False
+        edges.append((vector, length))
+    for index, (vector, length) in enumerate(edges):
+        next_vector, next_length = edges[(index + 1) % 4]
+        # Adjacent edges must be perpendicular within tolerance.
+        dot = abs(vector[0] * next_vector[0] + vector[1] * next_vector[1])
+        if dot > tolerance * (length + next_length):
+            return False
+        # Opposite edges must match in length.
+        opposite_length = edges[(index + 2) % 4][1]
+        if abs(length - opposite_length) > tolerance:
+            return False
+    return True
+
+
 def validate_polygon(points: Sequence[Point], tolerance: float) -> list[str]:
     polygon = simplify_polygon(points, tolerance)
     errors: list[str] = []

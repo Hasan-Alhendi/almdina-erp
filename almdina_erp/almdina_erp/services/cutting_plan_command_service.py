@@ -359,6 +359,30 @@ def _assert_addon_cutter_approval(plan: Any) -> None:
         )
 
 
+def _assert_system_plan_special_outline_approval(plan: Any) -> None:
+    """Reject System plan approval when Special doors are rectangular without openings.
+
+    Uploaded DXF and Board Editor plans keep their existing approval gates.
+    """
+
+    if str(getattr(plan, "source_type", None) or SYSTEM) != SYSTEM:
+        return
+    from almdina_erp.almdina_erp.domain.cutting.system_plan_special_outline import (
+        collect_system_plan_special_outline_issues,
+    )
+    from almdina_erp.almdina_erp.presentation.cutting.dxf_error_presenter import (
+        render_error_cards_html,
+    )
+
+    snapshot = frappe.parse_json(plan.snapshot_json or "{}") or {}
+    issues = collect_system_plan_special_outline_issues(snapshot)
+    if issues:
+        frappe.throw(
+            render_error_cards_html(issues, context="save"),
+            title=_("Could not approve the cutting plan"),
+        )
+
+
 def _assert_plan_ready_for_approval(order: Any, plan: Any) -> None:
     if str(plan.status or "") != DRAFT:
         frappe.throw(_("يمكن اعتماد خطة قص في حالة المسودة فقط."), frappe.ValidationError)
@@ -443,6 +467,7 @@ def _assert_plan_ready_for_approval(order: Any, plan: Any) -> None:
             )
 
     _assert_addon_cutter_approval(plan)
+    _assert_system_plan_special_outline_approval(plan)
 
     if str(plan.source_type or "") == BOARD_EDITOR:
         # Re-validate posed geometry on the server. Browser review is not authority.

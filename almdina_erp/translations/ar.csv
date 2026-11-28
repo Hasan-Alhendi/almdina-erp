@@ -4427,3 +4427,6 @@ Save the sheet settings before generating the NC file.,احفظ إعدادات �
 "The trim margin changed. Current margin is {0} mm; this uploaded plan was validated with {1} mm. Upload a new DXF that matches the current margin before approval.","تغير هامش التشذيب. الهامش الحالي {0} مم؛ تم التحقق من هذه الخطة المرفوعة بهامش {1} مم. ارفع DXF جديدًا يطابق الهامش الحالي قبل الاعتماد."
 "Uploaded plan was validated with {0} mm trim margin.","تم التحقق من الخطة المرفوعة بهامش تشذيب {0} مم."
 "The uploaded plan trim margin ({0} mm) does not match the current manufacturing trim ({1} mm). Upload a new DXF that matches the current margin before approval.","هامش التشذيب في الخطة المرفوعة ({0} مم) لا يطابق هامش التصنيع الحالي ({1} مم). ارفع DXF جديدًا يطابق الهامش الحالي قبل الاعتماد."
+A special door cannot be approved on the system plan because its outline is rectangular and has no valid internal through-cut opening.,لا يمكن اعتماد درفة خاصة في خطة النظام لأن محيطها مستطيل ولا يحتوي على فتحة قص نافذة داخلية صحيحة.
+"Provide a non-rectangular cut outline, or add at least one internal through-cut opening. Liners, handles, rear grooves, and guide lines are not openings.",وفّر محيط قص غير مستطيل، أو أضف فتحة قص نافذة داخلية واحدة على الأقل. اللاينر ومسكة اليد والمجرى الخلفي والخطوط الإرشادية ليست فتحات.
+Could not approve the cutting plan,تعذر اعتماد خطة القص
